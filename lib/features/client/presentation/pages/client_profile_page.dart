@@ -185,9 +185,13 @@ class ClientProfilePage extends StatelessWidget {
     BuildContext context, {
     required Client entity,
   }) {
+    final clientBloc = context.read<ClientBloc>();
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => ClientPersonalDetailsPage(entity: entity),
+        builder: (_) => BlocProvider.value(
+          value: clientBloc,
+          child: ClientPersonalDetailsPage(entity: entity),
+        ),
       ),
     );
   }
@@ -240,7 +244,10 @@ class ClientProfilePage extends StatelessWidget {
                       label: 'Payment',
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => ClientPaymentsPage(entity: current),
+                          builder: (_) => BlocProvider.value(
+                            value: context.read<ClientBloc>(),
+                            child: ClientPaymentsPage(entity: current),
+                          ),
                         ),
                       ),
                     ),

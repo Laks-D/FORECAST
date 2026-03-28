@@ -38,7 +38,9 @@ class NotificationsPage extends StatelessWidget {
                   const Spacer(),
                   BlocBuilder<NotificationCubit, NotificationState>(
                     builder: (context, state) {
-                      if (state.records.isEmpty) return const SizedBox.shrink();
+                      final now = DateTime.now();
+                      final hasVisible = state.records.any((n) => !n.createdAt.isAfter(now));
+                      if (!hasVisible) return const SizedBox.shrink();
                       return PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, color: Colors.white),
                         onSelected: (value) {
@@ -77,10 +79,16 @@ class NotificationsPage extends StatelessWidget {
                 clipBehavior: Clip.antiAlias,
                 child: BlocBuilder<NotificationCubit, NotificationState>(
                   builder: (context, state) {
+                    final now = DateTime.now();
+                    // Only show notifications that are due/triggered (not future scheduled).
+                    final visibleRecords = state.records
+                        .where((n) => !n.createdAt.isAfter(now))
+                        .toList(growable: false);
+
                     if (state.loading) {
                       return const Center(child: CircularProgressIndicator());
                     }
-                    if (state.records.isEmpty) {
+                    if (visibleRecords.isEmpty) {
                       return Center(
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -102,10 +110,10 @@ class NotificationsPage extends StatelessWidget {
                     }
                     return ListView.separated(
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      itemCount: state.records.length,
+                      itemCount: visibleRecords.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, index) {
-                        final n = state.records[index];
+                        final n = visibleRecords[index];
                         return _NotificationTile(notification: n);
                       },
                     );

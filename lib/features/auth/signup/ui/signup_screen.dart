@@ -1,11 +1,14 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../../core/auth/username_key.dart';
+import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
-import '../../../dashboard/ui/dashboard_screen.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -116,27 +119,153 @@ class _SignupScreenState extends State<SignupScreen> {
   Future<void> _onFinishRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) return;
+
+    final usernameRaw = _userNameController.text.trim();
+    final usernameKey = usernameKeyFromInput(usernameRaw);
+    if (usernameKey.isEmpty || usernameKey.length < 3) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Username must be at least 3 characters')),
+      );
+      return;
+    }
+
+    // Create Firebase user first (source of truth for identity).
+    // If the email already exists, fall back to sign-in so the user isn't blocked.
+    try {
+      final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final uid = credential.user?.uid;
+      if (uid != null) {
+        // Reserve username key -> uid/email mapping for username-based login.
+        try {
+          await firestoreDb.runTransaction((tx) async {
+            final usernameRef = firestoreDb.collection('usernames').doc(usernameKey);
+            final existing = await tx.get(usernameRef);
+            if (existing.exists) {
+              throw StateError('USERNAME_TAKEN');
+            }
+            tx.set(usernameRef, {
+              'uid': uid,
+              'email': email,
+              'username': usernameRaw,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+
+            final userRef = firestoreDb.collection('users').doc(uid);
+            tx.set(
+              userRef,
+              {
+                'fullName': _fullNameController.text.trim(),
+                'profession': _professionController.text.trim(),
+                'userName': usernameRaw,
+                'userNameKey': usernameKey,
+                'email': email,
+                'createdAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true),
+            );
+          });
+        } on StateError catch (e) {
+          if (e.message == 'USERNAME_TAKEN') {
+            // Clean up newly-created auth user if we couldn't reserve the username.
+            try {
+              await credential.user?.delete();
+              await FirebaseAuth.instance.signOut();
+            } catch (_) {
+              // Ignore cleanup failures.
+            }
+            throw FirebaseAuthException(
+              code: 'USERNAME_TAKEN',
+              message: 'Username already taken. Please choose another one.',
+            );
+          }
+          rethrow;
+        } on FirebaseException catch (e) {
+          // Convert Firestore failures into a user-facing message.
+          try {
+            await credential.user?.delete();
+            await FirebaseAuth.instance.signOut();
+          } catch (_) {
+            // Ignore cleanup failures.
+          }
+
+          final message = switch (e.code) {
+            'permission-denied' => 'Database permission denied. Update Firestore rules.',
+            'unavailable' => 'No internet connection (Firestore client is offline).',
+            _ => (e.message ?? 'Database error (${e.code})'),
+          };
+          throw FirebaseAuthException(code: 'FIRESTORE_ERROR', message: message);
+        } catch (_) {
+          // Unknown failure reserving username/profile; avoid orphaned auth users.
+          try {
+            await credential.user?.delete();
+            await FirebaseAuth.instance.signOut();
+          } catch (_) {
+            // Ignore cleanup failures.
+          }
+          throw FirebaseAuthException(
+            code: 'SIGNUP_INCOMPLETE',
+            message: 'Signup failed while saving profile. Please try again.',
+          );
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'email-already-in-use') {
+        try {
+          await FirebaseAuth.instance.signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account already exists — signed you in.')),
+          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          return;
+        } on FirebaseAuthException {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Email already registered. Please log in or reset your password.'),
+            ),
+          );
+          return;
+        }
+      }
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message ?? 'Signup failed (${e.code})')),
+      );
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Signup failed')),
+      );
+      return;
+    }
+
     final profile = SignupProfileData(
       fullName: _fullNameController.text.trim(),
       profession: _professionController.text.trim(),
       userName: _userNameController.text.trim(),
-      email: _emailController.text.trim(),
+      email: email,
     );
 
     await SignupProfileStorage.saveProfile(profile);
     if (!mounted) return;
 
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute<void>(
-        builder: (_) => DashboardScreen(
-          initialUserName: profile.fullName.isEmpty ? null : profile.fullName,
-          initialUserEmail: profile.email.isEmpty ? null : profile.email,
-          initialUserAvatarBytes: _profileImageBytes,
-          initialUserAvatarAlignment: _profileImageAlignment,
-        ),
-      ),
-      (route) => false,
-    );
+    // No navigation needed: LandingScreen listens to FirebaseAuth and will
+    // switch to the signed-in app automatically.
+    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override

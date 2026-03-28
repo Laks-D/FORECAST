@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'login_fields.dart';
 import 'login_footer_links.dart';
+import 'login_google_button.dart';
 import 'login_submit_button.dart';
 
 class LoginCard extends StatelessWidget {
@@ -29,6 +30,8 @@ class LoginCard extends StatelessWidget {
             const LoginFields(),
             const SizedBox(height: 18),
             const LoginSubmitButton(),
+            const SizedBox(height: 12),
+            const LoginGoogleButton(),
             const SizedBox(height: 10),
             LoginFooterLinks(
               onNewUserTap: onNewUserTap,

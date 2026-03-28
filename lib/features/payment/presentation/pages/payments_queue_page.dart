@@ -8,6 +8,7 @@ import '../../../client/domain/entities/client_timeline_event.dart';
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
+import '../../../calendar/bloc/sessions_cubit.dart';
 import 'client_transactions_page.dart';
 
 class PaymentsQueuePage extends StatefulWidget {
@@ -147,10 +148,19 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                                   (e) => e.id == payment.entityId,
                                 );
 
+                                final clientBloc = context.read<ClientBloc>();
+                                final sessionsCubit = context.read<SessionsCubit>();
+
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => ClientTransactionsPage(clientId: entity.id),
+                                    builder: (_) => MultiBlocProvider(
+                                      providers: [
+                                        BlocProvider.value(value: clientBloc),
+                                        BlocProvider.value(value: sessionsCubit),
+                                      ],
+                                      child: ClientTransactionsPage(clientId: entity.id),
+                                    ),
                                   ),
                                 );
                               },

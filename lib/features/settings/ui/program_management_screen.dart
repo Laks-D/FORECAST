@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/storage/program_catalog_storage.dart';
+import '../../../core/services/user_firestore_sync.dart';
 import '../../../design_system/theme/app_chrome_theme.dart';
 import 'add_program_screen.dart';
 
@@ -72,20 +73,24 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
   }
 
   Future<void> _persistPrograms() async {
-    await ProgramCatalogStorage.saveRegisteredPrograms(
-      _programs
-          .map(
-            (p) => RegisteredProgram(
-              name: p.name,
-              description: p.description,
-              frequency: p.frequency,
-              numberOfClasses: p.numberOfClasses,
-              classDuration: p.classDuration,
-              customDays: p.customDays,
-            ),
-          )
-          .toList(growable: false),
-    );
+    final registered = _programs
+        .map(
+          (p) => RegisteredProgram(
+            name: p.name,
+            description: p.description,
+            frequency: p.frequency,
+            numberOfClasses: p.numberOfClasses,
+            classDuration: p.classDuration,
+            customDays: p.customDays,
+          ),
+        )
+        .toList(growable: false);
+
+    await ProgramCatalogStorage.saveRegisteredPrograms(registered);
+
+    // Persist per-user in Firestore so programs survive logout/login and sync across devices.
+    await UserFirestoreSync.instance
+      .patchSettingsNow({'programCatalog': ProgramCatalogStorage.toJsonList(registered)});
   }
 
   Future<void> _onProgramTap(_ProgramItem item) async {

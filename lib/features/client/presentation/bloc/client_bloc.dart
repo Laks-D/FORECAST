@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../domain/entities/client.dart';
@@ -33,6 +35,9 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
 
   List<Client> _allEntities = [];
 
+  Timer? _persistDebounce;
+  Future<void> _persistChain = Future.value();
+
   ClientBloc(
     this.repository,
     this.getClientsUseCase,
@@ -59,6 +64,12 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     on<MergeClientPayments>(_onMergePayments);
     on<MarkClientPaidFully>(_onMarkPaidFully);
     on<RevertClientPaidFully>(_onRevertPaidFully);
+  }
+
+  @override
+  Future<void> close() {
+    _persistDebounce?.cancel();
+    return super.close();
   }
 
   /* ================= LOAD ================= */
@@ -268,9 +279,18 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
 
   /* ================= RELOAD ================= */
 
+  void _schedulePersist() {
+    _persistDebounce?.cancel();
+    _persistDebounce = Timer(const Duration(milliseconds: 250), () {
+      // Serialize persists so SharedPreferences + Firestore mirror always end up
+      // with the latest snapshot (prevents out-of-order overwrites).
+      _persistChain = _persistChain.then((_) => repository.persist());
+    });
+  }
+
   void _reload(Emitter<ClientState> emit) {
     _allEntities = getClientsUseCase.execute();
     emit(ClientLoaded(_allEntities));
-    repository.persist();
+    _schedulePersist();
   }
 }

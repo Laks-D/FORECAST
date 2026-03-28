@@ -43,3 +43,17 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android local machine + signing (never commit)
+android/local.properties
+**/key.properties
+**/*.jks
+**/*.keystore
+**/*.p12
+**/*.pem
+**/*.key
+**/*.crt
+
+# Env files
+.env
+.env.*

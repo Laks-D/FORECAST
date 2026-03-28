@@ -2,11 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:typed_data';
 
-import '../../../core/services/notification_cubit.dart';
 import '../../calendar/bloc/calendar_cubit.dart';
-import '../../calendar/bloc/sessions_cubit.dart';
-import '../../client/presentation/bloc/client_bloc.dart';
-import '../../client/presentation/bloc/client_state.dart';
 import '../../../design_system/theme/app_chrome_theme.dart';
 import '../bloc/dashboard_cubit.dart';
 import 'widgets/dashboard_phone_frame.dart';
@@ -64,35 +60,9 @@ class _DashboardView extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
 
-    return MultiBlocListener(
-      listeners: [
-        BlocListener<SessionsCubit, SessionsState>(
-          listenWhen: (prev, next) =>
-              !next.isLoading && prev.sessions != next.sessions,
-          listener: (context, state) {
-            context
-                .read<NotificationCubit>()
-                .scheduleSessionReminders(state.sessions);
-          },
-        ),
-        BlocListener<ClientBloc, ClientState>(
-          listenWhen: (prev, next) =>
-              next is ClientLoaded &&
-              (prev is! ClientLoaded ||
-                  prev.entities != (next).entities),
-          listener: (context, state) {
-            if (state is ClientLoaded) {
-              context
-                  .read<NotificationCubit>()
-                  .schedulePaymentReminders(state.entities);
-            }
-          },
-        ),
-      ],
-      child: Scaffold(
-        backgroundColor: chrome.frameColor,
-        body: const DashboardPhoneFrame(),
-      ),
+    return Scaffold(
+      backgroundColor: chrome.frameColor,
+      body: const DashboardPhoneFrame(),
     );
   }
 }

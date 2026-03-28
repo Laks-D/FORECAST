@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/user_firestore_sync.dart';
+
 class SignupProfileData {
   const SignupProfileData({
     this.fullName = '',
@@ -51,7 +53,10 @@ class SignupProfileStorage {
 
   static Future<void> saveProfile(SignupProfileData data) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, jsonEncode(data.toJson()));
+    final jsonMap = data.toJson();
+    await prefs.setString(_key, jsonEncode(jsonMap));
+
+    UserFirestoreSync.instance.scheduleSettingsPatch({'signupProfile': jsonMap});
   }
 
   static Future<SignupProfileData?> getProfile() async {

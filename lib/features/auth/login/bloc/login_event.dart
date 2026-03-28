@@ -32,3 +32,7 @@ final class LoginPasswordVisibilityToggled extends LoginEvent {
 final class LoginSubmitted extends LoginEvent {
   const LoginSubmitted();
 }
+
+final class LoginWithGoogleSubmitted extends LoginEvent {
+  const LoginWithGoogleSubmitted();
+}

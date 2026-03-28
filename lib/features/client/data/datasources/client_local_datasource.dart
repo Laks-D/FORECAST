@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/entities/client.dart';
 import '../../domain/entities/client_timeline_event.dart';
+import '../../../../core/services/user_firestore_sync.dart';
 
 /// Local in-memory client datasource backed by SharedPreferences.
 class ClientLocalDataSource {
@@ -298,6 +299,9 @@ class ClientLocalDataSource {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = _data.map((c) => c.toJson()).toList();
     await prefs.setString(_storageKey, jsonEncode(jsonList));
+
+    // Mirror into Firestore under the signed-in user.
+    UserFirestoreSync.instance.scheduleClientsSync(List.unmodifiable(_data));
   }
 
   /// Load all client data from SharedPreferences into memory.

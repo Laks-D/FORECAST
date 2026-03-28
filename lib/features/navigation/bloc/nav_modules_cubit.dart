@@ -4,6 +4,7 @@ import 'package:bloc/bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../dashboard/bloc/dashboard_state.dart';
+import '../../../core/services/user_firestore_sync.dart';
 import 'nav_modules_state.dart';
 
 class NavModulesCubit extends Cubit<NavModulesState> {
@@ -106,6 +107,8 @@ class NavModulesCubit extends Cubit<NavModulesState> {
         'enabled': state.enabled.map(_tabToKey).toList(growable: false),
       };
       await prefs.setString(_prefsKey, json.encode(payload));
+
+      UserFirestoreSync.instance.scheduleSettingsPatch({'navModules': payload});
     } catch (_) {
       // Ignore persistence failures; keep UI responsive.
     }

@@ -96,7 +96,7 @@ Future<void> setupServiceLocator() async {
     () => RevertPaidFullyUseCase(sl()),
   );
 
-  sl.registerLazySingleton<ClientBloc>(
+  sl.registerFactory<ClientBloc>(
     () => ClientBloc(
       sl<ClientRepository>(),
       sl<GetClientsUseCase>(),

@@ -1,4 +1,5 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter/foundation.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -16,6 +17,12 @@ class NotificationService {
   /// Call once at app start.
   Future<void> init() async {
     if (_initialized) return;
+
+    // `flutter_local_notifications` isn't supported on Flutter web.
+    if (kIsWeb) {
+      _initialized = true;
+      return;
+    }
 
     tz.initializeTimeZones();
 
@@ -55,6 +62,8 @@ class NotificationService {
     required DateTime scheduledAt,
     String? payload,
   }) async {
+    if (kIsWeb) return;
+    if (!_initialized) return;
     final tzTime = tz.TZDateTime.from(scheduledAt, tz.local);
 
     // Don't schedule notifications in the past.
@@ -75,7 +84,7 @@ class NotificationService {
         ),
         iOS: DarwinNotificationDetails(),
       ),
-      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
       payload: payload,
     );
   }
@@ -87,6 +96,8 @@ class NotificationService {
     required String body,
     String? payload,
   }) async {
+    if (kIsWeb) return;
+    if (!_initialized) return;
     await _plugin.show(
       id: id,
       title: title,
@@ -106,10 +117,18 @@ class NotificationService {
   }
 
   /// Cancel a specific notification.
-  Future<void> cancel(int id) => _plugin.cancel(id: id);
+  Future<void> cancel(int id) {
+    if (kIsWeb) return Future.value();
+    if (!_initialized) return Future.value();
+    return _plugin.cancel(id: id);
+  }
 
   /// Cancel all scheduled notifications.
-  Future<void> cancelAll() => _plugin.cancelAll();
+  Future<void> cancelAll() {
+    if (kIsWeb) return Future.value();
+    if (!_initialized) return Future.value();
+    return _plugin.cancelAll();
+  }
 
   static void _onNotificationTapped(NotificationResponse response) {
     // Can be extended to navigate to specific screens using payload.

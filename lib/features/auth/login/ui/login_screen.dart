@@ -4,23 +4,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../bloc/login_bloc.dart';
 import '../bloc/login_state.dart';
-import '../../../dashboard/ui/dashboard_screen.dart';
 import '../../signup/ui/signup_screen.dart';
+import '../../forgot_password/ui/forgot_password_screen.dart';
 import 'widgets/login_phone_frame.dart';
-
-String _nameFromEmail(String email) {
-  final trimmed = email.trim();
-  final at = trimmed.indexOf('@');
-  final raw = (at > 0 ? trimmed.substring(0, at) : trimmed).trim();
-  if (raw.isEmpty) return 'User';
-  final replaced = raw.replaceAll(RegExp(r'[._-]+'), ' ').trim();
-  if (replaced.isEmpty) return 'User';
-  return replaced
-      .split(RegExp(r'\s+'))
-      .where((p) => p.isNotEmpty)
-      .map((p) => p.length == 1 ? p.toUpperCase() : '${p[0].toUpperCase()}${p.substring(1)}')
-      .join(' ');
-}
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
@@ -31,16 +17,10 @@ class LoginScreen extends StatelessWidget {
       create: (_) => LoginBloc(),
       child: BlocListener<LoginBloc, LoginState>(
         listenWhen: (previous, current) => previous.status != current.status,
-        listener: (context, state) {
+        listener: (context, state) async {
           if (state.status == LoginStatus.success) {
-            Navigator.of(context).pushReplacement(
-              MaterialPageRoute<void>(
-                builder: (_) => DashboardScreen(
-                  initialUserName: _nameFromEmail(state.email),
-                  initialUserEmail: state.email,
-                ),
-              ),
-            );
+            // No navigation needed: LandingScreen listens to FirebaseAuth and
+            // will switch to the signed-in app automatically.
           }
         },
         child: const _LoginView(),
@@ -55,17 +35,54 @@ class _LoginView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final error = context.select((LoginBloc bloc) => bloc.state.errorMessage);
 
     return Scaffold(
       backgroundColor: chrome.frameColor,
-      body: LoginPhoneFrame(
-        onNewUserTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const SignupScreen(),
+      body: Stack(
+        children: [
+          LoginPhoneFrame(
+            onNewUserTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SignupScreen(),
+                ),
+              );
+            },
+            onForgotPasswordTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ForgotPasswordScreen(),
+                ),
+              );
+            },
+          ),
+          if (error != null && error.trim().isNotEmpty)
+            Positioned(
+              left: 18,
+              right: 18,
+              bottom: 24,
+              child: SafeArea(
+                top: false,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.88),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    child: Text(
+                      error,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          );
-        },
+        ],
       ),
     );
   }

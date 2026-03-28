@@ -2,9 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../design_system/theme/app_chrome_theme.dart';
-import '../../auth/login/ui/login_screen.dart';
 import '../../calendar/ui/widgets/calendar_page_body.dart';
 import '../../client/presentation/pages/client_page.dart';
 import '../../dashboard/bloc/dashboard_cubit.dart';
@@ -485,10 +485,7 @@ class _LogoutButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: () {
-              Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
-                MaterialPageRoute<void>(builder: (_) => const LoginScreen()),
-                (route) => false,
-              );
+              FirebaseAuth.instance.signOut();
             },
             borderRadius: BorderRadius.circular(18),
             child: Ink(

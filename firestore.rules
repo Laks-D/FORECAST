@@ -1,0 +1,50 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // DEV safety valve: extend as needed, but don't leave permanently open.
+    function withinDevWindow() {
+      // At least one year from today (2026-03-28).
+      return request.time < timestamp.date(2027, 3, 28);
+    }
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    // Used by the app startup probe in lib/main.dart.
+    match /__health/{docId} {
+      allow read: if withinDevWindow();
+      allow write: if false;
+    }
+
+    // WARNING: This doc currently stores an email address.
+    // If you want "no personal details" in Firestore, change the app to stop storing email here.
+    // For now, we allow unauthenticated GET so username-login works.
+    match /usernames/{usernameKey} {
+      allow get: if withinDevWindow();
+      allow list: if false;
+
+      allow create: if withinDevWindow()
+        && signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'username', 'createdAt'])
+        && !exists(/databases/$(database)/documents/usernames/$(usernameKey));
+
+      allow update, delete: if false;
+    }
+
+    // Per-user data: everything should live under users/{uid}/...
+    match /users/{uid} {
+      allow read, create, update, delete: if withinDevWindow() && isUser(uid);
+
+      match /{document=**} {
+        allow read, write: if withinDevWindow() && isUser(uid);
+      }
+    }
+  }
+}

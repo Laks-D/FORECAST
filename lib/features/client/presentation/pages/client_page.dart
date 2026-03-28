@@ -179,10 +179,18 @@ class _ClientPageState extends State<ClientPage> {
                 subtitle: const Text('Use the registration form'),
                 onTap: () {
                   Navigator.pop(sheetContext);
+                  final clientBloc = context.read<ClientBloc>();
+                  final sessionsCubit = context.read<SessionsCubit>();
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const ClientRegistrationPage(),
+                      builder: (_) => MultiBlocProvider(
+                        providers: [
+                          BlocProvider.value(value: clientBloc),
+                          BlocProvider.value(value: sessionsCubit),
+                        ],
+                        child: const ClientRegistrationPage(),
+                      ),
                     ),
                   );
                 },
@@ -279,10 +287,18 @@ class _ClientPageState extends State<ClientPage> {
                             scheme: scheme,
                             chrome: chrome,
                             onTap: () {
+                              final clientBloc = context.read<ClientBloc>();
+                              final sessionsCubit = context.read<SessionsCubit>();
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => ClientProfilePage(entity: entity),
+                                  builder: (_) => MultiBlocProvider(
+                                    providers: [
+                                      BlocProvider.value(value: clientBloc),
+                                      BlocProvider.value(value: sessionsCubit),
+                                    ],
+                                    child: ClientProfilePage(entity: entity),
+                                  ),
                                 ),
                               );
                             },

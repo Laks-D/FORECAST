@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../services/user_firestore_sync.dart';
+
 /// Persists the admin (app-user) profile details locally.
 class AdminProfileStorage {
   static const _key = 'admin_profile_data_v1';
@@ -24,6 +26,16 @@ class AdminProfileStorage {
       'userDateOfBirth': userDateOfBirth?.toIso8601String(),
     };
     await prefs.setString(_key, jsonEncode(data));
+
+    UserFirestoreSync.instance.scheduleSettingsPatch({'adminProfile': data});
+    await UserFirestoreSync.instance.upsertUserProfile(
+      fullName: userName,
+      middleName: userMiddleName,
+      email: userEmail,
+      phone: userPhone,
+      gender: userGender,
+      dateOfBirth: userDateOfBirth,
+    );
   }
 
   static Future<Map<String, dynamic>?> load() async {

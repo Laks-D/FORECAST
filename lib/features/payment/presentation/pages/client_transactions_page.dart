@@ -8,6 +8,7 @@ import '../../../client/domain/entities/client_timeline_event.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/presentation/pages/client_profile_page.dart';
+import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 
 class ClientTransactionsPage extends StatelessWidget {
@@ -40,9 +41,17 @@ class ClientTransactionsPage extends StatelessWidget {
                   onPressed: client == null
                       ? null
                       : () {
+                          final clientBloc = context.read<ClientBloc>();
+                          final sessionsCubit = context.read<SessionsCubit>();
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => ClientProfilePage(entity: client),
+                              builder: (_) => MultiBlocProvider(
+                                providers: [
+                                  BlocProvider.value(value: clientBloc),
+                                  BlocProvider.value(value: sessionsCubit),
+                                ],
+                                child: ClientProfilePage(entity: client),
+                              ),
                             ),
                           );
                         },

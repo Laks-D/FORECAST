@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../domain/entities/schedule_session.dart';
+import '../../../../core/services/user_firestore_sync.dart';
 
 class ScheduleLocalDataSource {
   static const _storageKey = 'sessions_data_v1';
@@ -54,6 +55,9 @@ class ScheduleLocalDataSource {
     final prefs = await SharedPreferences.getInstance();
     final jsonList = _sessions.map((s) => s.toJson()).toList();
     await prefs.setString(_storageKey, jsonEncode(jsonList));
+
+    // Mirror into Firestore under the signed-in user.
+    UserFirestoreSync.instance.scheduleSessionsSync(List.unmodifiable(_sessions));
   }
 
   /// Load all sessions from SharedPreferences into memory.

@@ -972,6 +972,7 @@ class _CalendarBottomCard extends StatelessWidget {
                         onPressed: () async {
                           final calendarCubit = context.read<CalendarCubit>();
                           final sessionsCubit = context.read<SessionsCubit>();
+                          final clientBloc = context.read<ClientBloc>();
                           await showModalBottomSheet<void>(
                             context: context,
                             isScrollControlled: true,
@@ -985,7 +986,10 @@ class _CalendarBottomCard extends StatelessWidget {
                                   value: calendarCubit,
                                   child: BlocProvider.value(
                                     value: sessionsCubit,
-                                    child: _AddPaymentSheet(selectedDate: selectedDate),
+                                    child: BlocProvider.value(
+                                      value: clientBloc,
+                                      child: _AddPaymentSheet(selectedDate: selectedDate),
+                                    ),
                                   ),
                                 ),
                               );
@@ -1251,6 +1255,7 @@ class _PaymentScheduleList extends StatelessWidget {
             final amountLabel = p.amount == null ? 'No amount' : '₹${p.amount!.toStringAsFixed(0)}';
 
             Future<void> openReschedule() async {
+              final clientBloc = context.read<ClientBloc>();
               await showModalBottomSheet<void>(
                 context: context,
                 isScrollControlled: true,
@@ -1260,10 +1265,13 @@ class _PaymentScheduleList extends StatelessWidget {
                     padding: EdgeInsets.only(
                       bottom: MediaQuery.of(ctx).viewInsets.bottom,
                     ),
-                    child: _ReschedulePaymentSheet(
-                      clientId: p.clientId,
-                      paymentEventId: p.paymentEventId,
-                      currentDate: p.date,
+                    child: BlocProvider.value(
+                      value: clientBloc,
+                      child: _ReschedulePaymentSheet(
+                        clientId: p.clientId,
+                        paymentEventId: p.paymentEventId,
+                        currentDate: p.date,
+                      ),
                     ),
                   );
                 },
