@@ -151,7 +151,7 @@ class _NotificationTile extends StatelessWidget {
       case AppNotificationType.sessionReminder:
         return chrome.accentBlue;
       case AppNotificationType.paymentReminder:
-        return Colors.orange;
+        return VibrantColors.warmYellow;
       case AppNotificationType.general:
         return chrome.mutedColor;
     }
@@ -169,7 +169,7 @@ class _NotificationTile extends StatelessWidget {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.red.shade400,
+        color: VibrantColors.softPink,
         child: const Icon(Icons.delete_outline, color: Colors.white),
       ),
       onDismissed: (_) {

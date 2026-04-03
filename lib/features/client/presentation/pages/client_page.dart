@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
+import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
+import 'package:gendral_app/design_system/widgets/app_loading.dart';
+import 'package:gendral_app/design_system/widgets/app_search_field.dart';
 
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../domain/entities/client.dart';
@@ -13,10 +16,36 @@ import 'client_registration_page.dart';
 
 /// Common country-code suggestions for the autocomplete (without +, prefix shown in field).
 const _quickAddCodes = <String>[
-  '91', '1', '44', '971', '61', '65', '966', '974', '965',
-  '92', '880', '977', '94', '86', '81', '82', '49', '33',
-  '39', '34', '55', '52', '27', '234', '254', '60', '63',
-  '66', '62', '7',
+  '91',
+  '1',
+  '44',
+  '971',
+  '61',
+  '65',
+  '966',
+  '974',
+  '965',
+  '92',
+  '880',
+  '977',
+  '94',
+  '86',
+  '81',
+  '82',
+  '49',
+  '33',
+  '39',
+  '34',
+  '55',
+  '52',
+  '27',
+  '234',
+  '254',
+  '60',
+  '63',
+  '66',
+  '62',
+  '7',
 ];
 
 class ClientPage extends StatefulWidget {
@@ -29,10 +58,10 @@ class ClientPage extends StatefulWidget {
 }
 
 class _ClientPageState extends State<ClientPage> {
-
   void _showQuickAddClientModal() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
+    final emailController = TextEditingController();
     final countryCodeController = TextEditingController(text: '91');
     final formKey = GlobalKey<FormState>();
 
@@ -79,11 +108,10 @@ class _ClientPageState extends State<ClientPage> {
                         optionsBuilder: (textEditingValue) {
                           final input = textEditingValue.text.trim();
                           if (input.isEmpty) return _quickAddCodes;
-                          return _quickAddCodes
-                              .where((c) => c.contains(input));
+                          return _quickAddCodes.where((c) => c.contains(input));
                         },
-                        fieldViewBuilder: (context, controller, focusNode,
-                            onFieldSubmitted) {
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
                           controller.addListener(() {
                             countryCodeController.text = controller.text;
                           });
@@ -116,6 +144,20 @@ class _ClientPageState extends State<ClientPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(labelText: 'Email'),
+                  textInputAction: TextInputAction.done,
+                  validator: (v) {
+                    final value = v?.trim() ?? '';
+                    if (value.isEmpty) return null;
+                    final ok =
+                        RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(value);
+                    return ok ? null : 'Enter a valid email';
+                  },
+                ),
                 const SizedBox(height: 16),
                 SizedBox(
                   width: double.infinity,
@@ -126,18 +168,20 @@ class _ClientPageState extends State<ClientPage> {
                       final name = nameController.text.trim();
                       final phone = phoneController.text.trim();
                       final code = countryCodeController.text.trim();
+                      final email = emailController.text.trim();
 
                       context.read<ClientBloc>().add(
-                        CreateClient(
-                          name: name,
-                          primaryContact: phone,
-                          countryCode: () {
-                            var c = code.replaceAll('+', '');
-                            if (c.isEmpty) return '+91';
-                            return '+$c';
-                          }(),
-                        ),
-                      );
+                            CreateClient(
+                              name: name,
+                              primaryContact: phone,
+                              countryCode: () {
+                                var c = code.replaceAll('+', '');
+                                if (c.isEmpty) return '+91';
+                                return '+$c';
+                              }(),
+                              email: email.isEmpty ? null : email,
+                            ),
+                          );
 
                       Navigator.pop(sheetContext);
                     },
@@ -167,7 +211,7 @@ class _ClientPageState extends State<ClientPage> {
               ListTile(
                 leading: const Icon(Icons.flash_on_outlined),
                 title: const Text('Quick add'),
-                subtitle: const Text('Name + phone only'),
+                subtitle: const Text('Name + phone + email'),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _showQuickAddClientModal();
@@ -221,11 +265,12 @@ class _ClientPageState extends State<ClientPage> {
                 children: [
                   Expanded(
                     child: Text(
-                      'Client',
+                      'Clients',
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: Colors.white,
-                                fontWeight: FontWeight.w800,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.5,
                               ),
                     ),
                   ),
@@ -240,7 +285,7 @@ class _ClientPageState extends State<ClientPage> {
                     child: IconButton(
                       tooltip: 'Add Client',
                       onPressed: _showAddClientOptions,
-                      icon: const Icon(Icons.add),
+                      icon: const Icon(Icons.add, size: 24),
                       color: Colors.white,
                     ),
                   ),
@@ -251,7 +296,9 @@ class _ClientPageState extends State<ClientPage> {
                 hintText: 'Search customer / phone / program',
                 onChanged: (value) {
                   final sessions = context.read<SessionsCubit>().state.sessions;
-                  context.read<ClientBloc>().add(SearchClients(value, sessions: sessions));
+                  context
+                      .read<ClientBloc>()
+                      .add(SearchClients(value, sessions: sessions));
                 },
               ),
               const SizedBox(height: 14),
@@ -259,18 +306,15 @@ class _ClientPageState extends State<ClientPage> {
                 child: BlocBuilder<ClientBloc, ClientState>(
                   builder: (context, state) {
                     if (state is ClientLoading || state is ClientInitial) {
-                      return const Center(
-                        child: CircularProgressIndicator(color: Colors.white),
-                      );
+                      return const AppLoading(color: Colors.white);
                     }
 
                     if (state is ClientLoaded) {
                       if (state.entities.isEmpty) {
-                        return Center(
-                          child: _EmptyCard(
+                        return const Center(
+                          child: AppEmptyState(
                             message: 'No clients found',
-                            surfaceColor: scheme.surface,
-                            mutedColor: chrome.mutedColor,
+                            icon: Icons.people_outline,
                           ),
                         );
                       }
@@ -288,7 +332,8 @@ class _ClientPageState extends State<ClientPage> {
                             chrome: chrome,
                             onTap: () {
                               final clientBloc = context.read<ClientBloc>();
-                              final sessionsCubit = context.read<SessionsCubit>();
+                              final sessionsCubit =
+                                  context.read<SessionsCubit>();
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -309,10 +354,9 @@ class _ClientPageState extends State<ClientPage> {
 
                     if (state is ClientError) {
                       return Center(
-                        child: _EmptyCard(
+                        child: AppEmptyState(
                           message: state.message,
-                          surfaceColor: scheme.surface,
-                          mutedColor: chrome.mutedColor,
+                          icon: Icons.error_outline,
                         ),
                       );
                     }
@@ -340,40 +384,9 @@ class _SearchPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final chrome = AppChromeTheme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: TextField(
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hintText,
-          prefixIcon: const Icon(Icons.search),
-          prefixIconColor: chrome.mutedColor,
-          hintStyle: TextStyle(color: chrome.mutedColor),
-          filled: true,
-          fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
+    return AppSearchField(
+      hintText: hintText,
+      onChanged: onChanged,
     );
   }
 }
@@ -393,144 +406,120 @@ class _ClientCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(28),
-      onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: BorderRadius.circular(28),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.08),
-              blurRadius: 18,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: scheme.primary.withOpacity(0.10),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  entity.name.isEmpty ? '?' : entity.name.characters.first,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      entity.name,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                          ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      entity.formattedPhone,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: chrome.mutedColor,
-                          ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: _clientStatusBg(entity.status),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      entity.status,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: _clientStatusFg(entity.status),
-                            fontWeight: FontWeight.w700,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
+    final statusColor = _clientStatusColor(entity.status);
 
-Color _clientStatusBg(String status) {
-  final s = status.trim().toLowerCase();
-  if (s == 'active') return Colors.green.withOpacity(0.12);
-  if (s == 'overdue') return Colors.orange.withOpacity(0.12);
-  return Colors.blue.withOpacity(0.12);
-}
-
-Color _clientStatusFg(String status) {
-  final s = status.trim().toLowerCase();
-  if (s == 'active') return Colors.green.shade700;
-  if (s == 'overdue') return Colors.orange.shade800;
-  return Colors.blue.shade700;
-}
-
-class _EmptyCard extends StatelessWidget {
-  final String message;
-  final Color surfaceColor;
-  final Color mutedColor;
-
-  const _EmptyCard({
-    required this.message,
-    required this.surfaceColor,
-    required this.mutedColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
+    return Container(
       decoration: BoxDecoration(
-        color: surfaceColor,
+        color: chrome.surfaceColor,
         borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 15,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: 18,
-          vertical: 16,
-        ),
-        child: Text(
-          message,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: mutedColor,
-              ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(28),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 58,
+                  height: 58,
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: statusColor.withOpacity(0.2)),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    entity.name.isEmpty ? '?' : entity.name.characters.first,
+                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          color: statusColor,
+                          fontWeight: FontWeight.w900,
+                        ),
+                  ),
+                ),
+                const SizedBox(width: 18),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entity.name,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: chrome.textColor,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 18,
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Icon(Icons.phone_outlined,
+                              size: 14, color: chrome.mutedColor),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              entity.formattedPhone,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: chrome.mutedColor,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: statusColor.withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    entity.status.toUpperCase(),
+                    style: TextStyle(
+                      color: statusColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
+}
+
+Color _clientStatusColor(String status) {
+  final s = status.trim().toLowerCase();
+  if (s == 'active') return VibrantColors.pastelGreen;
+  if (s == 'pending') return VibrantColors.warmYellow;
+  if (s == 'inactive') return const Color(0xFF6B7280);
+  return VibrantColors.softBlue;
 }

@@ -253,10 +253,15 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
         },
       );
     }
-
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111214),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+        ),
+        padding: const EdgeInsets.all(20.0),
         child: BlocBuilder<SessionsCubit, SessionsState>(
           builder: (context, state) {
             return Column(
@@ -492,8 +497,9 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                 foregroundColor: chrome.textColor,
                                 side: BorderSide(color: chrome.mutedColor.withOpacity(0.35)),
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
                               ),
                               child: const Text('Generate'),
                             ),
@@ -505,13 +511,17 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                   ? null
                                   : _saveDraft,
                               style: FilledButton.styleFrom(
-                                backgroundColor: chrome.textColor,
-                                foregroundColor: chrome.surfaceColor,
+                                backgroundColor: VibrantColors.pastelGreen,
+                                foregroundColor: Colors.black,
                                 shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(999),
+                                  borderRadius: BorderRadius.circular(16),
                                 ),
+                                padding: const EdgeInsets.symmetric(vertical: 14),
                               ),
-                              child: const Text('Save'),
+                              child: const Text(
+                                'Save',
+                                style: TextStyle(fontWeight: FontWeight.w900),
+                              ),
                             ),
                           ),
                         ],
@@ -531,43 +541,54 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                   const SizedBox(height: 8),
                   SizedBox(
                     height: 240,
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(18),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: chrome.surfaceColor,
-                          border: Border.all(color: chrome.mutedColor.withOpacity(0.18)),
-                        ),
-                        child: ListView.separated(
-                          itemCount: _draft.length,
-                          separatorBuilder: (_, __) => Divider(
-                            height: 1,
-                            color: chrome.mutedColor.withOpacity(0.12),
+                    child: ListView.separated(
+                      itemCount: _draft.length,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      separatorBuilder: (_, __) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final s = _draft[index];
+                        final isClash = _clashIds.contains(s.id);
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: chrome.surfaceColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: isClash ? VibrantColors.softPink.withOpacity(0.55) : chrome.mutedColor.withOpacity(0.12),
+                            ),
                           ),
-                          itemBuilder: (context, index) {
-                            final s = _draft[index];
-                            final isClash = _clashIds.contains(s.id);
-                            return ListTile(
-                              dense: true,
-                              title: Text(
-                                '${s.date} • ${s.time}',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: isClash ? Colors.red.shade700 : chrome.textColor,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                              subtitle: Text(
-                                isClash ? 'Clash with existing session' : 'Session ${s.sessionNo}',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: isClash
-                                          ? Colors.red.shade700
-                                          : chrome.mutedColor,
-                                    ),
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${s.date} • ${s.time}',
+                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                              color: isClash ? VibrantColors.softPink : chrome.textColor,
+                                              fontWeight: FontWeight.w800,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        isClash ? 'Clash with existing session' : 'Session ${s.sessionNo}',
+                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              color: isClash ? VibrantColors.softPink.withOpacity(0.85) : chrome.mutedColor,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (isClash)
+                                  Icon(Icons.warning_amber_rounded, color: VibrantColors.softPink, size: 20),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -576,7 +597,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                   Text(
                     'Resolve clashes to enable Save.',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.red.shade700,
+                          color: VibrantColors.softPink,
                           fontWeight: FontWeight.w700,
                         ),
                   ),

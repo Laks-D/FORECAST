@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/theme/app_chrome_theme.dart';
+
 class DashboardProgressRing extends StatelessWidget {
   const DashboardProgressRing({
     super.key,
@@ -10,8 +12,9 @@ class DashboardProgressRing extends StatelessWidget {
     required this.centerLabel,
     this.size,
     this.strokeWidth = 10,
-    this.progressColor = const Color(0xFF58C7B3),
-    this.trackColor = const Color(0xFFE6E6E6),
+    this.progressColor = VibrantColors.pastelGreen,
+    this.trackColor,
+    this.textColor,
   });
 
   final double progress;
@@ -21,19 +24,22 @@ class DashboardProgressRing extends StatelessWidget {
   final double? size;
   final double strokeWidth;
   final Color progressColor;
-  final Color trackColor;
+  final Color? trackColor;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    final resolvedTrackColor = trackColor ?? chrome.mutedColor.withOpacity(0.15);
     final p = progress.isNaN ? 0.0 : progress.clamp(0.0, 1.0);
 
     final valueStyle = Theme.of(context).textTheme.titleLarge?.copyWith(
-          color: Colors.black87,
+          color: textColor ?? chrome.textColor,
           fontWeight: FontWeight.w700,
         );
 
     final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Colors.black54,
+          color: (textColor ?? chrome.mutedColor).withOpacity(0.8),
           fontWeight: FontWeight.w500,
         );
 
@@ -45,7 +51,7 @@ class DashboardProgressRing extends StatelessWidget {
             progress: p,
             strokeWidth: strokeWidth,
             progressColor: progressColor,
-            trackColor: trackColor,
+            trackColor: resolvedTrackColor,
           ),
           child: const SizedBox.expand(),
         ),

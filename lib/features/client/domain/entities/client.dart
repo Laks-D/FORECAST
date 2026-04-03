@@ -1,17 +1,6 @@
 import 'client_timeline_event.dart';
 
 class Client {
-  final String id;
-  final String name;
-  final String? middleName;
-  final String primaryContact;
-  final String? countryCode;
-  final String? email;
-  final String? gender;
-  final DateTime? dateOfBirth;
-  final String? address;
-  final List<ClientTimelineEvent> timeline;
-
   const Client({
     required this.id,
     required this.name,
@@ -22,8 +11,21 @@ class Client {
     this.gender,
     this.dateOfBirth,
     this.address,
+    this.currency,
     required this.timeline,
   });
+
+  final String id;
+  final String name;
+  final String? middleName;
+  final String primaryContact;
+  final String? countryCode;
+  final String? email;
+  final String? gender;
+  final DateTime? dateOfBirth;
+  final String? address;
+  final String? currency;
+  final List<ClientTimelineEvent> timeline;
 
   /// Full display name including middle name if present.
   String get displayName {
@@ -52,65 +54,56 @@ class Client {
 
   /* ================= STATUS ================= */
 
-  /// Determines the entity status based on payment history and due dates.
+  /// Client status is user-controlled.
   ///
-  /// Priority:
-  /// 1. If the most recent timeline event overall is a manual status change, use it.
-  /// 2. Otherwise auto-compute from payments:
-  ///    - No payments → "Pending"
-  ///    - Any payment overdue (past date, not marked Paid/Paid fully) → "Overdue"
-  ///    - Has at least one Paid payment and no overdue → "Active"
-  ///    - All future, none paid → "Pending"
+  /// The system must not automatically change status based on payments/schedule.
+  /// We only honor explicit manual status changes made by the user.
   String get status {
-    // 1. Check for a manual override (latest timeline event is a statusChanged).
-    if (timeline.isNotEmpty) {
-      final latest = timeline.reduce(
-        (a, b) => a.createdAt.isAfter(b.createdAt) ? a : b,
-      );
-      if (latest.type == ClientTimelineEventType.statusChanged &&
-          (latest.status?.trim().isNotEmpty ?? false)) {
-        return latest.status!;
+    // Canonical, user-editable statuses.
+    // NOTE: We also support legacy stored statuses via normalization below.
+    const allowed = <String>{'Active', 'Pending', 'Inactive'};
+
+    String? normalize(String raw) {
+      final s = raw.trim();
+      if (s.isEmpty) return null;
+      final lower = s.toLowerCase();
+
+      // Legacy mapping:
+      // - "Overdue" is now displayed as "Pending".
+      if (lower == 'overdue') return 'Pending';
+
+      // Legacy mapping:
+      // - "Upcoming" used to be a client status; it is no longer user-editable.
+      //   Treat it as "Pending".
+      if (lower == 'upcoming') return 'Pending';
+
+      // Accept canonical values (case-insensitive).
+      if (lower == 'active') return 'Active';
+      if (lower == 'pending') return 'Pending';
+      if (lower == 'inactive') return 'Inactive';
+
+      // Unknown/unsupported status.
+      return null;
+    }
+
+    DateTime? latestManualAt;
+    String? latestManualStatus;
+    for (final e in timeline) {
+      if (e.type != ClientTimelineEventType.statusChanged) continue;
+      final raw = e.status;
+      if (raw == null) continue;
+      final s = normalize(raw);
+      if (s == null) continue;
+      if (!allowed.contains(s)) continue;
+      if (latestManualAt == null || e.createdAt.isAfter(latestManualAt)) {
+        latestManualAt = e.createdAt;
+        latestManualStatus = s;
       }
     }
 
-    // 2. Auto-compute from payment events.
-    if (payments.isEmpty) return 'Pending';
-
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-
-    bool hasPaid = false;
-    bool hasOverdue = false;
-
-    for (final pay in payments) {
-      final payDate = DateTime(pay.createdAt.year, pay.createdAt.month, pay.createdAt.day);
-      final dateKey = '${pay.createdAt.year}-${pay.createdAt.month.toString().padLeft(2, '0')}-${pay.createdAt.day.toString().padLeft(2, '0')}';
-
-      // Check if this payment date has a Paid / Paid fully status event
-      bool isPaid = false;
-      for (final e in timeline.reversed) {
-        if (e.type != ClientTimelineEventType.statusChanged) continue;
-        final eKey = '${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')}';
-        if (eKey != dateKey) continue;
-        final s = e.status?.trim();
-        if (s == 'Paid' || s == 'Paid fully') {
-          isPaid = true;
-          break;
-        }
-      }
-
-      if (isPaid) {
-        hasPaid = true;
-      } else if (payDate.isBefore(today) || payDate.isAtSameMomentAs(today)) {
-        hasOverdue = true;
-      }
-    }
-
-    if (hasOverdue) return 'Overdue';
-    if (hasPaid) return 'Active';
-
-    // All payments are in the future and none paid yet
-    return 'Pending';
+    return (latestManualStatus != null && latestManualStatus.trim().isNotEmpty)
+        ? latestManualStatus.trim()
+      : 'Pending';
   }
 
   /// Returns the timestamp of the most recent event in the timeline.
@@ -129,6 +122,7 @@ class Client {
         if (gender != null) 'gender': gender,
         if (dateOfBirth != null) 'dateOfBirth': dateOfBirth!.toIso8601String(),
         if (address != null) 'address': address,
+        if (currency != null) 'currency': currency,
         'timeline': timeline.map((e) => e.toJson()).toList(),
       };
 
@@ -145,6 +139,7 @@ class Client {
           ? DateTime.tryParse(json['dateOfBirth'] as String)
           : null,
       address: json['address'] as String?,
+      currency: json['currency'] as String?,
       timeline: (json['timeline'] as List<dynamic>?)
               ?.map((e) =>
                   ClientTimelineEvent.fromJson(e as Map<String, dynamic>))

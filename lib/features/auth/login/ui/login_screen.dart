@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/widgets/app_card.dart';
 import '../bloc/login_bloc.dart';
 import '../bloc/login_state.dart';
 import '../../signup/ui/signup_screen.dart';
@@ -64,20 +65,15 @@ class _LoginView extends StatelessWidget {
               bottom: 24,
               child: SafeArea(
                 top: false,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.88),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    child: Text(
-                      error,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
+                child: AppCard(
+                  color: Colors.white.withOpacity(0.88),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Text(
+                    error,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
                 ),
               ),

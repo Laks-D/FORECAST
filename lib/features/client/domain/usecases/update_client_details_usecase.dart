@@ -15,6 +15,7 @@ class UpdateClientDetailsUseCase {
     String? gender,
     DateTime? dateOfBirth,
     String? address,
+    String? currency,
   }) {
     repository.updateClientDetails(
       entityId: entityId,
@@ -26,6 +27,7 @@ class UpdateClientDetailsUseCase {
       gender: gender,
       dateOfBirth: dateOfBirth,
       address: address,
+      currency: currency,
     );
   }
 }

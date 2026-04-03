@@ -20,9 +20,12 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
   bool _editing = false;
 
   final _nameCtrl = TextEditingController();
+  final _handleCtrl = TextEditingController();
   final _middleNameCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _nationalityCtrl = TextEditingController();
+  final _currencyCtrl = TextEditingController();
   String? _selectedGender;
   DateTime? _selectedDob;
   bool _controllersSeeded = false;
@@ -40,41 +43,65 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
       _controllersSeeded = true;
       final st = context.read<DashboardCubit>().state;
       _nameCtrl.text = st.userName ?? 'User';
+      _handleCtrl.text = st.userHandle ?? 'user_123';
       _middleNameCtrl.text = st.userMiddleName ?? '';
       _phoneCtrl.text = st.userPhone ?? '';
       _emailCtrl.text = st.userEmail ?? '';
       _selectedGender = st.userGender;
       _selectedDob = st.userDateOfBirth;
+      
+      // Seed from SignupProfile if available
+      _nationalityCtrl.text = _signupProfile?.nationality ?? 'India';
+      _currencyCtrl.text = _signupProfile?.currency ?? '₹';
     }
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _handleCtrl.dispose();
     _middleNameCtrl.dispose();
     _phoneCtrl.dispose();
     _emailCtrl.dispose();
+    _nationalityCtrl.dispose();
+    _currencyCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadSignupProfile() async {
     final profile = await SignupProfileStorage.getProfile();
     if (!mounted) return;
-    setState(() => _signupProfile = profile);
+    setState(() {
+      _signupProfile = profile;
+      if (profile != null) {
+        _nationalityCtrl.text = profile.nationality;
+        _currencyCtrl.text = profile.currency;
+      }
+    });
   }
-
-  static const _cardRadius = 40.0;
 
   void _toggleEdit() {
     if (_editing) {
-      // Save
-      final cubit = context.read<DashboardCubit>();
-      cubit.setUserName(_nameCtrl.text.trim());
-      cubit.setUserMiddleName(_middleNameCtrl.text.trim());
-      cubit.setUserPhone(_phoneCtrl.text.trim());
-      cubit.setUserEmail(_emailCtrl.text.trim());
-      if (_selectedGender != null) cubit.setUserGender(_selectedGender!);
-      if (_selectedDob != null) cubit.setUserDateOfBirth(_selectedDob!);
+      // Save all fields via bulk update
+      context.read<DashboardCubit>().updateProfile(
+            name: _nameCtrl.text,
+            handle: _handleCtrl.text,
+            middleName: _middleNameCtrl.text,
+            phone: _phoneCtrl.text,
+            email: _emailCtrl.text,
+            gender: _selectedGender,
+            dob: _selectedDob,
+          );
+
+      // Save to Storage (Nationality/Currency)
+      if (_signupProfile != null) {
+        SignupProfileStorage.saveProfile(
+          _signupProfile!.copyWith(
+            nationality: _nationalityCtrl.text.trim(),
+            currency: _currencyCtrl.text.trim(),
+          ),
+        );
+      }
     }
     setState(() => _editing = !_editing);
   }
@@ -97,472 +124,357 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
 
     return Scaffold(
       backgroundColor: chrome.frameColor,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        backgroundColor: chrome.frameColor,
-        foregroundColor: Colors.white,
+        backgroundColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
-        title: const Text('Profile'),
-        actions: [
-          TextButton(
-            onPressed: _toggleEdit,
-            child: Text(
-              _editing ? 'Save' : 'Edit Profile',
-              style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-          const SizedBox(width: 4),
+        leading: IconButton(
+          icon: Icon(Icons.arrow_back_ios_new, color: chrome.mutedColor, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+        actions: const [
+          SizedBox(width: 8),
         ],
       ),
-      body: SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: chrome.surfaceColor,
-              borderRadius: BorderRadius.circular(_cardRadius),
-            ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(_cardRadius),
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 24),
-                    Center(
-                      child: BlocBuilder<DashboardCubit, DashboardState>(
-                        buildWhen: (p, n) =>
-                            p.userAvatarBytes != n.userAvatarBytes ||
-                            p.userAvatarAlignment != n.userAvatarAlignment,
-                        builder: (context, state) {
-                          final avatarBytes = state.userAvatarBytes;
-                          return Material(
-                            color: Colors.transparent,
-                            shape: const CircleBorder(),
-                            child: InkWell(
-                              key: const Key('profile_avatar_tap'),
-                              onTap: () => _openProfilePhoto(context),
-                              customBorder: const CircleBorder(),
-                              child: Container(
-                                width: 148,
-                                height: 148,
-                                decoration: BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: chrome.mutedColor.withOpacity(0.22),
-                                ),
-                                child: ClipOval(
-                                  child: avatarBytes == null
-                                      ? Center(
-                                          child: Icon(
-                                            Icons.person_outline,
-                                            size: 56,
-                                            color: chrome.mutedColor.withOpacity(0.7),
-                                          ),
-                                        )
-                                      : Image.memory(
-                                          avatarBytes,
-                                          fit: BoxFit.cover,
-                                          alignment: state.userAvatarAlignment,
-                                        ),
-                                ),
-                              ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            const SizedBox(height: 100),
+            // Avatar with Neon Glow
+            Center(
+              child: BlocBuilder<DashboardCubit, DashboardState>(
+                builder: (context, state) {
+                  return Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      // Neon Glow
+                      Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: VibrantColors.softPink.withOpacity(0.22),
+                              blurRadius: 18,
+                              spreadRadius: 1,
                             ),
-                          );
-                        },
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-                      child: BlocBuilder<DashboardCubit, DashboardState>(
-                        buildWhen: (p, n) =>
-                            p.userName != n.userName ||
-                            p.userMiddleName != n.userMiddleName ||
-                            p.userEmail != n.userEmail ||
-                            p.userPhone != n.userPhone ||
-                            p.userGender != n.userGender ||
-                            p.userDateOfBirth != n.userDateOfBirth,
-                        builder: (context, state) {
-                          final name = (state.userName ?? 'User').trim();
-                          final middleName = (state.userMiddleName ?? '').trim();
-                          final email = (state.userEmail ?? '').trim();
-                          final phone = (state.userPhone ?? '').trim();
-                          final gender = (state.userGender ?? '').trim();
-                          final dob = state.userDateOfBirth;
-                          final userName = (_signupProfile?.userName ?? '').trim();
-                          final profession = (_signupProfile?.profession ?? '').trim();
-                          final programs = _signupProfile?.selectedPrograms ?? const <String>[];
-                          final preferences = _signupProfile?.preferences ?? const <String>[];
-
-                          return Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _editing
-                                  ? _EditField(
-                                      controller: _nameCtrl,
-                                      icon: Icons.person_outline,
-                                      label: 'Name',
-                                    )
-                                  : _InfoPill(
-                                      icon: Icons.person_outline,
-                                      label: 'Name',
-                                      value: name.isEmpty ? 'User' : name,
-                                    ),
-                              const SizedBox(height: 14),
-                              _editing
-                                  ? _EditField(
-                                      controller: _middleNameCtrl,
-                                      icon: Icons.person_outline,
-                                      label: 'Middle name',
-                                    )
-                                  : _InfoPill(
-                                      icon: Icons.person_outline,
-                                      label: 'Middle name',
-                                      value: middleName.isEmpty ? 'Not set' : middleName,
-                                    ),
-                              const SizedBox(height: 14),
-                              _editing
-                                  ? _EditField(
-                                      controller: _phoneCtrl,
-                                      icon: Icons.phone_outlined,
-                                      label: 'Phone number',
-                                      keyboardType: TextInputType.phone,
-                                    )
-                                  : _InfoPill(
-                                      icon: Icons.phone_outlined,
-                                      label: 'Phone number',
-                                      value: phone.isEmpty ? 'Not set' : phone,
-                                    ),
-                              const SizedBox(height: 14),
-                              _editing
-                                  ? _EditField(
-                                      controller: _emailCtrl,
-                                      icon: Icons.email_outlined,
-                                      label: 'Email address',
-                                      keyboardType: TextInputType.emailAddress,
-                                    )
-                                  : _InfoPill(
-                                      icon: Icons.email_outlined,
-                                      label: 'Email address',
-                                      value: email.isEmpty ? 'Not set' : email,
-                                    ),
-                              const SizedBox(height: 14),
-                              _editing
-                                  ? _GenderPicker(
-                                      value: _selectedGender,
-                                      onChanged: (v) => setState(() => _selectedGender = v),
-                                    )
-                                  : _InfoPill(
-                                      icon: Icons.wc_outlined,
-                                      label: 'Gender',
-                                      value: gender.isEmpty ? 'Not set' : gender,
-                                    ),
-                              const SizedBox(height: 14),
-                              _editing
-                                  ? _DobPicker(
-                                      value: _selectedDob,
-                                      onChanged: (v) => setState(() => _selectedDob = v),
-                                    )
-                                  : _InfoPill(
-                                      icon: Icons.cake_outlined,
-                                      label: 'Date of birth',
-                                      value: dob != null
-                                          ? AppDateUtils.displayDate(dob)
-                                          : 'Not set',
-                                    ),
-                              if (userName.isNotEmpty) ...[
-                                const SizedBox(height: 14),
-                                _InfoPill(
-                                  icon: Icons.alternate_email,
-                                  label: 'Username',
-                                  value: userName,
-                                ),
-                              ],
-                              if (profession.isNotEmpty) ...[
-                                const SizedBox(height: 14),
-                                _InfoPill(
-                                  icon: Icons.work_outline,
-                                  label: 'Profession',
-                                  value: profession,
-                                ),
-                              ],
-                              if (programs.isNotEmpty) ...[
-                                const SizedBox(height: 14),
-                                _InfoPill(
-                                  icon: Icons.menu_book_outlined,
-                                  label: 'Selected programs',
-                                  value: programs.join(', '),
-                                ),
-                              ],
-                              if (preferences.isNotEmpty) ...[
-                                const SizedBox(height: 14),
-                                _InfoPill(
-                                  icon: Icons.tune_outlined,
-                                  label: 'Preferences',
-                                  value: preferences.join(', '),
-                                ),
-                              ],
-                            ],
-                          );
-                        },
+                      GestureDetector(
+                        onTap: () => _openProfilePhoto(context),
+                        child: Container(
+                          width: 120,
+                          height: 120,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: VibrantColors.softPink, width: 2),
+                          ),
+                          child: ClipOval(
+                            child: state.userAvatarBytes == null
+                                ? Container(
+                                    color: chrome.surfaceColor,
+                                    child: Icon(Icons.person, size: 60, color: chrome.mutedColor),
+                                  )
+                                : Image.memory(
+                                    state.userAvatarBytes!,
+                                    fit: BoxFit.cover,
+                                    alignment: state.userAvatarAlignment,
+                                  ),
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
-                ),
+                    ],
+                  );
+                },
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
+            const SizedBox(height: 16),
 
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: chrome.mutedColor,
-          fontWeight: FontWeight.w700,
-        );
-
-    final valueStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: chrome.textColor,
-          fontWeight: FontWeight.w800,
-        );
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 66),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: chrome.mutedColor.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(icon, color: Colors.black87, size: 20),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: labelStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 2),
-                    Text(value, style: valueStyle, maxLines: 3, overflow: TextOverflow.ellipsis),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _EditField extends StatelessWidget {
-  const _EditField({
-    required this.controller,
-    required this.icon,
-    required this.label,
-    this.keyboardType,
-  });
-
-  final TextEditingController controller;
-  final IconData icon;
-  final String label;
-  final TextInputType? keyboardType;
-
-  @override
-  Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: chrome.mutedColor,
-          fontWeight: FontWeight.w700,
-        );
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 66),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: chrome.mutedColor.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(28),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(icon, color: Colors.black87, size: 20),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(label, style: labelStyle, maxLines: 1, overflow: TextOverflow.ellipsis),
-                    TextField(
-                      controller: controller,
-                      keyboardType: keyboardType,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: chrome.textColor,
-                            fontWeight: FontWeight.w800,
-                          ),
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
+            // Section 1: Personal Information
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Personal Information',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: Colors.white.withOpacity(0.9),
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  GestureDetector(
+                    onTap: _toggleEdit,
+                    child: Row(
+                      children: [
+                        Icon(
+                          _editing ? Icons.check : Icons.edit_outlined,
+                          size: 16,
+                          color: chrome.accentBlue,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          _editing ? 'SAVE' : 'Edit',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: chrome.accentBlue,
+                                fontWeight: FontWeight.w800,
+                              ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 16),
+            _ProfileSection(
+              children: [
+                _ProfileRow(
+                  icon: Icons.person_outline,
+                  label: 'Full Name',
+                  value: _editing ? null : _nameCtrl.text,
+                  controller: _editing ? _nameCtrl : null,
+                  iconColor: chrome.accentBlue,
+                ),
+                _ProfileRow(
+                  icon: Icons.alternate_email,
+                  label: 'Username',
+                  value: _editing ? null : _handleCtrl.text,
+                  controller: _editing ? _handleCtrl : null,
+                  iconColor: chrome.accentBlue,
+                ),
+                _ProfileRow(
+                  icon: Icons.mail_outline,
+                  label: 'Email',
+                  value: _editing ? null : _emailCtrl.text,
+                  controller: _editing ? _emailCtrl : null,
+                  iconColor: VibrantColors.softPink,
+                ),
+                _ProfileRow(
+                  icon: Icons.phone_iphone_outlined,
+                  label: 'Phone',
+                  value: _editing ? null : _phoneCtrl.text,
+                  controller: _editing ? _phoneCtrl : null,
+                  iconColor: VibrantColors.warmYellow,
+                ),
+                _ProfileRow(
+                  icon: Icons.public_outlined,
+                  label: 'Nationality',
+                  value: _editing ? null : _nationalityCtrl.text,
+                  controller: _editing ? _nationalityCtrl : null,
+                  iconColor: VibrantColors.pastelGreen,
+                ),
+                _ProfileRow(
+                  icon: Icons.payments_outlined,
+                  label: 'Primary Currency',
+                  value: _editing ? null : _currencyCtrl.text,
+                  controller: _editing ? _currencyCtrl : null,
+                  iconColor: VibrantColors.softBlue,
+                ),
+                _ProfileRow(
+                  icon: Icons.wc_outlined,
+                  label: 'Gender',
+                  value: _editing ? null : (_selectedGender ?? 'Not set'),
+                  iconColor: VibrantColors.softBlue,
+                  child: _editing
+                      ? _GenderDropdown(
+                          value: _selectedGender,
+                          onChanged: (v) => setState(() => _selectedGender = v),
+                        )
+                      : null,
+                ),
+                _ProfileRow(
+                  icon: Icons.cake_outlined,
+                  label: 'Date of Birth',
+                  value: _editing
+                      ? null
+                      : (_selectedDob != null
+                          ? AppDateUtils.displayDate(_selectedDob!)
+                          : 'Not set'),
+                  iconColor: VibrantColors.warmYellow,
+                  isLast: true,
+                  child: _editing
+                      ? _DobPickerInline(
+                          value: _selectedDob,
+                          onChanged: (v) => setState(() => _selectedDob = v),
+                        )
+                      : null,
+                ),
+              ],
+            ),
+            const SizedBox(height: 32),
+
+            const SizedBox(height: 48),
+          ],
         ),
       ),
     );
   }
 }
-/* ─────────────── Gender Picker (edit mode) ─────────────── */
 
-class _GenderPicker extends StatelessWidget {
-  const _GenderPicker({required this.value, required this.onChanged});
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({required this.children});
+  final List<Widget> children;
 
+  @override
+  Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: BoxDecoration(
+        color: chrome.surfaceColor.withOpacity(0.6),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: chrome.mutedColor.withOpacity(0.1)),
+      ),
+      child: Column(children: children),
+    );
+  }
+}
+
+class _ProfileRow extends StatelessWidget {
+  const _ProfileRow({
+    required this.icon,
+    required this.label,
+    this.value,
+    this.child,
+    this.controller,
+    required this.iconColor,
+    this.isLast = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final String? value;
+  final Widget? child;
+  final TextEditingController? controller;
+  final Color iconColor;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: iconColor.withOpacity(0.2)),
+                ),
+                child: Icon(icon, color: iconColor, size: 20),
+              ),
+              const SizedBox(width: 16),
+              // Label
+              Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: chrome.mutedColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+              const SizedBox(width: 10),
+              // Value or Input
+              if (child != null)
+                Expanded(child: Align(alignment: Alignment.centerRight, child: child!))
+              else if (controller != null)
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    textAlign: TextAlign.right,
+                    cursorColor: chrome.accentBlue,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: chrome.accentBlue, width: 1),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                    ),
+                  ),
+                )
+              else if (value != null)
+                Text(
+                  value!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.white.withOpacity(0.9),
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+            ],
+          ),
+        ),
+        if (!isLast)
+          Divider(
+            height: 1,
+            indent: 72,
+            endIndent: 16,
+            color: chrome.mutedColor.withOpacity(0.08),
+          ),
+      ],
+    );
+  }
+}
+
+class _GenderDropdown extends StatelessWidget {
+  const _GenderDropdown({required this.value, required this.onChanged});
   final String? value;
   final ValueChanged<String?> onChanged;
 
-  static const _options = ['Male', 'Female', 'Other', 'Prefer not to say'];
-
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
-
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: chrome.mutedColor,
-          fontWeight: FontWeight.w700,
-        );
-
-    final valueStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: chrome.textColor,
-          fontWeight: FontWeight.w800,
-        );
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 66),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: chrome.mutedColor.withOpacity(0.18),
-          borderRadius: BorderRadius.circular(28),
+    const options = ['Male', 'Female', 'Other', 'Prefer not to say'];
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<String>(
+        value: options.contains(value) ? value : null,
+        isDense: true,
+        dropdownColor: const Color(0xFF1C1C1E),
+        icon: Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: Icon(Icons.unfold_more, size: 16, color: chrome.mutedColor.withOpacity(0.5)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.06),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: const SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: Icon(Icons.wc_outlined, color: Colors.black87, size: 20),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Gender', style: labelStyle, maxLines: 1,
-                        overflow: TextOverflow.ellipsis),
-                    DropdownButton<String>(
-                      value: _options.contains(value) ? value : null,
-                      hint: Text('Select', style: valueStyle),
-                      isExpanded: true,
-                      underline: const SizedBox.shrink(),
-                      isDense: true,
-                      style: valueStyle,
-                      items: _options
-                          .map((g) => DropdownMenuItem(value: g, child: Text(g)))
-                          .toList(),
-                      onChanged: onChanged,
-                    ),
-                  ],
-                ),
-              ),
-            ],
+        underline: const SizedBox.shrink(),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+            ),
+        items: options.map((s) => DropdownMenuItem(
+          value: s, 
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(s),
           ),
-        ),
+        )).toList(),
+        onChanged: onChanged,
       ),
     );
   }
 }
 
-/* ─────────────── Date-of-Birth Picker (edit mode) ─────────────── */
-
-class _DobPicker extends StatelessWidget {
-  const _DobPicker({required this.value, required this.onChanged});
-
+class _DobPickerInline extends StatelessWidget {
+  const _DobPickerInline({required this.value, required this.onChanged});
   final DateTime? value;
   final ValueChanged<DateTime?> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
-
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: chrome.mutedColor,
-          fontWeight: FontWeight.w700,
-        );
-
-    final valueStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: chrome.textColor,
-          fontWeight: FontWeight.w800,
-        );
-
     return GestureDetector(
       onTap: () async {
         final picked = await showDatePicker(
@@ -570,55 +482,64 @@ class _DobPicker extends StatelessWidget {
           initialDate: value ?? DateTime(2000),
           firstDate: DateTime(1920),
           lastDate: DateTime.now(),
+          builder: (context, child) => Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: ColorScheme.dark(
+                primary: chrome.accentBlue, 
+                onPrimary: Colors.white,
+                surface: const Color(0xFF1C1C1E),
+                onSurface: Colors.white
+              ),
+              textButtonTheme: TextButtonThemeData(
+                style: TextButton.styleFrom(foregroundColor: chrome.accentBlue),
+              ),
+            ),
+            child: child!,
+          ),
         );
         if (picked != null) onChanged(picked);
       },
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 66),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: chrome.mutedColor.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(28),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.06),
-                    borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value != null ? AppDateUtils.displayDate(value!) : 'Select Date',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: const SizedBox(
-                    width: 40,
-                    height: 40,
-                    child: Icon(Icons.cake_outlined, color: Colors.black87, size: 20),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Date of birth', style: labelStyle, maxLines: 1,
-                          overflow: TextOverflow.ellipsis),
-                      const SizedBox(height: 2),
-                      Text(
-                        value != null
-                            ? AppDateUtils.displayDate(value!)
-                            : 'Tap to select',
-                        style: valueStyle,
-                      ),
-                    ],
-                  ),
-                ),
-              ],
             ),
-          ),
+            const SizedBox(width: 6),
+            Icon(Icons.calendar_today_outlined, size: 14, color: chrome.mutedColor.withOpacity(0.6)),
+          ],
         ),
       ),
+    );
+  }
+}
+
+extension SignupProfileDataExt on SignupProfileData {
+  SignupProfileData copyWith({
+    String? fullName,
+    String? profession,
+    String? userName,
+    String? email,
+    String? nationality,
+    String? currency,
+    List<String>? selectedPrograms,
+    List<String>? preferences,
+  }) {
+    return SignupProfileData(
+      fullName: fullName ?? this.fullName,
+      profession: profession ?? this.profession,
+      userName: userName ?? this.userName,
+      email: email ?? this.email,
+      nationality: nationality ?? this.nationality,
+      currency: currency ?? this.currency,
+      selectedPrograms: selectedPrograms ?? this.selectedPrograms,
+      preferences: preferences ?? this.preferences,
     );
   }
 }

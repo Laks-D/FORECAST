@@ -43,7 +43,7 @@ class ScheduleGenerator {
           id: DateTime.now().millisecondsSinceEpoch + i,
           sessionNo: i + 1,
           clientId: clientId,
-          status: 'Pending',
+          status: 'Upcoming',
           time: timeRange,
           date: AppDateUtils.dateToStr(cursor),
           duration: duration,
@@ -93,6 +93,9 @@ class ScheduleGenerator {
       final newTime = AppDateUtils.parseTimeRange(newS.time);
       for (final ex in existing) {
         if (newS.date != ex.date) continue;
+        // Cancelled/Completed sessions should not block scheduling.
+        final derived = AppDateUtils.determineSessionStatus(ex.status, ex.date, ex.time);
+        if (derived == 'Cancelled' || derived == 'Completed') continue;
         final exTime = AppDateUtils.parseTimeRange(ex.time);
 
         final overlaps = (newTime['start']! < exTime['end']!) &&

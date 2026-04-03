@@ -10,6 +10,7 @@ import '../../../client/domain/usecases/get_clients_usecase.dart';
 import '../../../client/domain/entities/client_timeline_event.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_event.dart';
+import '../../../../core/storage/signup_profile_storage.dart';
 import '../../bloc/calendar_cubit.dart';
 import '../../bloc/calendar_state.dart';
 import '../../bloc/sessions_cubit.dart';
@@ -26,9 +27,6 @@ class CalendarPageBody extends StatefulWidget {
 
   @override
   State<CalendarPageBody> createState() => _CalendarPageBodyState();
-
-  static const _cardRadius = 40.0;
-  static const _softText = Color(0xFF4A4A4A);
 
   static DateTime _startOfWeek(DateTime date) {
     final normalized = DateTime(date.year, date.month, date.day);
@@ -62,8 +60,93 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
     return BlocSelector<CalendarCubit, CalendarState, CalendarViewMode>(
       selector: (s) => s.viewMode,
       builder: (context, mode) {
-        final topFlex = mode == CalendarViewMode.monthly ? 5 : 3;
-        final bottomFlex = mode == CalendarViewMode.monthly ? 6 : 8;
+        if (mode == CalendarViewMode.monthly) {
+          // Monthly view:
+          // - Calendar grid scrolls away (top section)
+          // - Date + Schedule toggle stay pinned
+          // - After that, only the schedule list continues scrolling
+          final chrome = AppChromeTheme.of(context);
+          const pinnedHeaderHeight = 12.0 + 26.0 + 12.0 + 52.0 + 10.0;
+
+          return CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 390,
+                  child: _CalendarTopCard(
+                    mode: mode,
+                    scheduleType: _scheduleType,
+                  ),
+                ),
+              ),
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _PinnedMonthlyHeaderDelegate(
+                  height: pinnedHeaderHeight,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: chrome.mutedColor.withOpacity(0.10),
+                        ),
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const SizedBox(height: 12),
+                        BlocSelector<CalendarCubit, CalendarState, DateTime>(
+                          selector: (s) => s.selectedDate,
+                          builder: (context, selected) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: SizedBox(
+                                  height: 26,
+                                  child: Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Text(
+                                      '${selected.day} ${CalendarPageBody._monthName(selected.month)}  ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][selected.weekday - 1]}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                            color: chrome.textColor,
+                                            fontWeight: FontWeight.w900,
+                                            fontSize: 20,
+                                            height: 1.0,
+                                          ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        _ScheduleTypeToggle(
+                          value: _scheduleType,
+                          onChanged: (type) => setState(() => _scheduleType = type),
+                        ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: _CalendarBottomCard(
+                  scheduleType: _scheduleType,
+                  isSliverWrap: true,
+                ),
+              ),
+            ],
+          );
+        }
+
+        final topFlex = mode == CalendarViewMode.monthly ? 7 : 3;
+        final bottomFlex = mode == CalendarViewMode.monthly ? 4 : 8;
 
         return Column(
           children: [
@@ -74,7 +157,30 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
                 scheduleType: _scheduleType,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
+            BlocSelector<CalendarCubit, CalendarState, DateTime>(
+              selector: (s) => s.selectedDate,
+              builder: (context, selected) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      '${selected.day} ${CalendarPageBody._monthName(selected.month)}  ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][selected.weekday - 1]}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: AppChromeTheme.of(context).textColor,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 20,
+                            height: 1.0,
+                          ),
+                    ),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
             _ScheduleTypeToggle(
               value: _scheduleType,
               onChanged: (type) => setState(() => _scheduleType = type),
@@ -112,9 +218,8 @@ class _ScheduleTypeToggle extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEFEFEF) : Colors.transparent,
+            color: selected ? VibrantColors.warmYellow : Colors.transparent,
             borderRadius: BorderRadius.circular(999),
-            border: selected ? Border.all(color: const Color(0xFFE1E1E1)) : null,
           ),
           child: SizedBox(
             height: 44,
@@ -122,8 +227,8 @@ class _ScheduleTypeToggle extends StatelessWidget {
               child: Text(
                 text,
                 style: TextStyle(
-                  color: selected ? Colors.black : Colors.grey,
-                  fontWeight: FontWeight.w700,
+                  color: selected ? Colors.black : AppChromeTheme.of(context).textColor.withOpacity(0.6),
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                 ),
               ),
             ),
@@ -136,9 +241,9 @@ class _ScheduleTypeToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppChromeTheme.of(context).surfaceColor,
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: const Color(0xFFE6E6E6)),
+          border: Border.all(color: AppChromeTheme.of(context).mutedColor.withOpacity(0.18)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.max,
@@ -176,9 +281,8 @@ class _CalendarTopCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(CalendarPageBody._cardRadius),
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -239,9 +343,10 @@ class _CalendarHeader extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: CalendarPageBody._softText,
-                          fontWeight: FontWeight.w800,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: AppChromeTheme.of(context).textColor,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 18,
                         ),
                   ),
                 ),
@@ -273,8 +378,8 @@ class _ArrowButton extends StatelessWidget {
         padding: const EdgeInsets.all(4),
         child: Icon(
           icon,
-          size: 20,
-          color: Colors.black54,
+          size: 24,
+          color: AppChromeTheme.of(context).textColor.withOpacity(0.8),
         ),
       ),
     );
@@ -295,17 +400,16 @@ class _CalendarModeToggle extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: selected ? const Color(0xFFEFEFEF) : Colors.transparent,
+                color: selected ? VibrantColors.pastelGreen : Colors.transparent,
                 borderRadius: BorderRadius.circular(999),
-                border: selected ? Border.all(color: const Color(0xFFE1E1E1)) : null,
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                 child: Text(
                   text,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: selected ? Colors.black87 : Colors.black54,
-                        fontWeight: FontWeight.w700,
+                        color: selected ? Colors.black : AppChromeTheme.of(context).textColor.withOpacity(0.6),
+                        fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
                       ),
                 ),
               ),
@@ -315,9 +419,9 @@ class _CalendarModeToggle extends StatelessWidget {
 
         return DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppChromeTheme.of(context).surfaceColor,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: const Color(0xFFE6E6E6)),
+            border: Border.all(color: AppChromeTheme.of(context).mutedColor.withOpacity(0.18)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -360,16 +464,24 @@ class _WeeklyTopContent extends StatelessWidget {
             final Map<String, int> sessionCounts = {};
             final Map<String, bool> allCompletedMap = {};
             if (scheduleType == _ScheduleCalendarType.classSchedule) {
-              markerDates = sessionsState.sessions.map((s) => s.date).toSet();
+              final dates = <String>{};
               // Group sessions by date for counts & completed status
               for (final s in sessionsState.sessions) {
+                final derived = AppDateUtils.determineSessionStatus(
+                  s.status,
+                  s.date,
+                  s.time,
+                );
+                if (derived == 'Cancelled') continue;
+                dates.add(s.date);
                 sessionCounts[s.date] = (sessionCounts[s.date] ?? 0) + 1;
-                if (s.status == 'Completed') {
+                if (derived == 'Completed') {
                   allCompletedMap[s.date] ??= true;
                 } else {
                   allCompletedMap[s.date] = false;
                 }
               }
+              markerDates = dates;
             } else {
               final allClients = sl<GetClientsUseCase>().execute();
               final dates = <String>{};
@@ -396,16 +508,8 @@ class _WeeklyTopContent extends StatelessWidget {
 
             return Center(
               child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x14000000),
-                      blurRadius: 14,
-                      offset: Offset(0, 8),
-                    ),
-                  ],
+                decoration: const BoxDecoration(
+                  color: Colors.transparent,
                 ),
                 child: SizedBox(
                   height: 74,
@@ -479,15 +583,15 @@ class _WeekDayChip extends StatelessWidget {
     final label = dayNames[date.weekday - 1];
     final chrome = AppChromeTheme.of(context);
 
-    final bg = selected ? const Color(0xFFEDEDED) : const Color(0xFFF7F7F7);
+    final bg = selected ? VibrantColors.softBlue : Colors.transparent;
 
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(24),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Center(
           child: FittedBox(
@@ -501,19 +605,19 @@ class _WeekDayChip extends StatelessWidget {
                   maxLines: 1,
                   softWrap: false,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.black54,
+                        color: selected ? Colors.black54 : chrome.textColor.withOpacity(0.5),
                         fontWeight: FontWeight.w700,
                         height: 1.0,
                       ),
                 ),
-                const SizedBox(height: 1),
+                const SizedBox(height: 8),
                 Text(
                   '${date.day}',
                   maxLines: 1,
                   softWrap: false,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w800,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: selected ? Colors.black : chrome.textColor,
+                        fontWeight: FontWeight.w900,
                         height: 1.0,
                       ),
                 ),
@@ -523,18 +627,18 @@ class _WeekDayChip extends StatelessWidget {
                     padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
                     decoration: BoxDecoration(
                       color: allCompleted
-                          ? const Color(0xFF4CAF50)
+                          ? VibrantColors.pastelGreen
                           : (selected
-                              ? chrome.textColor
-                              : chrome.accentBlue.withOpacity(0.85)),
+                              ? Colors.black87
+                              : VibrantColors.warmYellow),
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
                       '$sessionCount',
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: selected ? VibrantColors.softBlue : chrome.surfaceColor,
                         fontSize: 8,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         height: 1.2,
                       ),
                     ),
@@ -544,11 +648,11 @@ class _WeekDayChip extends StatelessWidget {
                   DecoratedBox(
                     decoration: BoxDecoration(
                       color: selected
-                          ? chrome.textColor
-                          : chrome.accentBlue.withOpacity(0.85),
+                          ? Colors.black87
+                          : VibrantColors.warmYellow,
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: const SizedBox(height: 6, width: 6),
+                    child: const SizedBox(height: 5, width: 5),
                   ),
                 ],
               ],
@@ -578,15 +682,23 @@ class _MonthlyTopContent extends StatelessWidget {
             final Map<String, int> sessionCounts = {};
             final Map<String, bool> allCompletedMap = {};
             if (scheduleType == _ScheduleCalendarType.classSchedule) {
-              markerDates = sessionsState.sessions.map((s) => s.date).toSet();
+              final dates = <String>{};
               for (final s in sessionsState.sessions) {
+                final derived = AppDateUtils.determineSessionStatus(
+                  s.status,
+                  s.date,
+                  s.time,
+                );
+                if (derived == 'Cancelled') continue;
+                dates.add(s.date);
                 sessionCounts[s.date] = (sessionCounts[s.date] ?? 0) + 1;
-                if (s.status == 'Completed') {
+                if (derived == 'Completed') {
                   allCompletedMap[s.date] ??= true;
                 } else {
                   allCompletedMap[s.date] = false;
                 }
               }
+              markerDates = dates;
             } else {
               final allClients = sl<GetClientsUseCase>().execute();
               final dates = <String>{};
@@ -622,27 +734,25 @@ class _MonthlyTopContent extends StatelessWidget {
 
             return Column(
               children: [
-                const SizedBox(height: 4),
+                const SizedBox(height: 2),
                 const _WeekdayHeaderRow(),
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 Expanded(
                   child: LayoutBuilder(
                     builder: (context, constraints) {
-                      final spacing = (constraints.maxHeight / rows) < 36 ? 4.0 : 6.0;
+                      const spacing = 6.0;
                       final usableH = constraints.maxHeight - spacing * (rows - 1);
-                      // Let the grid fill the available height to avoid empty space
-                      // below the last week (common when a max cell height is used).
-                      final computedCellH = usableH / rows;
-                      final cellH = computedCellH < 20.0 ? 20.0 : computedCellH;
+                      final computedCellH = (usableH / rows).clamp(36.0, 56.0);
+                      final cellH = computedCellH;
 
                       return GridView.builder(
                         primary: false,
-                        padding: EdgeInsets.zero,
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
                         physics: const NeverScrollableScrollPhysics(),
                         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                           crossAxisCount: 7,
-                          mainAxisSpacing: spacing,
-                          crossAxisSpacing: spacing,
+                          mainAxisSpacing: 6,
+                          crossAxisSpacing: 6,
                           mainAxisExtent: cellH,
                         ),
                         itemCount: cellCount,
@@ -690,6 +800,7 @@ class _WeekdayHeaderRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const labels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+    final chrome = AppChromeTheme.of(context);
     return Row(
       children: labels
           .map(
@@ -698,8 +809,8 @@ class _WeekdayHeaderRow extends StatelessWidget {
                 child: Text(
                   t,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: Colors.black45,
-                        fontWeight: FontWeight.w700,
+                        color: chrome.mutedColor,
+                        fontWeight: FontWeight.w800,
                       ),
                 ),
               ),
@@ -734,24 +845,19 @@ class _MonthDayCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
-    final bg = selected
-        ? const Color(0xFFE9E9E9)
-        : (isToday ? const Color(0xFFF2F2F2) : const Color(0xFFF8F8F8));
-
-    final cellBg = (inMonth && allCompleted && hasSessions)
-        ? const Color(0xFFE8F5E9)
-        : (inMonth ? bg : const Color(0xFFF8F8F8));
+    
+    final bg = selected ? VibrantColors.softBlue : Colors.transparent;
+    final textColor = inMonth
+        ? (selected ? Colors.black : (chrome.textColor))
+        : (chrome.mutedColor).withOpacity(0.3);
 
     return InkWell(
       onTap: inMonth ? onTap : null,
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(24),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: cellBg,
-          borderRadius: BorderRadius.circular(16),
-          border: (inMonth && allCompleted && hasSessions)
-              ? Border.all(color: const Color(0xFF4CAF50), width: 1.5)
-              : null,
+          color: bg,
+          borderRadius: BorderRadius.circular(24),
         ),
         child: Center(
           child: FittedBox(
@@ -759,50 +865,45 @@ class _MonthDayCell extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (inMonth)
-                  Text(
-                    '$day',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                          color: (allCompleted && hasSessions)
-                              ? const Color(0xFF2E7D32)
-                              : Colors.black87,
-                          fontWeight: FontWeight.w800,
-                          height: 1.0,
-                        ),
-                  ),
-                if (hasSessions && inMonth && sessionCount > 0) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: allCompleted
-                          ? const Color(0xFF4CAF50)
-                          : (selected
-                              ? chrome.textColor.withOpacity(0.9)
-                              : chrome.accentBlue.withOpacity(0.85)),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '$sessionCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w700,
-                        height: 1.2,
+                Text(
+                  inMonth ? '$day' : '',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: textColor,
+                        fontWeight: FontWeight.w900,
+                        height: 1.0,
                       ),
+                ),
+                if (hasSessions && inMonth) ...[
+                  const SizedBox(height: 4),
+                  if (sessionCount > 1)
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: allCompleted
+                          ? VibrantColors.pastelGreen
+                            : (selected ? Colors.black87 : VibrantColors.warmYellow),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                        child: Text(
+                          '$sessionCount',
+                          style: TextStyle(
+                            color: selected ? VibrantColors.softBlue : chrome.surfaceColor,
+                            fontSize: 8,
+                            fontWeight: FontWeight.w800,
+                            height: 1.2,
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: selected ? Colors.black87 : VibrantColors.warmYellow,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const SizedBox(height: 5, width: 5),
                     ),
-                  ),
-                ] else if (hasSessions && inMonth) ...[
-                  const SizedBox(height: 2),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? chrome.textColor.withOpacity(0.9)
-                          : chrome.accentBlue.withOpacity(0.85),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const SizedBox(height: 5, width: 5),
-                  ),
                 ],
               ],
             ),
@@ -813,26 +914,48 @@ class _MonthDayCell extends StatelessWidget {
   }
 }
 
+class _PinnedMonthlyHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _PinnedMonthlyHeaderDelegate({
+    required this.height,
+    required this.child,
+  });
+
+  final double height;
+  final Widget child;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return SizedBox(height: height, child: child);
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedMonthlyHeaderDelegate oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
+  }
+}
+
 bool _isSameDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
 class _CalendarBottomCard extends StatelessWidget {
-  const _CalendarBottomCard({required this.scheduleType});
+  const _CalendarBottomCard({required this.scheduleType, this.isSliverWrap = false});
 
   final _ScheduleCalendarType scheduleType;
+  final bool isSliverWrap;
 
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(CalendarPageBody._cardRadius),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+    final content = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
         child: BlocBuilder<CalendarCubit, CalendarState>(
           builder: (context, calendarState) {
             final selectedDate = calendarState.selectedDate;
@@ -1014,9 +1137,10 @@ class _CalendarBottomCard extends StatelessWidget {
                 ),
                 // Add Payment Sheet for scheduling a payment for a client
                 const SizedBox(height: 10),
-                Expanded(
-                  child: scheduleType == _ScheduleCalendarType.classSchedule
-                      ? BlocBuilder<SessionsCubit, SessionsState>(
+                Builder(
+                  builder: (context) {
+                    final bottomContent = scheduleType == _ScheduleCalendarType.classSchedule
+                        ? BlocBuilder<SessionsCubit, SessionsState>(
                           builder: (context, state) {
                             if (state.isLoading) {
                               return const Center(child: CircularProgressIndicator());
@@ -1026,7 +1150,7 @@ class _CalendarBottomCard extends StatelessWidget {
                                 child: Text(
                                   state.error!,
                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: Colors.red.shade700,
+                                        color: VibrantColors.softPink,
                                         fontWeight: FontWeight.w700,
                                       ),
                                 ),
@@ -1035,6 +1159,15 @@ class _CalendarBottomCard extends StatelessWidget {
 
                             final sessions = state.sessions
                                 .where((s) => visibleDateStrs.contains(s.date))
+                                .where(
+                                  (s) =>
+                                      AppDateUtils.determineSessionStatus(
+                                        s.status,
+                                        s.date,
+                                        s.time,
+                                      ) !=
+                                      'Cancelled',
+                                )
                                 .toList()
                               ..sort((a, b) {
                                 // Sort by date first, then by time.
@@ -1059,63 +1192,121 @@ class _CalendarBottomCard extends StatelessWidget {
                               );
                             }
 
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(22),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: chrome.surfaceColor,
-                                  border: Border.all(
-                                    color: chrome.mutedColor.withOpacity(0.16),
+                             final list = ListView.separated(
+                               itemCount: sessions.length,
+                               shrinkWrap: isSliverWrap,
+                               physics: isSliverWrap ? const NeverScrollableScrollPhysics() : null,
+                               padding: const EdgeInsets.only(bottom: 24),
+                               separatorBuilder: (_, __) => const SizedBox(height: 12),
+                               itemBuilder: (context, index) {
+                                 final s = sessions[index];
+                                final derivedStatus = AppDateUtils.determineSessionStatus(
+                                  s.status,
+                                  s.date,
+                                  s.time,
+                                );
+                                final name = clientNames[s.clientId] ?? 'Client';
+                                final dateLabel = isWeeklyAll ? '${AppDateUtils.displayDateStr(s.date)} • ' : '';
+                                
+                                // Generate a deterministic color based on the name length
+                                final avatarColors = [
+                                  VibrantColors.softBlue,
+                                  VibrantColors.pastelGreen,
+                                  VibrantColors.warmYellow,
+                                  VibrantColors.softPink,
+                                ];
+                                final colorIndex = name.length % avatarColors.length;
+                                final avatarBg = avatarColors[colorIndex];
+
+                                return DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    color: chrome.surfaceColor,
+                                    borderRadius: BorderRadius.circular(24),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.2),
+                                        blurRadius: 10,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ]
                                   ),
-                                ),
-                                child: ListView.separated(
-                                  itemCount: sessions.length,
-                                  separatorBuilder: (_, __) => Divider(
-                                    height: 1,
-                                    thickness: 1,
-                                    color: chrome.mutedColor.withOpacity(0.25),
-                                  ),
-                                  itemBuilder: (context, index) {
-                                    final s = sessions[index];
-                                    final derivedStatus = AppDateUtils.determineSessionStatus(
-                                      s.status,
-                                      s.date,
-                                      s.time,
-                                    );
-                                    final name = clientNames[s.clientId] ?? 'Client';
-                                    final dateLabel = isWeeklyAll ? '${AppDateUtils.displayDateStr(s.date)} • ' : '';
-                                    return ListTile(
-                                      dense: true,
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
                                       onTap: () => openRescheduleSheet(s),
-                                      title: Text(
-                                        name,
-                                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                              color: chrome.textColor,
-                                              fontWeight: FontWeight.w800,
+                                      borderRadius: BorderRadius.circular(24),
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 52,
+                                              height: 52,
+                                              decoration: BoxDecoration(
+                                                color: avatarBg,
+                                                borderRadius: BorderRadius.circular(16),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                name.isNotEmpty ? name[0].toUpperCase() : 'C',
+                                                style: const TextStyle(
+                                                  color: Color(0xFF111827),
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                              ),
                                             ),
-                                      ),
-                                      subtitle: Text(
-                                        '$dateLabel${s.time} • $derivedStatus',
-                                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                              color: chrome.mutedColor,
-                                              fontWeight: FontWeight.w600,
+                                            const SizedBox(width: 16),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    name,
+                                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                                          color: chrome.textColor,
+                                                          fontWeight: FontWeight.w800,
+                                                          fontSize: 16,
+                                                        ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '$dateLabel${s.time} • $derivedStatus',
+                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                          color: chrome.mutedColor,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
+                                          ],
+                                        ),
                                       ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            );
-                          },
-                        )
-                      : _PaymentScheduleList(items: paymentItems, isWeeklyAll: isWeeklyAll),
+                                    ),
+                                  ),
+                                  );
+                               },
+                             );
+
+                             return isSliverWrap ? list : Expanded(child: list);
+                           },
+                         )
+                       : (isSliverWrap 
+                           ? _PaymentScheduleList(items: paymentItems, isWeeklyAll: isWeeklyAll, isSliverWrap: true)
+                           : Expanded(child: _PaymentScheduleList(items: paymentItems, isWeeklyAll: isWeeklyAll)));
+
+                    if (isSliverWrap) return bottomContent;
+                    return Expanded(child: bottomContent);
+                  },
                 ),
-              ],
-            );
-          },
-        ),
-      ),
+               ],
+             );
+           },
+         ),
     );
+
+    return content;
   }
 }
 
@@ -1150,10 +1341,15 @@ class _PaymentScheduleRow {
 }
 
 class _PaymentScheduleList extends StatelessWidget {
-  const _PaymentScheduleList({required this.items, this.isWeeklyAll = false});
+  const _PaymentScheduleList({
+    required this.items,
+    this.isWeeklyAll = false,
+    this.isSliverWrap = false,
+  });
 
   final List<_PaymentScheduleItem> items;
   final bool isWeeklyAll;
+  final bool isSliverWrap;
 
   @override
   Widget build(BuildContext context) {
@@ -1161,59 +1357,83 @@ class _PaymentScheduleList extends StatelessWidget {
     final clients = sl<GetClientsUseCase>().execute();
     final clientMap = {for (final c in clients) c.id: c};
 
-    String statusFor(Client client, DateTime date) {
-      String status = 'Pending';
+    String statusFor(Client client, DateTime date, String paymentEventId) {
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final payDay = DateTime(date.year, date.month, date.day);
+
+      String status = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
       try {
         final dateKey = AppDateUtils.dateToStr(date);
-        final statusEvents = client.timeline.reversed
+
+        final hasMultiplePaymentsThatDay = client.timeline
             .where((e) =>
-                e.type == ClientTimelineEventType.statusChanged &&
-                AppDateUtils.dateToStr(e.createdAt) == dateKey)
-            .toList(growable: false);
-        if (statusEvents.isNotEmpty) {
-          final statusEvent = statusEvents.first;
-          if (statusEvent.status != null && statusEvent.status!.trim().isNotEmpty) {
-            status = statusEvent.status!;
+              e.type == ClientTimelineEventType.payment &&
+              AppDateUtils.dateToStr(e.createdAt) == dateKey)
+            .length >
+          1;
+
+        // Prefer a payment-specific status change.
+        for (final e in client.timeline.reversed) {
+          if (e.type != ClientTimelineEventType.statusChanged) continue;
+          if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
+          if (e.refId != paymentEventId) continue;
+          final s = e.status;
+          if (s != null && s.trim().isNotEmpty) {
+            status = s;
+            break;
+          }
+        }
+
+        // Fallback to legacy date-based status changes (no refId).
+        // If there are multiple payments that day, legacy status changes would
+        // incorrectly affect all of them.
+        if (!hasMultiplePaymentsThatDay &&
+            status == (payDay.isBefore(today) ? 'Pending' : 'Upcoming')) {
+          for (final e in client.timeline.reversed) {
+            if (e.type != ClientTimelineEventType.statusChanged) continue;
+            if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
+            if (e.refId != null) continue;
+            final s = e.status;
+            if (s != null && s.trim().isNotEmpty) {
+              status = s;
+              break;
+            }
           }
         }
       } catch (_) {}
 
-      if (status != 'Pending' &&
+      // Legacy mapping.
+      if (status.trim() == 'Overdue') status = 'Pending';
+
+      // Older builds treated "Pending" as a future label; normalize future dates to "Upcoming".
+      if (status.trim() == 'Pending' && !payDay.isBefore(today)) {
+        status = 'Upcoming';
+      }
+
+      if (status != 'Upcoming' &&
+          status != 'Pending' &&
           status != 'Paid' &&
           status != 'Paid fully' &&
           status != 'Will pay later') {
-        status = 'Pending';
+        status = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
       }
 
       return status;
     }
 
-    bool isCoveredByPaidFully(Client client, DateTime date) {
-      final dateKey = AppDateUtils.dateToStr(date);
-      for (final event in client.timeline.reversed) {
-        if (event.type != ClientTimelineEventType.statusChanged) continue;
-        if (event.status == null) continue;
-        if (event.status!.trim() != 'Paid fully') continue;
-        final key = AppDateUtils.dateToStr(event.createdAt);
-        if (key == dateKey) {
-          // Same-day "Paid fully" is the anchor; keep it visible.
-          return false;
-        }
-        if (key.compareTo(dateKey) < 0) {
-          // A prior Paid fully action covers this future installment.
-          return true;
-        }
-      }
-      return false;
-    }
-
     final rows = <_PaymentScheduleRow>[];
     for (final item in items) {
       final client = clientMap[item.clientId];
-      if (client == null) continue;
-      final status = statusFor(client, item.date);
-      if (isCoveredByPaidFully(client, item.date)) {
+      if (client == null) {
+        debugPrint('Calendar: client not found for id ${item.clientId}');
         continue;
+      }
+      String status = 'Upcoming';
+      try {
+        status = statusFor(client, item.date, item.paymentEventId);
+      } catch (e) {
+        debugPrint('Calendar: error statusFor for ${client.id}: $e');
       }
       rows.add(_PaymentScheduleRow(item: item, client: client, status: status));
     }
@@ -1231,145 +1451,153 @@ class _PaymentScheduleList extends StatelessWidget {
         ),
       );
     }
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(22),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: chrome.surfaceColor,
-          border: Border.all(
-            color: chrome.mutedColor.withOpacity(0.16),
-          ),
-        ),
-        child: ListView.separated(
-          itemCount: rows.length,
-          separatorBuilder: (_, __) => Divider(
-            height: 1,
-            thickness: 1,
-            color: chrome.mutedColor.withOpacity(0.25),
-          ),
-          itemBuilder: (context, index) {
-            final row = rows[index];
-            final p = row.item;
-            final client = row.client;
-            final status = row.status;
-            final amountLabel = p.amount == null ? 'No amount' : '₹${p.amount!.toStringAsFixed(0)}';
+    return ListView.separated(
+      itemCount: rows.length,
+      shrinkWrap: isSliverWrap,
+      physics: isSliverWrap ? const NeverScrollableScrollPhysics() : null,
+      padding: const EdgeInsets.only(bottom: 24),
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final row = rows[index];
+        final p = row.item;
+        final client = row.client;
+        final status = row.status;
+        final amountLabel = p.amount == null ? 'No amount' : '₹${p.amount!.toStringAsFixed(0)}';
+        final resetLabel = () {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final payDay = DateTime(p.date.year, p.date.month, p.date.day);
+          return payDay.isBefore(today) ? 'Pending' : 'Upcoming';
+        }();
 
-            Future<void> openReschedule() async {
-              final clientBloc = context.read<ClientBloc>();
-              await showModalBottomSheet<void>(
-                context: context,
-                isScrollControlled: true,
-                backgroundColor: Colors.transparent,
-                builder: (ctx) {
-                  return Padding(
-                    padding: EdgeInsets.only(
-                      bottom: MediaQuery.of(ctx).viewInsets.bottom,
+        Future<void> openReschedule() async {
+          final clientBloc = context.read<ClientBloc>();
+          await showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Colors.transparent,
+            builder: (ctx) {
+              return Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                ),
+                child: BlocProvider.value(
+                  value: clientBloc,
+                  child: _ReschedulePaymentSheet(
+                    clientId: p.clientId,
+                    paymentEventId: p.paymentEventId,
+                    currentDate: p.date,
+                  ),
+                ),
+              );
+            },
+          );
+
+          if (!context.mounted) return;
+          try {
+            context.read<CalendarCubit>().refresh();
+          } catch (_) {}
+        }
+
+        final isPaidOrPast = status == 'Paid' || status == 'Paid fully';
+
+        // Same avatar block logic
+        final avatarColors = [
+          VibrantColors.softBlue,
+          VibrantColors.pastelGreen,
+          VibrantColors.warmYellow,
+          VibrantColors.softPink,
+        ];
+        final colorIndex = p.clientName.length % avatarColors.length;
+        final avatarBg = avatarColors[colorIndex];
+
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: chrome.surfaceColor,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ]
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: avatarBg,
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: BlocProvider.value(
-                      value: clientBloc,
-                      child: _ReschedulePaymentSheet(
-                        clientId: p.clientId,
-                        paymentEventId: p.paymentEventId,
-                        currentDate: p.date,
+                    alignment: Alignment.center,
+                    child: Text(
+                      p.clientName.isNotEmpty ? p.clientName[0].toUpperCase() : 'C',
+                      style: const TextStyle(
+                        color: Color(0xFF111827),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w900,
                       ),
                     ),
-                  );
-                },
-              );
-
-              if (!context.mounted) return;
-              try {
-                context.read<CalendarCubit>().refresh();
-              } catch (_) {}
-            }
-
-            final isPaidOrPast = status == 'Paid' || status == 'Paid fully';
-
-            return ListTile(
-              dense: true,
-              title: Text(
-                p.clientName,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: chrome.textColor,
-                      fontWeight: FontWeight.w800,
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          p.clientName,
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: chrome.textColor,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 16,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          p.note != null && p.note!.trim().isNotEmpty
+                              ? '$amountLabel • ${p.note!.trim()}'
+                              : amountLabel,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: chrome.mutedColor,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ],
                     ),
-              ),
-              subtitle: Text(
-                p.note != null && p.note!.trim().isNotEmpty
-                    ? '$amountLabel • ${p.note!.trim()}'
-                    : amountLabel,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: chrome.mutedColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              trailing: DropdownButton<String>(
-                value: status,
-                items: const [
-                  DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-                  DropdownMenuItem(value: 'Paid', child: Text('Paid')),
-                  DropdownMenuItem(value: 'Paid fully', child: Text('Paid fully')),
-                  DropdownMenuItem(value: 'Will pay later', child: Text('Will pay later')),
-                ],
-                onChanged: (v) {
+                  ),
+                  const SizedBox(width: 12),
+                  DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: status,
+                      icon: Icon(Icons.keyboard_arrow_down, color: chrome.mutedColor),
+                      dropdownColor: chrome.surfaceColor,
+                      style: TextStyle(
+                        color: isPaidOrPast ? VibrantColors.pastelGreen : VibrantColors.warmYellow,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                      items: [
+                        DropdownMenuItem(value: resetLabel, child: Text(resetLabel)),
+                        const DropdownMenuItem(value: 'Paid', child: Text('Paid')),
+                        const DropdownMenuItem(value: 'Paid fully', child: Text('Paid fully')),
+                        const DropdownMenuItem(value: 'Will pay later', child: Text('Will pay later')),
+                      ],
+                      onChanged: (v) {
                   if (v == null) return;
 
-                  if (v == 'Pending') {
-                    // If covered by "Paid fully", revert the whole batch.
-                    bool coveredByPaidFully = false;
-                    final dateKey = AppDateUtils.dateToStr(p.date);
-                    for (final ev in client.timeline) {
-                      if (ev.type != ClientTimelineEventType.statusChanged) continue;
-                      if (ev.status?.trim() != 'Paid fully') continue;
-                      final sKey = AppDateUtils.dateToStr(ev.createdAt);
-                      if (sKey.compareTo(dateKey) <= 0) {
-                        coveredByPaidFully = true;
-                        break;
-                      }
-                    }
-
-                    if (coveredByPaidFully) {
-                      showDialog<bool>(
-                        context: context,
-                        builder: (ctx) => AlertDialog(
-                          title: const Text('Revert Paid Fully?'),
-                          content: const Text(
-                            'This payment was marked via "Paid fully". '
-                            'Reverting will reset ALL payments that were covered.\n\n'
-                            'Continue?',
-                          ),
-                          actions: [
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, false),
-                              child: const Text('Cancel'),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.pop(ctx, true),
-                              child: const Text('Revert'),
-                            ),
-                          ],
-                        ),
-                      ).then((confirmed) {
-                        if (confirmed == true && context.mounted) {
-                          context.read<ClientBloc>().add(
-                                RevertClientPaidFully(entityId: client.id),
-                              );
-                          try { context.read<CalendarCubit>().refresh(); } catch (_) {}
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              duration: Duration(seconds: 1),
-                              content: Text('Paid fully reverted'),
-                            ),
-                          );
-                        }
-                      });
-                      return;
-                    }
-
+                  if (v == resetLabel) {
                     try {
                       context.read<ClientBloc>().add(ClearPaymentStatusForDate(
                         entityId: client.id,
                         date: p.date,
+                        paymentId: p.paymentEventId,
                       ));
                     } catch (_) {}
 
@@ -1379,7 +1607,7 @@ class _PaymentScheduleList extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         duration: const Duration(seconds: 1),
-                        content: Text('Payment reset to Pending for ${AppDateUtils.displayDate(p.date)}'),
+                        content: Text('Payment reset to $resetLabel for ${AppDateUtils.displayDate(p.date)}'),
                       ),
                     );
                     return;
@@ -1388,27 +1616,11 @@ class _PaymentScheduleList extends StatelessWidget {
                   if (v == 'Will pay later') {
                     // If currently paid, clear the status first.
                     if (isPaidOrPast) {
-                      bool coveredByPaidFully = false;
-                      final dateKey = AppDateUtils.dateToStr(p.date);
-                      for (final ev in client.timeline) {
-                        if (ev.type != ClientTimelineEventType.statusChanged) continue;
-                        if (ev.status?.trim() != 'Paid fully') continue;
-                        final sKey = AppDateUtils.dateToStr(ev.createdAt);
-                        if (sKey.compareTo(dateKey) <= 0) {
-                          coveredByPaidFully = true;
-                          break;
-                        }
-                      }
-                      if (coveredByPaidFully) {
-                        context.read<ClientBloc>().add(
-                              RevertClientPaidFully(entityId: client.id),
-                            );
-                      } else {
-                        context.read<ClientBloc>().add(ClearPaymentStatusForDate(
-                          entityId: client.id,
-                          date: p.date,
-                        ));
-                      }
+                      context.read<ClientBloc>().add(ClearPaymentStatusForDate(
+                        entityId: client.id,
+                        date: p.date,
+                        paymentId: p.paymentEventId,
+                      ));
                     }
                     openReschedule();
                     return;
@@ -1421,6 +1633,7 @@ class _PaymentScheduleList extends StatelessWidget {
                       entityId: client.id,
                       status: 'Paid',
                       createdAt: p.date,
+                      refId: p.paymentEventId,
                     ));
                     try {
                       context.read<CalendarCubit>().refresh();
@@ -1435,7 +1648,7 @@ class _PaymentScheduleList extends StatelessWidget {
                   }
 
                   if (v == 'Paid fully') {
-                    // Mark this and remaining scheduled payments as paid.
+                    // Mark all payments on this date as paid.
                     context.read<ClientBloc>().add(MarkClientPaidFully(
                       entityId: client.id,
                       fromDate: p.date,
@@ -1446,17 +1659,20 @@ class _PaymentScheduleList extends StatelessWidget {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         duration: const Duration(seconds: 1),
-                        content: Text('Marked Paid fully from ${AppDateUtils.displayDate(p.date)}'),
+                        content: Text('Marked Paid for all payments on ${AppDateUtils.displayDate(p.date)}'),
                       ),
                     );
                     return;
                   }
                 },
               ),
-            );
-          },
-        ),
-      ),
+            ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1495,29 +1711,6 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
   }
 
   DateTime _normalizeDay(DateTime d) => DateTime(d.year, d.month, d.day);
-
-  Future<bool> _confirmMerge({required String message}) async {
-    final res = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Warning'),
-          content: Text(message),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Merge'),
-            ),
-          ],
-        );
-      },
-    );
-    return res ?? false;
-  }
 
   Future<void> _save() async {
     final clients = sl<GetClientsUseCase>().execute();
@@ -1560,36 +1753,14 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
       }
     }
 
+    // If there is already a payment on the target day, we still reschedule.
+    // Payments should remain separate; we do not merge amounts.
     if (existing != null) {
-      // --- Merge path: target date already has a payment for this client ---
-      final targetPayment = existing;
-      final existingAmount = targetPayment.amount ?? 0;
-      final oldAmount = old.amount ?? 0;
-      final merged = existingAmount + oldAmount;
-      final message =
-          '${client.name} already has ₹${existingAmount.toStringAsFixed(0)} scheduled on $targetKey.\n'
-          'Merge with this ₹${oldAmount.toStringAsFixed(0)} payment for a total of ₹${merged.toStringAsFixed(0)}?';
-
-      final ok = await _confirmMerge(message: message);
-      if (!mounted) return;
-      if (!ok) return;
-
-      String? mergedNote;
-      if (targetPayment.note != null && targetPayment.note!.trim().isNotEmpty) {
-        mergedNote = targetPayment.note!.trim();
-      } else if (old.note != null && old.note!.trim().isNotEmpty) {
-        mergedNote = old.note!.trim();
-      }
-
-      // Dispatch merge through the bloc pipeline.
-      context.read<ClientBloc>().add(MergeClientPayments(
+      context.read<ClientBloc>().add(RescheduleClientPayment(
         entityId: widget.clientId,
-        sourcePaymentId: old.id,
-        sourceDate: _normalizeDay(old.createdAt),
-        targetPaymentId: targetPayment.id,
-        targetDate: targetDay,
-        mergedAmount: merged,
-        mergedNote: mergedNote,
+        paymentId: old.id,
+        oldDate: _normalizeDay(old.createdAt),
+        newDate: targetDay,
       ));
       if (mounted) Navigator.of(context).pop();
       return;
@@ -1613,11 +1784,12 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
+            color: const Color(0xFF111214),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
           ),
           child: Padding(
-            padding: const EdgeInsets.all(18.0),
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1729,6 +1901,9 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
     return existing.where((s) {
       if (s.id == widget.session.id) return false;
       if (s.date != selectedDate) return false;
+      // Cancelled/Completed sessions should not block rescheduling.
+      final derived = AppDateUtils.determineSessionStatus(s.status, s.date, s.time);
+      if (derived == 'Cancelled' || derived == 'Completed') return false;
 
       final exRange = AppDateUtils.parseTimeRange(s.time);
       final exStart = exRange['start'] ?? 0;
@@ -1819,8 +1994,14 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
     }
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111214),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+        ),
+        padding: const EdgeInsets.all(20.0),
         child: BlocBuilder<SessionsCubit, SessionsState>(
           builder: (context, state) {
             final clashes = _findClashes(state.sessions);
@@ -1916,24 +2097,27 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
                       ? 'Clash found with ${clashes.length} session(s): ${clashes.take(2).map((s) => s.time).join(', ')}${clashes.length > 2 ? '...' : ''}'
                       : 'No clash for selected time.',
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: hasClash ? Colors.red.shade700 : Colors.green.shade700,
+                        color: hasClash ? VibrantColors.softPink : VibrantColors.pastelGreen,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  child: FilledButton(
                     onPressed: hasClash ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: VibrantColors.pastelGreen,
+                      foregroundColor: Colors.black,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(16),
                       ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Save'),
+                    child: const Text(
+                      'Save',
+                      style: TextStyle(fontWeight: FontWeight.w900),
+                    ),
                   ),
                 ),
               ],
@@ -1962,6 +2146,7 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
   late final FocusNode _fullAmountFocus;
   late final FocusNode _frequentAmountFocus;
   String _frequency = 'Monthly';
+  String _currency = '₹';
   int _customDays = 1;
   int _weeklyDay = DateTime.monday;
   int _monthlyDate = 1;
@@ -1994,9 +2179,10 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
     _fullAmountFocus = FocusNode();
     _frequentAmountFocus = FocusNode();
 
+    _loadDefaultCurrency();
+
     void onAmountTextChanged() {
       if (!mounted) return;
-      // Rebuild to update enable/disable + warning overlays dynamically.
       if (_draftDates.isNotEmpty) {
         setState(() => _clearDraft());
       } else {
@@ -2006,6 +2192,35 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
 
     _fullAmountController.addListener(onAmountTextChanged);
     _frequentAmountController.addListener(onAmountTextChanged);
+  }
+
+  Future<void> _loadDefaultCurrency() async {
+    final profile = await SignupProfileStorage.getProfile();
+    const currencyMap = {
+      'India': '₹',
+      'USA': r'$',
+      'UK': '£',
+      'UAE': 'د.إ',
+      'Europe': '€',
+    };
+    if (profile != null && mounted) {
+      setState(() {
+        _currency = currencyMap[profile.nationality] ?? '₹';
+      });
+    }
+  }
+
+  void _onClientChanged(String? id) {
+    setState(() {
+      _clientId = id;
+      _clearDraft();
+      if (id != null) {
+        final client = clients.firstWhere((c) => c.id == id);
+        if (client.currency != null) {
+          _currency = client.currency!;
+        }
+      }
+    });
   }
 
   @override
@@ -2279,6 +2494,15 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
       return;
     }
 
+    context.read<ClientBloc>().add(UpdateClientStatus(
+          entityId: clientId,
+          status: 'Active', // Simple nudge if they're paying
+        ));
+    context.read<ClientBloc>().add(UpdateClientDetails(
+          entityId: clientId,
+          currency: _currency,
+        ));
+
     for (final d in _draftDates) {
       context.read<ClientBloc>().add(AddPaymentToClient(
         entityId: clientId,
@@ -2299,349 +2523,366 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(18.0),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+        decoration: BoxDecoration(
+          color: const Color(0xFF111214),
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+        ),
+        padding: const EdgeInsets.all(20.0),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Schedule Payment',
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: chrome.textColor,
-                              fontWeight: FontWeight.w800,
-                            ),
+                  Expanded(
+                    child: Text(
+                      'Schedule Payment',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: chrome.textColor,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: Icon(Icons.close, color: chrome.mutedColor),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Builder(
+                builder: (ctx) {
+                  final availableClients = clients;
+                  final selectedClient = availableClients.cast<Client?>().firstWhere(
+                        (c) => c?.id == _clientId,
+                        orElse: () => null,
+                      );
+
+                  return _PaymentSearchableSelectField<String>(
+                    label: 'Client',
+                    value: _clientId,
+                    displayValue: selectedClient?.name ?? '',
+                    options: availableClients
+                        .map((c) => _PaymentOptionItem(value: c.id, label: c.name))
+                        .toList(growable: false),
+                    onChanged: _onClientChanged,
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: DropdownButtonFormField<String>(
+                      value: _frequency,
+                      decoration: InputDecoration(
+                        labelText: 'Frequency',
+                        filled: true,
+                        fillColor: chrome.surfaceColor,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                       ),
+                      items: const [
+                        DropdownMenuItem(value: 'Daily', child: Text('Daily')),
+                        DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
+                        DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
+                        DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                      ],
+                      onChanged: (v) {
+                        setState(() {
+                          _frequency = v ?? 'Monthly';
+                          _clearDraft();
+                        });
+                      },
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close, color: chrome.mutedColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 1,
+                    child: DropdownButtonFormField<String>(
+                      value: _currency,
+                      decoration: InputDecoration(
+                        labelText: 'Currency',
+                        filled: true,
+                        fillColor: chrome.surfaceColor,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: '₹', child: Text('₹ (INR)')),
+                        DropdownMenuItem(value: r'$', child: Text(r'$ (USD)')),
+                        DropdownMenuItem(value: '€', child: Text('€ (EUR)')),
+                        DropdownMenuItem(value: '£', child: Text('£ (GBP)')),
+                        DropdownMenuItem(value: 'د.إ', child: Text('د.إ (AED)')),
+                      ],
+                      onChanged: (v) {
+                        setState(() {
+                          _currency = v ?? '₹';
+                          _clearDraft();
+                        });
+                      },
                     ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Builder(
-                  builder: (ctx) {
-                    final availableClients = clients;
-
-                    final selectedClient = availableClients.cast<Client?>().firstWhere(
-                          (c) => c?.id == _clientId,
-                          orElse: () => null,
-                        );
-
-                    return _PaymentSearchableSelectField<String>(
-                      label: 'Client',
-                      value: _clientId,
-                      displayValue: selectedClient?.name ?? '',
-                      options: availableClients
-                          .map((c) => _PaymentOptionItem(value: c.id, label: c.name))
-                          .toList(growable: false),
-                      onChanged: (v) => setState(() {
-                        _clientId = v;
+                  ),
+                ],
+              ),
+              if (_frequency == 'Custom') ...[
+                const SizedBox(height: 12),
+                TextFormField(
+                  initialValue: _customDays.toString(),
+                  keyboardType: TextInputType.number,
+                  decoration: InputDecoration(
+                    labelText: 'Repeat every (days)',
+                    filled: true,
+                    fillColor: chrome.surfaceColor,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                  ),
+                  onChanged: (v) {
+                    final val = int.tryParse(v);
+                    if (val != null && val > 0) {
+                      setState(() {
+                        _customDays = val;
                         _clearDraft();
-                      }),
-                    );
+                      });
+                    }
                   },
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: _frequency,
+              ],
+              const SizedBox(height: 12),
+              if (_frequency == 'Weekly')
+                DropdownButtonFormField<int>(
+                  value: _weeklyDay,
                   decoration: InputDecoration(
-                    labelText: 'Frequency',
+                    labelText: 'Day of the week',
                     filled: true,
                     fillColor: chrome.surfaceColor,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'Daily', child: Text('Daily')),
-                    DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
-                    DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-                    DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                    DropdownMenuItem(value: DateTime.monday, child: Text('Monday')),
+                    DropdownMenuItem(value: DateTime.tuesday, child: Text('Tuesday')),
+                    DropdownMenuItem(value: DateTime.wednesday, child: Text('Wednesday')),
+                    DropdownMenuItem(value: DateTime.thursday, child: Text('Thursday')),
+                    DropdownMenuItem(value: DateTime.friday, child: Text('Friday')),
+                    DropdownMenuItem(value: DateTime.saturday, child: Text('Saturday')),
+                    DropdownMenuItem(value: DateTime.sunday, child: Text('Sunday')),
                   ],
                   onChanged: (v) {
+                    if (v == null) return;
                     setState(() {
-                      _frequency = v ?? 'Monthly';
+                      _weeklyDay = v;
                       _clearDraft();
                     });
                   },
-                ),
-                if (_frequency == 'Custom') ...[
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    initialValue: _customDays.toString(),
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Repeat every (days)',
-                      filled: true,
-                      fillColor: chrome.surfaceColor,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    onChanged: (v) {
-                      final val = int.tryParse(v);
-                      if (val != null && val > 0) {
-                        setState(() {
-                          _customDays = val;
-                          _clearDraft();
-                        });
-                      }
-                    },
-                  ),
-                ],
-                const SizedBox(height: 12),
-                if (_frequency == 'Weekly')
-                  DropdownButtonFormField<int>(
-                    value: _weeklyDay,
-                    decoration: InputDecoration(
-                      labelText: 'Day of the week',
-                      filled: true,
-                      fillColor: chrome.surfaceColor,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: DateTime.monday, child: Text('Monday')),
-                      DropdownMenuItem(value: DateTime.tuesday, child: Text('Tuesday')),
-                      DropdownMenuItem(value: DateTime.wednesday, child: Text('Wednesday')),
-                      DropdownMenuItem(value: DateTime.thursday, child: Text('Thursday')),
-                      DropdownMenuItem(value: DateTime.friday, child: Text('Friday')),
-                      DropdownMenuItem(value: DateTime.saturday, child: Text('Saturday')),
-                      DropdownMenuItem(value: DateTime.sunday, child: Text('Sunday')),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() {
-                        _weeklyDay = v;
-                        _clearDraft();
-                      });
-                    },
-                  )
-                else if (_frequency == 'Monthly')
-                  _PaymentNumberField(
-                    label: 'Day of the month',
-                    value: _monthlyDate,
-                    min: 1,
-                    max: 31,
-                    onChanged: (v) => setState(() {
-                      _monthlyDate = v;
-                      _clearDraft();
-                    }),
-                  )
-                else
-                  const SizedBox.shrink(),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          TextFormField(
-                            controller: _fullAmountController,
-                            focusNode: _fullAmountFocus,
-                            enabled: !_hasFrequentText,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                            decoration: InputDecoration(
-                              labelText: 'Total amount',
-                              filled: true,
-                              fillColor: chrome.surfaceColor,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                          ),
-                          if (_hasFrequentText)
-                            Positioned.fill(
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(16),
-                                  onTap: () async {
-                                    final ok = await _confirmOverride(
-                                      message: 'Amount per payment is already filled. Override it? This will clear Amount per payment.',
-                                    );
-                                    if (!ok) return;
-                                    setState(() {
-                                      _frequentAmountController.clear();
-                                      _clearDraft();
-                                    });
-                                    _fullAmountFocus.requestFocus();
-                                  },
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          TextFormField(
-                            controller: _frequentAmountController,
-                            focusNode: _frequentAmountFocus,
-                            enabled: !_hasTotalText,
-                            keyboardType: TextInputType.number,
-                            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                            decoration: InputDecoration(
-                              labelText: 'Amount per payment',
-                              filled: true,
-                              fillColor: chrome.surfaceColor,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                            ),
-                          ),
-                          if (_hasTotalText)
-                            Positioned.fill(
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(16),
-                                  onTap: () async {
-                                    final ok = await _confirmOverride(
-                                      message: 'Total amount is already filled. Override it? This will clear Total amount.',
-                                    );
-                                    if (!ok) return;
-                                    setState(() {
-                                      _fullAmountController.clear();
-                                      _clearDraft();
-                                    });
-                                    _frequentAmountFocus.requestFocus();
-                                  },
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
+                )
+              else if (_frequency == 'Monthly')
                 _PaymentNumberField(
-                  label: 'Number of payments',
-                  value: _times,
+                  label: 'Day of the month',
+                  value: _monthlyDate,
                   min: 1,
-                  max: 60,
-                  enabled: _hasTotalText || _hasFrequentText,
+                  max: 31,
                   onChanged: (v) => setState(() {
-                    _times = v;
+                    _monthlyDate = v;
                     _clearDraft();
                   }),
-                ),
-                if (_draftDates.isNotEmpty) ...[
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _draftClashKeys.isEmpty
-                              ? 'Generated payments'
-                              : 'Generated payments (${_draftClashKeys.length} clash)',
-                          style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                                color: chrome.textColor,
-                                fontWeight: FontWeight.w800,
-                              ),
+                )
+              else
+                const SizedBox.shrink(),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        TextFormField(
+                          controller: _fullAmountController,
+                          focusNode: _fullAmountFocus,
+                          enabled: !_hasFrequentText,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                          decoration: InputDecoration(
+                            labelText: 'Total amount',
+                            filled: true,
+                            fillColor: chrome.surfaceColor,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
                         ),
-                      ),
-                      if (_draftClashKeys.isNotEmpty)
-                        Text(
-                          'Resolve clashes to save',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Colors.red.shade700,
-                                fontWeight: FontWeight.w700,
+                        if (_hasFrequentText)
+                          Positioned.fill(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () async {
+                                  final ok = await _confirmOverride(
+                                    message: 'Amount per payment is already filled. Override it? This will clear Amount per payment.',
+                                  );
+                                  if (!ok) return;
+                                  setState(() {
+                                    _frequentAmountController.clear();
+                                    _clearDraft();
+                                  });
+                                  _fullAmountFocus.requestFocus();
+                                },
                               ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: chrome.surfaceColor,
-                      borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                      ],
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12.0),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 180),
-                        child: ListView.separated(
-                          shrinkWrap: true,
-                          itemCount: _draftDates.length,
-                          separatorBuilder: (_, __) => const Divider(height: 16),
-                          itemBuilder: (context, i) {
-                            final d = _draftDates[i];
-                            final key = AppDateUtils.dateToStr(_normalizeDay(d));
-                            final isClash = _draftClashKeys.contains(key);
-                            return Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    key,
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          color: isClash ? Colors.red.shade700 : chrome.textColor,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                  ),
-                                ),
-                                Text(
-                                  '₹${_draftAmount.toStringAsFixed(0)}',
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        TextFormField(
+                          controller: _frequentAmountController,
+                          focusNode: _frequentAmountFocus,
+                          enabled: !_hasTotalText,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
+                          decoration: InputDecoration(
+                            labelText: 'Amount per payment',
+                            filled: true,
+                            fillColor: chrome.surfaceColor,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                        ),
+                        if (_hasTotalText)
+                          Positioned.fill(
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(16),
+                                onTap: () async {
+                                  final ok = await _confirmOverride(
+                                    message: 'Total amount is already filled. Override it? This will clear Total amount.',
+                                  );
+                                  if (!ok) return;
+                                  setState(() {
+                                    _fullAmountController.clear();
+                                    _clearDraft();
+                                  });
+                                  _frequentAmountFocus.requestFocus();
+                                },
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              _PaymentNumberField(
+                label: 'Number of payments',
+                value: _times,
+                min: 1,
+                max: 60,
+                enabled: _hasTotalText || _hasFrequentText,
+                onChanged: (v) => setState(() {
+                  _times = v;
+                  _clearDraft();
+                }),
+              ),
+              if (_draftDates.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Text(
+                  'Preview',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: chrome.textColor,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _draftDates.length,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, i) {
+                      final d = _draftDates[i];
+                      final key = AppDateUtils.dateToStr(_normalizeDay(d));
+                      final isClash = _draftClashKeys.contains(key);
+                      return DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: chrome.surfaceColor,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isClash ? VibrantColors.softPink.withOpacity(0.55) : chrome.mutedColor.withOpacity(0.12),
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  key,
                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: isClash ? Colors.red.shade700 : chrome.textColor,
-                                        fontWeight: FontWeight.w700,
+                                        color: isClash ? VibrantColors.softPink : chrome.textColor,
+                                        fontWeight: FontWeight.w800,
                                       ),
                                 ),
-                              ],
-                            );
-                          },
+                              ),
+                              Text(
+                                '${_currency}${_draftAmount.toStringAsFixed(0)}',
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: isClash ? VibrantColors.softPink : chrome.textColor,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                              ),
+                            ],
+                          ),
                         ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        side: BorderSide(color: chrome.mutedColor.withOpacity(0.35)),
+                        foregroundColor: chrome.textColor,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed: _generateDraft,
+                      child: const Text('Generate'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        backgroundColor: VibrantColors.warmYellow,
+                        foregroundColor: Colors.black,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                      onPressed:
+                          (_draftDates.isEmpty || _draftClashKeys.isNotEmpty) ? null : _saveDraft,
+                      child: const Text(
+                        'Save',
+                        style: TextStyle(fontWeight: FontWeight.w900),
                       ),
                     ),
                   ),
                 ],
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          backgroundColor: chrome.surfaceColor,
-                          foregroundColor: chrome.textColor,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: _generateDraft,
-                        child: const Text('Generate'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          backgroundColor: chrome.surfaceColor,
-                          foregroundColor: chrome.textColor,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed:
-                            (_draftDates.isEmpty || _draftClashKeys.isNotEmpty) ? null : _saveDraft,
-                        child: const Text('Save'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
-    ),
-  );
+    );
   }
 }
 

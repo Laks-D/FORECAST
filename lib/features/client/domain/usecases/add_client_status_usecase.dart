@@ -9,11 +9,13 @@ class AddClientStatusUseCase {
     required String entityId,
     required String status,
     DateTime? createdAt,
+    String? refId,
   }) {
     repository.addStatusChange(
       entityId: entityId,
       status: status,
       createdAt: createdAt,
+      refId: refId,
     );
   }
 }

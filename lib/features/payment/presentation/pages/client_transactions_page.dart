@@ -3,6 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/utils/date_utils.dart';
 
+import 'package:gendral_app/design_system/widgets/app_card.dart';
+import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
+import 'package:gendral_app/design_system/widgets/app_loading.dart';
+
 import '../../../client/domain/entities/client.dart';
 import '../../../client/domain/entities/client_timeline_event.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
@@ -76,17 +80,16 @@ class ClientTransactionsPage extends StatelessWidget {
           child: BlocBuilder<ClientBloc, ClientState>(
             builder: (context, state) {
               if (state is! ClientLoaded) {
-                return const Center(
-                  child: CircularProgressIndicator(color: Colors.white),
-                );
+                return const AppLoading(color: Colors.white);
               }
 
               final client = _findClient(state);
               if (client == null) {
-                return _EmptyCard(
-                  message: 'Client not found',
-                  surfaceColor: Theme.of(context).colorScheme.surface,
-                  mutedColor: chrome.mutedColor,
+                return const Center(
+                  child: AppEmptyState(
+                    message: 'Client not found',
+                    icon: Icons.error_outline,
+                  ),
                 );
               }
 
@@ -99,12 +102,10 @@ class ClientTransactionsPage extends StatelessWidget {
                   const SizedBox(height: 14),
                   Expanded(
                     child: payments.isEmpty
-                        ? Center(
-                            child: _EmptyCard(
+                        ? const Center(
+                            child: AppEmptyState(
                               message: 'No transactions yet',
-                              surfaceColor:
-                                  Theme.of(context).colorScheme.surface,
-                              mutedColor: chrome.mutedColor,
+                              icon: Icons.receipt_long_outlined,
                             ),
                           )
                         : ListView.separated(
@@ -135,22 +136,45 @@ class ClientTransactionsPage extends StatelessWidget {
   }
 
   List<_PaymentVM> _extractPayments(Client client) {
-    bool isPaidOnDate(DateTime date) {
-      final dateKey = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    bool isPaymentPaid(ClientTimelineEvent payment) {
+      final dateKey = AppDateUtils.dateToStr(payment.createdAt);
+
+      final hasMultiplePaymentsThatDay = client.timeline
+              .where((e) =>
+                  e.type == ClientTimelineEventType.payment &&
+                  AppDateUtils.dateToStr(e.createdAt) == dateKey)
+              .length >
+          1;
+
+      // Prefer payment-specific status changes.
       for (final e in client.timeline.reversed) {
         if (e.type != ClientTimelineEventType.statusChanged) continue;
-        final k = '${e.createdAt.year}-${e.createdAt.month.toString().padLeft(2, '0')}-${e.createdAt.day.toString().padLeft(2, '0')}';
-        if (k != dateKey) continue;
+        if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
+        if (e.refId != payment.id) continue;
         final s = e.status?.trim();
-        if (s == 'Paid fully' || s == 'Paid') return true;
+        if (s == 'Paid' || s == 'Paid fully') return true;
       }
+
+      // Fallback to legacy date-based status changes (no refId).
+      // If there are multiple payments that day, legacy status changes would
+      // incorrectly affect all of them.
+      if (!hasMultiplePaymentsThatDay) {
+        for (final e in client.timeline.reversed) {
+          if (e.type != ClientTimelineEventType.statusChanged) continue;
+          if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
+          if (e.refId != null) continue;
+          final s = e.status?.trim();
+          if (s == 'Paid' || s == 'Paid fully') return true;
+        }
+      }
+
       return false;
     }
 
     final out = <_PaymentVM>[];
     for (final e in client.timeline) {
       if (e.type != ClientTimelineEventType.payment) continue;
-      if (!isPaidOnDate(e.createdAt)) continue;
+      if (!isPaymentPaid(e)) continue;
       out.add(
         _PaymentVM(
           amount: e.amount ?? 0,
@@ -174,22 +198,10 @@ class _HeaderCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        child: Row(
-          children: [
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: Row(
+        children: [
             Container(
               width: 54,
               height: 54,
@@ -230,8 +242,7 @@ class _HeaderCard extends StatelessWidget {
                 ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -247,22 +258,10 @@ class _TransactionCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-        child: Row(
-          children: [
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
+      child: Row(
+        children: [
             Container(
               width: 54,
               height: 54,
@@ -315,52 +314,12 @@ class _TransactionCard extends StatelessWidget {
                 ],
               ),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   static String _formatDate(DateTime dt) => AppDateUtils.displayDate(dt);
-}
-
-class _EmptyCard extends StatelessWidget {
-  const _EmptyCard({
-    required this.message,
-    required this.surfaceColor,
-    required this.mutedColor,
-  });
-
-  final String message;
-  final Color surfaceColor;
-  final Color mutedColor;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: surfaceColor,
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-        child: Text(
-          message,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: mutedColor, fontWeight: FontWeight.w600),
-        ),
-      ),
-    );
-  }
 }
 
 class _PaymentVM {

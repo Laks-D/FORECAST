@@ -1,151 +1,178 @@
 import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
+
+import '../../../../design_system/theme/app_chrome_theme.dart';
 
 class DashboardMeter extends StatelessWidget {
   const DashboardMeter({
     super.key,
-    required this.value,
-    required this.min,
-    required this.max,
-    this.size = 120,
-    this.valueText,
-    this.minText,
-    this.maxText,
-    this.needleColor = const Color(0xFF3A3A3A),
-    this.needleWidth = 4,
+    required this.completed,
+    required this.pending,
+    required this.upcoming,
+    required this.total,
+    required this.centerValue,
+    required this.centerLabel,
+    this.size,
+    this.strokeWidth = 20,
+    this.trackColor,
+    this.textColor,
   });
 
-  final double value;
-  final double min;
-  final double max;
-  final double size;
+  final int completed;
+  final int pending;
+  final int upcoming;
+  final int total;
+  final String centerValue;
+  final String centerLabel;
 
-  final String? valueText;
-  final String? minText;
-  final String? maxText;
-
-  final Color needleColor;
-  final double needleWidth;
+  final double? size;
+  final double strokeWidth;
+  final Color? trackColor;
+  final Color? textColor;
 
   @override
   Widget build(BuildContext context) {
-    final clamped = value.clamp(min, max);
-    final t = (max - min) <= 0 ? 0.0 : ((clamped - min) / (max - min));
+    final chrome = AppChromeTheme.of(context);
+    final resolvedTrackColor = trackColor ?? chrome.mutedColor.withOpacity(0.08);
+
+    final valueStyle = Theme.of(context).textTheme.displaySmall?.copyWith(
+          color: textColor ?? chrome.textColor,
+          fontWeight: FontWeight.w800,
+          fontSize: 32,
+          letterSpacing: -1,
+          height: 1.0,
+        );
 
     final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Colors.black54,
-          fontWeight: FontWeight.w500,
-        );
-
-    final valueStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Colors.black87,
+          color: (textColor ?? chrome.mutedColor).withOpacity(0.5),
           fontWeight: FontWeight.w700,
+          fontSize: 10,
+          letterSpacing: 1.2,
         );
 
-    return SizedBox(
-      width: size,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: size,
-            height: size * 0.78,
-            child: CustomPaint(
-              painter: _GaugePainter(
-                t: t,
-                needleColor: needleColor,
-                needleWidth: needleWidth,
-              ),
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(valueText ?? _formatMoney(value), style: valueStyle),
-          const SizedBox(height: 4),
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final availableWidth = constraints.maxWidth;
+        final availableHeight = constraints.maxHeight;
+        
+        // We want a wide arch, so we prioritize width but limit height by constraints
+        final meterWidth = size ?? availableWidth;
+        final meterHeight = math.min(availableHeight, meterWidth * 0.65);
+
+        return SizedBox(
+          width: meterWidth,
+          height: meterHeight,
+          child: Stack(
+            alignment: Alignment.bottomCenter,
             children: [
-              Expanded(
-                child: Text(
-                  minText ?? _formatMoney(min),
-                  style: labelStyle,
-                  textAlign: TextAlign.left,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              CustomPaint(
+                size: Size(meterWidth, meterHeight),
+                painter: _MeterPainter(
+                  completed: completed,
+                  pending: pending,
+                  upcoming: upcoming,
+                  total: total,
+                  strokeWidth: strokeWidth,
+                  trackColor: resolvedTrackColor,
                 ),
               ),
-              Expanded(
-                child: Text(
-                  maxText ?? _formatMoney(max),
-                  style: labelStyle,
-                  textAlign: TextAlign.right,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+              // Center the text in the hollow area of the arch
+              Positioned(
+                bottom: strokeWidth * 0.5,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      centerValue,
+                      style: valueStyle,
+                    ),
+                    if (centerLabel.trim().isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        centerLabel.toUpperCase(),
+                        style: labelStyle,
+                      ),
+                    ],
+                  ],
                 ),
               ),
             ],
           ),
-        ],
-      ),
+        );
+      },
     );
-  }
-
-  static String _formatMoney(double v) {
-    return r'$' + v.toStringAsFixed(2);
   }
 }
 
-class _GaugePainter extends CustomPainter {
-  _GaugePainter({required this.t, required this.needleColor, required this.needleWidth});
+class _MeterPainter extends CustomPainter {
+  const _MeterPainter({
+    required this.completed,
+    required this.pending,
+    required this.upcoming,
+    required this.total,
+    required this.strokeWidth,
+    required this.trackColor,
+  });
 
-  final double t;
-  final Color needleColor;
-  final double needleWidth;
-
-  static const _trackWidth = 14.0;
+  final int completed;
+  final int pending;
+  final int upcoming;
+  final int total;
+  final double strokeWidth;
+  final Color trackColor;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height);
-    final radius = math.min(size.width / 2, size.height) - _trackWidth;
-
+    // Center at the bottom to maximize the "arch" look
+    final strokeOffset = strokeWidth / 2;
+    final center = Offset(size.width / 2, size.height - strokeOffset);
+    
+    // Radius must be constrained by both width and height to prevent clipping
+    final radius = math.min(size.width / 2, size.height - strokeOffset) - strokeOffset;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
-    final startAngle = _degToRad(210);
-    final sweepTotal = _degToRad(240);
+    // Perfect semi-circle with sharp ends.
+    const totalSweep = math.pi;
+    const startAngle = math.pi;
 
-    final trackPaint = Paint()
+    final paint = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = _trackWidth
-      ..color = const Color(0xFFD7D7D7);
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.butt;
 
-    // Neutral (non-colored) gauge track.
-    canvas.drawArc(rect, startAngle, sweepTotal, false, trackPaint);
+    // 1. Draw Background Track
+    paint.color = trackColor;
+    canvas.drawArc(rect, startAngle, totalSweep, false, paint);
 
-    final needleAngle = startAngle + sweepTotal * t;
-    final needlePaint = Paint()
-      ..color = needleColor
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = needleWidth;
+    if (total <= 0) return;
 
-    final needleLen = radius * 0.72;
-    final needleEnd = center + Offset(
-          math.cos(needleAngle) * needleLen,
-          math.sin(needleAngle) * needleLen,
-        );
+    final safeTotal = total.toDouble();
+    double currentAngle = startAngle;
 
-    canvas.drawLine(center, needleEnd, needlePaint);
+    void drawSegment(double count, Color color) {
+      if (count <= 0) return;
+      
+      final sweep = (count / safeTotal) * totalSweep;
 
-    final hubPaint = Paint()..color = needleColor;
-    canvas.drawCircle(center, 6.5, hubPaint);
-    canvas.drawCircle(center, 2.5, Paint()..color = Colors.white);
+      paint.color = color;
+      canvas.drawArc(rect, currentAngle, sweep, false, paint);
+      
+      currentAngle += sweep;
+    }
+
+    // Sequence: Done (Green) -> Wait (Pink) -> Next (Yellow)
+    drawSegment(completed.toDouble(), VibrantColors.pastelGreen);
+    drawSegment(pending.toDouble(), VibrantColors.softPink);
+    drawSegment(upcoming.toDouble(), VibrantColors.warmYellow);
   }
 
   @override
-  bool shouldRepaint(covariant _GaugePainter oldDelegate) {
-    return oldDelegate.t != t || oldDelegate.needleColor != needleColor || oldDelegate.needleWidth != needleWidth;
+  bool shouldRepaint(covariant _MeterPainter oldDelegate) {
+    return oldDelegate.completed != completed ||
+        oldDelegate.pending != pending ||
+        oldDelegate.upcoming != upcoming ||
+        oldDelegate.total != total ||
+        oldDelegate.strokeWidth != strokeWidth ||
+        oldDelegate.trackColor != trackColor;
   }
-
-  static double _degToRad(double deg) => deg * math.pi / 180.0;
 }

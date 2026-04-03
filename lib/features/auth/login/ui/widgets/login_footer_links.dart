@@ -12,45 +12,38 @@ class LoginFooterLinks extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.black87,
-          fontWeight: FontWeight.w400,
-        );
+    final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final muted = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.onSurface.withOpacity(0.55),
+      fontWeight: FontWeight.w600,
+    );
+    final link = theme.textTheme.bodySmall?.copyWith(
+      color: scheme.primary,
+      fontWeight: FontWeight.w700,
+    );
 
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: InkWell(
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text("Don't have an account?", style: muted),
+            const SizedBox(width: 6),
+            InkWell(
               onTap: onNewUserTap,
               child: Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                child: Text(
-                  'New user?',
-                  style: textStyle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text('Sign up', style: link),
               ),
             ),
-          ),
+          ],
         ),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: InkWell(
-              onTap: onForgotPasswordTap,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-                child: Text(
-                  'Forgot password',
-                  style: textStyle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ),
+        InkWell(
+          onTap: onForgotPasswordTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+            child: Text('Forgot password?', style: muted),
           ),
         ),
       ],

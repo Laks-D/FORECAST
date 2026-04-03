@@ -39,7 +39,42 @@ ThemeData buildAppTheme({
       bodyColor: chromeTheme.textColor,
       displayColor: chromeTheme.textColor,
     ),
-    extensions: <ThemeExtension<dynamic>>[
+    cardTheme: CardThemeData(
+      color: chromeTheme.surfaceColor,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: chromeTheme.surfaceColor,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: chromeTheme.mutedColor.withOpacity(0.2)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: chromeTheme.mutedColor.withOpacity(0.15)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: chromeTheme.accentBlue, width: 1.5),
+      ),
+      labelStyle: TextStyle(color: chromeTheme.mutedColor),
+      hintStyle: TextStyle(color: chromeTheme.mutedColor.withOpacity(0.6)),
+    ),
+    dividerTheme: DividerThemeData(
+      color: chromeTheme.mutedColor.withOpacity(0.12),
+      thickness: 1,
+    ),
+    iconTheme: IconThemeData(color: chromeTheme.textColor),
+    listTileTheme: ListTileThemeData(
+      tileColor: Colors.transparent,
+      textColor: chromeTheme.textColor,
+      iconColor: chromeTheme.mutedColor,
+    ),
+    extensions: [
       chromeTheme,
     ],
   );

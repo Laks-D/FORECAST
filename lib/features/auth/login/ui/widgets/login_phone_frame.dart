@@ -46,13 +46,25 @@ class LoginPhoneFrame extends StatelessWidget {
               ),
 
               // Login card near bottom
-              Positioned(
-                left: 18,
-                right: 18,
-                bottom: 70,
-                child: LoginCard(
-                  onNewUserTap: onNewUserTap,
-                  onForgotPasswordTap: onForgotPasswordTap,
+              Positioned.fill(
+                top: statusTop,
+                child: SafeArea(
+                  top: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: SingleChildScrollView(
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                          child: LoginCard(
+                            onNewUserTap: onNewUserTap,
+                            onForgotPasswordTap: onForgotPasswordTap,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ],

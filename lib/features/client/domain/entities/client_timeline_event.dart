@@ -10,6 +10,10 @@ class ClientTimelineEvent {
   final ClientTimelineEventType type;
   final DateTime createdAt;
 
+  /// Optional reference id to link this event to another entity.
+  /// Used primarily to associate payment status changes to a specific payment event.
+  final String? refId;
+
   // Optional payload
   final double? amount;
   final String? note;
@@ -19,6 +23,7 @@ class ClientTimelineEvent {
     required this.id,
     required this.type,
     required this.createdAt,
+    this.refId,
     this.amount,
     this.note,
     this.status,
@@ -58,6 +63,7 @@ class ClientTimelineEvent {
   /// Flexible structured data (future-proof)
   Map<String, dynamic> get metadata {
     return {
+      if (refId != null) 'refId': refId,
       if (amount != null) 'amount': amount,
       if (note != null) 'note': note,
       if (status != null) 'status': status,
@@ -81,12 +87,14 @@ class ClientTimelineEvent {
     required String id,
     required String status,
     required DateTime createdAt,
+    String? refId,
   }) {
     return ClientTimelineEvent(
       id: id,
       type: ClientTimelineEventType.statusChanged,
       status: status,
       createdAt: createdAt,
+      refId: refId,
     );
   }
 
@@ -124,6 +132,7 @@ class ClientTimelineEvent {
         'id': id,
         'type': type.name,
         'createdAt': createdAt.toIso8601String(),
+      if (refId != null) 'refId': refId,
         if (amount != null) 'amount': amount,
         if (note != null) 'note': note,
         if (status != null) 'status': status,
@@ -137,6 +146,7 @@ class ClientTimelineEvent {
         orElse: () => ClientTimelineEventType.note,
       ),
       createdAt: DateTime.parse(json['createdAt'] as String),
+      refId: json['refId'] as String?,
       amount: (json['amount'] as num?)?.toDouble(),
       note: json['note'] as String?,
       status: json['status'] as String?,

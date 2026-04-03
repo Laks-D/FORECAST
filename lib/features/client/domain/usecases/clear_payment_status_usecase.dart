@@ -8,10 +8,12 @@ class ClearPaymentStatusUseCase {
   void execute({
     required String entityId,
     required DateTime date,
+    String? paymentId,
   }) {
     repository.clearPaymentStatusesForDate(
       entityId: entityId,
       date: date,
+      paymentId: paymentId,
     );
   }
 }

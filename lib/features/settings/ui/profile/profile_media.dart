@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../design_system/theme/app_chrome_theme.dart';
+
 enum ProfileImageAction { camera, gallery, remove }
 
 Future<ProfileImageAction?> showProfileImageSourceSheet(
@@ -22,13 +24,17 @@ Future<ProfileImageAction?> showProfileImageSourceSheet(
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
               title: const Text('Choose from gallery'),
-              onTap: () => Navigator.of(context).pop(ProfileImageAction.gallery),
+              onTap: () =>
+                  Navigator.of(context).pop(ProfileImageAction.gallery),
             ),
             if (showRemove)
               ListTile(
-                leading: Icon(Icons.delete_outline, color: Colors.red.shade400),
-                title: Text('Remove photo', style: TextStyle(color: Colors.red.shade400)),
-                onTap: () => Navigator.of(context).pop(ProfileImageAction.remove),
+                leading:
+                    Icon(Icons.delete_outline, color: VibrantColors.softPink),
+                title: Text('Remove photo',
+                    style: TextStyle(color: VibrantColors.softPink)),
+                onTap: () =>
+                    Navigator.of(context).pop(ProfileImageAction.remove),
               ),
             const SizedBox(height: 6),
           ],

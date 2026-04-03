@@ -10,36 +10,36 @@ import '../bloc/client_event.dart';
 
 /// Common country-code suggestions for the autocomplete (without +, prefix shown in field).
 const _commonCodes = <String>[
-  '91',  // India
-  '1',   // US / Canada
-  '44',  // UK
+  '91', // India
+  '1', // US / Canada
+  '44', // UK
   '971', // UAE
-  '61',  // Australia
-  '65',  // Singapore
+  '61', // Australia
+  '65', // Singapore
   '966', // Saudi Arabia
   '974', // Qatar
   '965', // Kuwait
-  '92',  // Pakistan
+  '92', // Pakistan
   '880', // Bangladesh
   '977', // Nepal
-  '94',  // Sri Lanka
-  '86',  // China
-  '81',  // Japan
-  '82',  // South Korea
-  '49',  // Germany
-  '33',  // France
-  '39',  // Italy
-  '34',  // Spain
-  '55',  // Brazil
-  '52',  // Mexico
-  '27',  // South Africa
+  '94', // Sri Lanka
+  '86', // China
+  '81', // Japan
+  '82', // South Korea
+  '49', // Germany
+  '33', // France
+  '39', // Italy
+  '34', // Spain
+  '55', // Brazil
+  '52', // Mexico
+  '27', // South Africa
   '234', // Nigeria
   '254', // Kenya
-  '60',  // Malaysia
-  '63',  // Philippines
-  '66',  // Thailand
-  '62',  // Indonesia
-  '7',   // Russia
+  '60', // Malaysia
+  '63', // Philippines
+  '66', // Thailand
+  '62', // Indonesia
+  '7', // Russia
 ];
 
 class ClientPersonalDetailsPage extends StatefulWidget {
@@ -51,7 +51,8 @@ class ClientPersonalDetailsPage extends StatefulWidget {
   });
 
   @override
-  State<ClientPersonalDetailsPage> createState() => _ClientPersonalDetailsPageState();
+  State<ClientPersonalDetailsPage> createState() =>
+      _ClientPersonalDetailsPageState();
 }
 
 class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
@@ -79,9 +80,12 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
     _emailController = TextEditingController(text: widget.entity.email ?? '');
     _addressController =
         TextEditingController(text: widget.entity.address ?? '');
-    _countryCodeController =
-        TextEditingController(text: (widget.entity.countryCode ?? '+91').replaceAll('+', ''));
+    _countryCodeController = TextEditingController(
+        text: (widget.entity.countryCode ?? '+91').replaceAll('+', ''));
     _status = widget.entity.status;
+    if (_status.trim().toLowerCase() == 'upcoming') {
+      _status = 'Pending';
+    }
     _gender = widget.entity.gender;
     _dateOfBirth = widget.entity.dateOfBirth;
   }
@@ -125,8 +129,8 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
 
     final nameChanged = name != widget.entity.name;
     final phoneChanged = phone != widget.entity.primaryContact;
-    final statusChanged =
-        _status.trim().toLowerCase() != widget.entity.status.trim().toLowerCase();
+    final statusChanged = _status.trim().toLowerCase() !=
+        widget.entity.status.trim().toLowerCase();
 
     final middleName = _middleNameController.text.trim();
     final email = _emailController.text.trim();
@@ -137,7 +141,8 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
     final detailsChanged = nameChanged ||
         phoneChanged ||
         middleName != (widget.entity.middleName ?? '') ||
-        countryCode != (widget.entity.countryCode ?? '+91').replaceAll('+', '') ||
+        countryCode !=
+            (widget.entity.countryCode ?? '+91').replaceAll('+', '') ||
         email != (widget.entity.email ?? '') ||
         _gender != widget.entity.gender ||
         _dateOfBirth != widget.entity.dateOfBirth ||
@@ -190,7 +195,8 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
               ),
             ),
             const SizedBox(width: 12),
-            Flexible(child: Align(alignment: Alignment.centerRight, child: value)),
+            Flexible(
+                child: Align(alignment: Alignment.centerRight, child: value)),
           ],
         ),
       );
@@ -265,8 +271,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                           optionsBuilder: (textEditingValue) {
                             final input = textEditingValue.text.trim();
                             if (input.isEmpty) return _commonCodes;
-                            return _commonCodes
-                                .where((c) => c.contains(input));
+                            return _commonCodes.where((c) => c.contains(input));
                           },
                           fieldViewBuilder: (context, controller, focusNode,
                               onFieldSubmitted) {
@@ -365,9 +370,10 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                     decoration: const InputDecoration(labelText: 'Status'),
                     items: const [
                       DropdownMenuItem(value: 'Active', child: Text('Active')),
-                      DropdownMenuItem(value: 'Pending', child: Text('Pending')),
-                      DropdownMenuItem(value: 'Overdue', child: Text('Overdue')),
-                      DropdownMenuItem(value: 'Inactive', child: Text('Inactive')),
+                      DropdownMenuItem(
+                          value: 'Pending', child: Text('Pending')),
+                      DropdownMenuItem(
+                          value: 'Inactive', child: Text('Inactive')),
                     ],
                     onChanged: (v) {
                       if (v == null) return;
@@ -392,7 +398,10 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                       'Last Activity',
                       Text(
                         _formatDate(widget.entity.lastActivityAt),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: chrome.textColor),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(color: chrome.textColor),
                       ),
                     ),
                     row(

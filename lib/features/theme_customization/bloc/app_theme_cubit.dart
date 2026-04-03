@@ -12,7 +12,7 @@ class AppThemeCubit extends Cubit<AppThemeState> {
     _load();
   }
 
-  static const _prefsKey = 'app_theme_v1';
+  static const _prefsKey = 'app_theme_v2';
 
   Future<void> reloadFromStorage() => _load();
 

@@ -104,6 +104,15 @@ class DashboardPhoneFrame extends StatelessWidget {
                                 final todayStr = AppDateUtils.dateToStr(DateTime.now());
                                 final todayCount = sessionsState.sessions
                                     .where((s) => s.date == todayStr)
+                                    .where(
+                                      (s) =>
+                                          AppDateUtils.determineSessionStatus(
+                                            s.status,
+                                            s.date,
+                                            s.time,
+                                          ) !=
+                                          'Cancelled',
+                                    )
                                     .length;
 
                                 if (todayCount == 0) {

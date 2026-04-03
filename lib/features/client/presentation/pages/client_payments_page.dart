@@ -45,17 +45,17 @@ class ClientPaymentsPage extends StatelessWidget {
 
           // Compute summary.
           double paidTotal = 0;
+          double upcomingTotal = 0;
           double pendingTotal = 0;
-          double overdueTotal = 0;
           for (final pay in payments) {
-            final s = _paymentStatusFor(current, pay.createdAt);
+            final s = _paymentStatusFor(current, pay.createdAt, pay.id);
             final amt = pay.amount ?? 0;
             if (s == 'Paid') {
               paidTotal += amt;
-            } else if (s == 'Overdue') {
-              overdueTotal += amt;
-            } else {
+            } else if (s == 'Pending') {
               pendingTotal += amt;
+            } else {
+              upcomingTotal += amt;
             }
           }
 
@@ -71,20 +71,20 @@ class ClientPaymentsPage extends StatelessWidget {
                       _SummaryChip(
                         label: 'Paid',
                         amount: paidTotal,
-                        color: Colors.green.shade700,
+                        color: VibrantColors.deep(VibrantColors.pastelGreen),
                       ),
                       const SizedBox(width: 12),
                       _SummaryChip(
-                        label: 'Pending',
-                        amount: pendingTotal,
-                        color: Colors.orange.shade700,
+                        label: 'Upcoming',
+                        amount: upcomingTotal,
+                        color: VibrantColors.deep(VibrantColors.warmYellow),
                       ),
-                      if (overdueTotal > 0) ...[
+                      if (pendingTotal > 0) ...[
                         const SizedBox(width: 12),
                         _SummaryChip(
-                          label: 'Overdue',
-                          amount: overdueTotal,
-                          color: Colors.red.shade700,
+                          label: 'Pending',
+                          amount: pendingTotal,
+                          color: VibrantColors.deep(VibrantColors.softPink),
                         ),
                       ],
                     ],
@@ -125,7 +125,7 @@ class ClientPaymentsPage extends StatelessWidget {
 
               // ── Payment rows ──
               ...payments.map((pay) {
-                final status = _paymentStatusFor(current, pay.createdAt);
+                final status = _paymentStatusFor(current, pay.createdAt, pay.id);
                 return _PaymentRow(
                   client: current,
                   paymentEvent: pay,
@@ -139,29 +139,43 @@ class ClientPaymentsPage extends StatelessWidget {
     );
   }
 
-  static String _paymentStatusFor(Client client, DateTime date) {
+  static String _paymentStatusFor(Client client, DateTime date, String paymentEventId) {
     final dateKey = AppDateUtils.dateToStr(date);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final payDay = DateTime(date.year, date.month, date.day);
 
-    // Check for Paid fully coverage from an earlier date.
-    for (final e in client.timeline) {
-      if (e.type != ClientTimelineEventType.statusChanged) continue;
-      if (e.status?.trim() != 'Paid fully') continue;
-      final sKey = AppDateUtils.dateToStr(e.createdAt);
-      if (sKey.compareTo(dateKey) < 0) return 'Paid';
-    }
+    final hasMultiplePaymentsThatDay = client.timeline
+        .where((e) =>
+          e.type == ClientTimelineEventType.payment &&
+          AppDateUtils.dateToStr(e.createdAt) == dateKey)
+        .length >
+      1;
 
+    // Prefer payment-specific status changes.
     for (final e in client.timeline.reversed) {
       if (e.type != ClientTimelineEventType.statusChanged) continue;
       if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
+      if (e.refId != paymentEventId) continue;
       final s = e.status?.trim();
-      if (s == 'Paid' || s == 'Paid fully') return 'Paid';
+      if (s == 'Paid') return 'Paid';
     }
 
-    if (payDay.isBefore(today)) return 'Overdue';
-    return 'Pending';
+    // Fallback to legacy date-based status changes (no refId).
+    // If there are multiple payments that day, legacy status changes would
+    // incorrectly affect all of them.
+    if (!hasMultiplePaymentsThatDay) {
+      for (final e in client.timeline.reversed) {
+        if (e.type != ClientTimelineEventType.statusChanged) continue;
+        if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
+        if (e.refId != null) continue;
+        final s = e.status?.trim();
+        if (s == 'Paid') return 'Paid';
+      }
+    }
+
+    if (payDay.isBefore(today)) return 'Pending';
+    return 'Upcoming';
   }
 }
 
@@ -227,11 +241,11 @@ class _PaymentRow extends StatelessWidget {
 
     Color statusColor;
     if (status == 'Paid') {
-      statusColor = Colors.green.shade700;
-    } else if (status == 'Overdue') {
-      statusColor = Colors.red.shade700;
+      statusColor = VibrantColors.deep(VibrantColors.pastelGreen);
+    } else if (status == 'Pending') {
+      statusColor = VibrantColors.deep(VibrantColors.softPink);
     } else {
-      statusColor = Colors.orange.shade700;
+      statusColor = VibrantColors.deep(VibrantColors.warmYellow);
     }
 
     return Card(
@@ -302,15 +316,28 @@ class _PaymentRow extends StatelessWidget {
               icon: Icon(Icons.arrow_drop_down,
                   size: 22, color: chrome.mutedColor),
               onSelected: (v) => _handleStatusChange(context, v),
-              itemBuilder: (_) => const [
-                PopupMenuItem(value: 'Pending', child: Text('Pending')),
-                PopupMenuItem(value: 'Paid', child: Text('Paid')),
-                PopupMenuItem(
-                    value: 'Paid fully', child: Text('Paid fully')),
-                PopupMenuItem(
+              itemBuilder: (_) {
+                final now = DateTime.now();
+                final today = DateTime(now.year, now.month, now.day);
+                final payDay = DateTime(
+                  paymentEvent.createdAt.year,
+                  paymentEvent.createdAt.month,
+                  paymentEvent.createdAt.day,
+                );
+                final resetLabel = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
+                return [
+                  PopupMenuItem(
+                    value: '__reset__',
+                    child: Text('Reset to $resetLabel'),
+                  ),
+                  const PopupMenuItem(value: 'Paid', child: Text('Paid')),
+                  const PopupMenuItem(value: 'Paid fully', child: Text('Paid fully')),
+                  const PopupMenuItem(
                     value: 'Will pay later',
-                    child: Text('Will pay later')),
-              ],
+                    child: Text('Will pay later'),
+                  ),
+                ];
+              },
             ),
           ],
         ),
@@ -320,67 +347,26 @@ class _PaymentRow extends StatelessWidget {
 
   /* ── Status change handlers (same logic) ── */
 
-  /// Returns true if a "Paid fully" event covers [date] (same day or earlier).
-  bool _hasPaidFullyCoverage(DateTime date) {
-    final dateKey = AppDateUtils.dateToStr(date);
-    for (final e in client.timeline) {
-      if (e.type != ClientTimelineEventType.statusChanged) continue;
-      if (e.status?.trim() != 'Paid fully') continue;
-      final sKey = AppDateUtils.dateToStr(e.createdAt);
-      if (sKey.compareTo(dateKey) <= 0) return true;
-    }
-    return false;
-  }
-
   void _handleStatusChange(BuildContext context, String newStatus) {
-    if (newStatus == 'Pending') {
-      // If covered by "Paid fully", ask to revert the whole thing.
-      if (_hasPaidFullyCoverage(paymentEvent.createdAt)) {
-        showDialog<bool>(
-          context: context,
-          builder: (ctx) => AlertDialog(
-            title: const Text('Revert Paid Fully?'),
-            content: const Text(
-              'This payment was marked via "Paid fully". '
-              'Reverting will reset ALL payments that were covered.\n\n'
-              'Continue?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Revert'),
-              ),
-            ],
-          ),
-        ).then((confirmed) {
-          if (confirmed == true && context.mounted) {
-            context.read<ClientBloc>().add(
-                  RevertClientPaidFully(entityId: client.id),
-                );
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                duration: Duration(seconds: 1),
-                content: Text('Paid fully reverted'),
-              ),
-            );
-          }
-        });
-        return;
-      }
-
+    if (newStatus == '__reset__') {
       final dateKey = AppDateUtils.dateToStr(paymentEvent.createdAt);
       context.read<ClientBloc>().add(ClearPaymentStatusForDate(
         entityId: client.id,
         date: paymentEvent.createdAt,
+        paymentId: paymentEvent.id,
       ));
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final payDay = DateTime(
+        paymentEvent.createdAt.year,
+        paymentEvent.createdAt.month,
+        paymentEvent.createdAt.day,
+      );
+      final resetLabel = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 1),
-          content: Text('Payment reset to Pending for $dateKey'),
+          content: Text('Payment reset to $resetLabel for $dateKey'),
         ),
       );
       return;
@@ -389,16 +375,11 @@ class _PaymentRow extends StatelessWidget {
     if (newStatus == 'Will pay later') {
       // If currently paid, clear the paid status first, then reschedule.
       if (status == 'Paid') {
-        if (_hasPaidFullyCoverage(paymentEvent.createdAt)) {
-          context.read<ClientBloc>().add(
-                RevertClientPaidFully(entityId: client.id),
-              );
-        } else {
-          context.read<ClientBloc>().add(ClearPaymentStatusForDate(
-            entityId: client.id,
-            date: paymentEvent.createdAt,
-          ));
-        }
+        context.read<ClientBloc>().add(ClearPaymentStatusForDate(
+          entityId: client.id,
+          date: paymentEvent.createdAt,
+          paymentId: paymentEvent.id,
+        ));
       }
       _openReschedule(context);
       return;
@@ -409,6 +390,7 @@ class _PaymentRow extends StatelessWidget {
         entityId: client.id,
         status: 'Paid',
         createdAt: paymentEvent.createdAt,
+        refId: paymentEvent.id,
       ));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -420,7 +402,6 @@ class _PaymentRow extends StatelessWidget {
     }
 
     if (newStatus == 'Paid fully') {
-      final baseKey = AppDateUtils.dateToStr(paymentEvent.createdAt);
       context.read<ClientBloc>().add(MarkClientPaidFully(
         entityId: client.id,
         fromDate: paymentEvent.createdAt,
@@ -428,7 +409,7 @@ class _PaymentRow extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 1),
-          content: Text('Marked Paid fully from $baseKey'),
+          content: Text('Marked Paid for all payments on ${AppDateUtils.displayDate(paymentEvent.createdAt)}'),
         ),
       );
       return;
@@ -563,60 +544,16 @@ class _PaymentRow extends StatelessWidget {
       }
     }
 
+    // If there is already a payment on the target day, we still reschedule.
+    // Payments should remain separate; we do not merge amounts.
     if (existing != null) {
-      final existingAmt = existing.amount ?? 0;
-      final oldAmt = paymentEvent.amount ?? 0;
-      final merged = existingAmt + oldAmt;
-
-      showDialog<bool>(
-        context: context,
-        builder: (dCtx) {
-          return AlertDialog(
-            title: const Text('Warning'),
-            content: Text(
-              '${client.name} already has ₹${existingAmt.toStringAsFixed(0)} on $targetKey.\n'
-              'Merge with ₹${oldAmt.toStringAsFixed(0)} for a total of ₹${merged.toStringAsFixed(0)}?',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dCtx).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dCtx).pop(true),
-                child: const Text('Merge'),
-              ),
-            ],
-          );
-        },
-      ).then((ok) {
-        if (ok != true) return;
-
-        if (!context.mounted) return;
-
-        final ex = existing!;
-        String? mergedNote;
-        if (ex.note != null && ex.note!.trim().isNotEmpty) {
-          mergedNote = ex.note!.trim();
-        } else if (paymentEvent.note != null &&
-            paymentEvent.note!.trim().isNotEmpty) {
-          mergedNote = paymentEvent.note!.trim();
-        }
-
-        context.read<ClientBloc>().add(MergeClientPayments(
-          entityId: client.id,
-          sourcePaymentId: paymentEvent.id,
-          sourceDate: oldDay,
-          targetPaymentId: ex.id,
-          targetDate: targetDay,
-          mergedAmount: merged,
-          mergedNote: mergedNote,
-        ));
-
-        if (context.mounted) {
-          Navigator.of(context).pop();
-        }
-      });
+      context.read<ClientBloc>().add(RescheduleClientPayment(
+        entityId: client.id,
+        paymentId: paymentEvent.id,
+        oldDate: oldDay,
+        newDate: targetDay,
+      ));
+      Navigator.of(context).pop();
       return;
     }
 

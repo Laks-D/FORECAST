@@ -131,9 +131,9 @@ class NotificationSettingsPage extends StatelessWidget {
                           ),
                           const SizedBox(height: 8),
                           _ToggleTile(
-                            title: 'Daily overdue reminders',
+                            title: 'Daily pending reminders',
                             subtitle:
-                                'Keep reminding every morning for unpaid overdue payments',
+                              'Keep reminding every morning for unpaid pending payments',
                             value: state.paymentOverdueDaily,
                             chrome: chrome,
                             onChanged: (v) => context

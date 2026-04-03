@@ -12,7 +12,6 @@ import '../../domain/usecases/create_client_usecase.dart';
 import '../../domain/usecases/update_client_details_usecase.dart';
 import '../../domain/usecases/clear_payment_status_usecase.dart';
 import '../../domain/usecases/reschedule_payment_usecase.dart';
-import '../../domain/usecases/merge_payments_usecase.dart';
 import '../../domain/usecases/mark_paid_fully_usecase.dart';
 import '../../domain/usecases/revert_paid_fully_usecase.dart';
 
@@ -29,7 +28,6 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   final UpdateClientDetailsUseCase updateClientDetailsUseCase;
   final ClearPaymentStatusUseCase clearPaymentStatusUseCase;
   final ReschedulePaymentUseCase reschedulePaymentUseCase;
-  final MergePaymentsUseCase mergePaymentsUseCase;
   final MarkPaidFullyUseCase markPaidFullyUseCase;
   final RevertPaidFullyUseCase revertPaidFullyUseCase;
 
@@ -48,7 +46,6 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     this.updateClientDetailsUseCase,
     this.clearPaymentStatusUseCase,
     this.reschedulePaymentUseCase,
-    this.mergePaymentsUseCase,
     this.markPaidFullyUseCase,
     this.revertPaidFullyUseCase,
   ) : super(ClientLoading()) {
@@ -61,7 +58,6 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     on<CreateClient>(_onCreateClient);
     on<ClearPaymentStatusForDate>(_onClearPaymentStatus);
     on<RescheduleClientPayment>(_onReschedulePayment);
-    on<MergeClientPayments>(_onMergePayments);
     on<MarkClientPaidFully>(_onMarkPaidFully);
     on<RevertClientPaidFully>(_onRevertPaidFully);
   }
@@ -158,6 +154,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
       entityId: event.entityId,
       status: event.status,
       createdAt: event.createdAt,
+      refId: event.refId,
     );
 
     _reload(emit);
@@ -169,19 +166,27 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     UpdateClientDetails event,
     Emitter<ClientState> emit,
   ) {
-    updateClientDetailsUseCase.execute(
-      entityId: event.entityId,
-      name: event.name,
-      primaryContact: event.primaryContact,
-      middleName: event.middleName,
-      countryCode: event.countryCode,
-      email: event.email,
-      gender: event.gender,
-      dateOfBirth: event.dateOfBirth,
-      address: event.address,
-    );
+    final client = _allEntities.cast<Client?>().firstWhere(
+          (e) => e?.id == event.entityId,
+          orElse: () => null,
+        );
 
-    _reload(emit);
+    if (client != null) {
+      updateClientDetailsUseCase.execute(
+        entityId: event.entityId,
+        name: event.name ?? client.name,
+        primaryContact: event.primaryContact ?? client.primaryContact,
+        middleName: event.middleName ?? client.middleName,
+        countryCode: event.countryCode ?? client.countryCode,
+        email: event.email ?? client.email,
+        gender: event.gender ?? client.gender,
+        dateOfBirth: event.dateOfBirth ?? client.dateOfBirth,
+        address: event.address ?? client.address,
+        currency: event.currency ?? client.currency,
+      );
+
+      _reload(emit);
+    }
   }
 
   /* ================= ADD CLIENT ================= */
@@ -213,6 +218,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     clearPaymentStatusUseCase.execute(
       entityId: event.entityId,
       date: event.date,
+      paymentId: event.paymentId,
     );
 
     _reload(emit);
@@ -229,25 +235,6 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
       paymentId: event.paymentId,
       oldDate: event.oldDate,
       newDate: event.newDate,
-    );
-
-    _reload(emit);
-  }
-
-  /* ================= MERGE PAYMENTS ================= */
-
-  void _onMergePayments(
-    MergeClientPayments event,
-    Emitter<ClientState> emit,
-  ) {
-    mergePaymentsUseCase.execute(
-      entityId: event.entityId,
-      sourcePaymentId: event.sourcePaymentId,
-      sourceDate: event.sourceDate,
-      targetPaymentId: event.targetPaymentId,
-      targetDate: event.targetDate,
-      mergedAmount: event.mergedAmount,
-      mergedNote: event.mergedNote,
     );
 
     _reload(emit);

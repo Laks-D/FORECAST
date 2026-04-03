@@ -10,6 +10,7 @@ class AdminProfileStorage {
 
   static Future<void> save({
     String? userName,
+    String? userHandle,
     String? userMiddleName,
     String? userEmail,
     String? userPhone,
@@ -19,6 +20,7 @@ class AdminProfileStorage {
     final prefs = await SharedPreferences.getInstance();
     final data = <String, dynamic>{
       'userName': userName,
+      'userHandle': userHandle,
       'userMiddleName': userMiddleName,
       'userEmail': userEmail,
       'userPhone': userPhone,
@@ -30,6 +32,7 @@ class AdminProfileStorage {
     UserFirestoreSync.instance.scheduleSettingsPatch({'adminProfile': data});
     await UserFirestoreSync.instance.upsertUserProfile(
       fullName: userName,
+      handle: userHandle,
       middleName: userMiddleName,
       email: userEmail,
       phone: userPhone,

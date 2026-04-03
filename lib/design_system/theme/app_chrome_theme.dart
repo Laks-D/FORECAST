@@ -1,5 +1,27 @@
 import 'package:flutter/material.dart';
 
+class VibrantColors {
+  static const pastelGreen = Color(0xFFA8DEC5);
+  static const softBlue = Color(0xFFC1E1FF);
+  static const warmYellow = Color(0xFFFFE09A);
+  static const softPink = Color(0xFFFFD1CF);
+
+  /// Derive a deeper (more readable) tone from a pastel.
+  /// Useful for text/icons on light tinted backgrounds.
+  static Color deep(Color base) {
+    final hsl = HSLColor.fromColor(base);
+    // Clamp to a mid-dark lightness to keep contrast predictable.
+    final l = (hsl.lightness * 0.55).clamp(0.22, 0.42);
+    final s = (hsl.saturation * 1.05).clamp(0.25, 0.85);
+    return hsl.withLightness(l).withSaturation(s).toColor();
+  }
+
+  /// Soft tinted background from a pastel.
+  static Color tint(Color base, {double opacity = 0.14}) {
+    return base.withOpacity(opacity.clamp(0.0, 1.0));
+  }
+}
+
 @immutable
 class AppChromeTheme extends ThemeExtension<AppChromeTheme> {
   const AppChromeTheme({
@@ -11,7 +33,7 @@ class AppChromeTheme extends ThemeExtension<AppChromeTheme> {
   });
 
   static const fallback = AppChromeTheme(
-    frameColor: Color(0xFFE32626),
+    frameColor: Color(0xFF0B0B0C),
     accentBlue: Color(0xFF4F86B7),
     surfaceColor: Color(0xFFFFFFFF),
     textColor: Color(0xFF111827),

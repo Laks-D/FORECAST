@@ -14,7 +14,8 @@ class LoginFields extends StatelessWidget {
     return Column(
       children: [
         LoginTextField(
-          hintText: 'Username',
+          labelText: 'Email',
+          hintText: 'Your email or username',
           onChanged: (value) => context.read<LoginBloc>().add(LoginEmailChanged(value)),
         ),
         const SizedBox(height: 14),
@@ -22,7 +23,8 @@ class LoginFields extends StatelessWidget {
           selector: (state) => state.isPasswordObscured,
           builder: (context, isObscured) {
             return LoginTextField(
-              hintText: 'Password',
+              labelText: 'Password',
+              hintText: 'Enter your password',
               obscureText: isObscured,
               suffix: IconButton(
                 icon: Icon(isObscured ? Icons.visibility_off : Icons.visibility),

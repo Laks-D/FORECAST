@@ -11,8 +11,9 @@ class DashboardCubit extends Cubit<DashboardState> {
   /// Load persisted admin profile from local storage.
   Future<void> loadProfile() async {
     final data = await AdminProfileStorage.load();
-    if (data == null) return;
+    if (isClosed || data == null) return;
     final name = (data['userName'] as String?)?.trim() ?? '';
+    final handle = (data['userHandle'] as String?)?.trim() ?? '';
     final middleName = (data['userMiddleName'] as String?)?.trim() ?? '';
     final email = (data['userEmail'] as String?)?.trim() ?? '';
     final phone = (data['userPhone'] as String?)?.trim() ?? '';
@@ -24,6 +25,7 @@ class DashboardCubit extends Cubit<DashboardState> {
     }
     emit(state.copyWith(
       userName: name.isNotEmpty ? name : null,
+      userHandle: handle.isNotEmpty ? handle : null,
       userMiddleName: middleName.isNotEmpty ? middleName : null,
       userEmail: email.isNotEmpty ? email : null,
       userPhone: phone.isNotEmpty ? phone : null,
@@ -36,6 +38,7 @@ class DashboardCubit extends Cubit<DashboardState> {
   Future<void> _persist() async {
     await AdminProfileStorage.save(
       userName: state.userName,
+      userHandle: state.userHandle,
       userMiddleName: state.userMiddleName,
       userEmail: state.userEmail,
       userPhone: state.userPhone,
@@ -45,66 +48,95 @@ class DashboardCubit extends Cubit<DashboardState> {
   }
 
   void selectTab(DashboardTab tab) {
-    if (state.tab == tab) return;
+    if (isClosed || state.tab == tab) return;
     emit(state.copyWith(tab: tab));
   }
 
+  void updateProfile({
+    String? name,
+    String? handle,
+    String? middleName,
+    String? email,
+    String? phone,
+    String? gender,
+    DateTime? dob,
+  }) {
+    if (isClosed) return;
+    emit(state.copyWith(
+      userName: name?.trim() ?? state.userName,
+      userHandle: handle?.trim() ?? state.userHandle,
+      userMiddleName: middleName?.trim() ?? state.userMiddleName,
+      userEmail: email?.trim() ?? state.userEmail,
+      userPhone: phone?.trim() ?? state.userPhone,
+      userGender: gender?.trim() ?? state.userGender,
+      userDateOfBirth: dob ?? state.userDateOfBirth,
+    ));
+    _persist();
+  }
+
+  void setUserHandle(String handle) {
+    if (isClosed || (state.userHandle ?? '') == handle) return;
+    emit(state.copyWith(userHandle: handle));
+    _persist();
+  }
+
   void setUserName(String name) {
-    if ((state.userName ?? 'User') == name) return;
+    if (isClosed || (state.userName ?? 'User') == name) return;
     emit(state.copyWith(userName: name));
     _persist();
   }
 
   void setUserMiddleName(String middleName) {
     final trimmed = middleName.trim();
-    if ((state.userMiddleName ?? '').trim() == trimmed) return;
+    if (isClosed || (state.userMiddleName ?? '').trim() == trimmed) return;
     emit(state.copyWith(userMiddleName: trimmed));
     _persist();
   }
 
   void setUserEmail(String email) {
     final trimmed = email.trim();
-    if ((state.userEmail ?? '').trim() == trimmed) return;
+    if (isClosed || (state.userEmail ?? '').trim() == trimmed) return;
     emit(state.copyWith(userEmail: trimmed));
     _persist();
   }
 
   void setUserPhone(String phone) {
     final trimmed = phone.trim();
-    if ((state.userPhone ?? '').trim() == trimmed) return;
+    if (isClosed || (state.userPhone ?? '').trim() == trimmed) return;
     emit(state.copyWith(userPhone: trimmed));
     _persist();
   }
 
   void setUserGender(String gender) {
     final trimmed = gender.trim();
-    if ((state.userGender ?? '').trim() == trimmed) return;
+    if (isClosed || (state.userGender ?? '').trim() == trimmed) return;
     emit(state.copyWith(userGender: trimmed));
     _persist();
   }
 
   void setUserDateOfBirth(DateTime dob) {
-    if (state.userDateOfBirth == dob) return;
+    if (isClosed || state.userDateOfBirth == dob) return;
     emit(state.copyWith(userDateOfBirth: dob));
     _persist();
   }
 
   void setUserAvatarBytes(Uint8List? bytes) {
-    if (identical(state.userAvatarBytes, bytes)) return;
+    if (isClosed || identical(state.userAvatarBytes, bytes)) return;
     emit(state.copyWith(userAvatarBytes: bytes));
   }
 
   void setUserAvatarAlignment(Alignment alignment) {
-    if (state.userAvatarAlignment == alignment) return;
+    if (isClosed || state.userAvatarAlignment == alignment) return;
     emit(state.copyWith(userAvatarAlignment: alignment));
   }
 
   void setClassesToday(int count) {
-    if ((state.classesToday ?? 0) == count) return;
+    if (isClosed || (state.classesToday ?? 0) == count) return;
     emit(state.copyWith(classesToday: count));
   }
 
   void setScheduleSummary({required int completed, required int remaining, required int total}) {
+    if (isClosed) return;
     if ((state.classesCompleted ?? 0) == completed &&
         (state.classesRemaining ?? 0) == remaining &&
         (state.classesTotal ?? 0) == total) {

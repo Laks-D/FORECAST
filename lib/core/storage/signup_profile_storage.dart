@@ -10,6 +10,8 @@ class SignupProfileData {
     this.profession = '',
     this.userName = '',
     this.email = '',
+    this.nationality = 'India',
+    this.currency = '₹',
     this.selectedPrograms = const <String>[],
     this.preferences = const <String>[],
   });
@@ -18,6 +20,8 @@ class SignupProfileData {
   final String profession;
   final String userName;
   final String email;
+  final String nationality;
+  final String currency;
   final List<String> selectedPrograms;
   final List<String> preferences;
 
@@ -26,6 +30,8 @@ class SignupProfileData {
         'profession': profession,
         'userName': userName,
         'email': email,
+        'nationality': nationality,
+        'currency': currency,
         'selectedPrograms': selectedPrograms,
         'preferences': preferences,
       };
@@ -36,6 +42,8 @@ class SignupProfileData {
       profession: (json['profession'] as String?) ?? '',
       userName: (json['userName'] as String?) ?? '',
       email: (json['email'] as String?) ?? '',
+      nationality: (json['nationality'] as String?) ?? 'India',
+      currency: (json['currency'] as String?) ?? '₹',
       selectedPrograms: (json['selectedPrograms'] as List?)
               ?.map((e) => e.toString())
               .toList(growable: false) ??

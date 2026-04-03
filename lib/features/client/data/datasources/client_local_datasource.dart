@@ -64,6 +64,7 @@ class ClientLocalDataSource {
     required String entityId,
     required String status,
     DateTime? createdAt,
+    String? refId,
   }) {
     final entity = _data.firstWhere((e) => e.id == entityId);
 
@@ -72,6 +73,7 @@ class ClientLocalDataSource {
         id: _nextId(),
         status: status,
         createdAt: createdAt ?? DateTime.now(),
+        refId: refId,
       ),
     );
   }
@@ -81,11 +83,18 @@ class ClientLocalDataSource {
   void clearPaymentStatusesForDate({
     required String entityId,
     required DateTime date,
+    String? paymentId,
   }) {
     final entity = _data.firstWhere((e) => e.id == entityId);
     entity.timeline.removeWhere((e) {
       if (e.type != ClientTimelineEventType.statusChanged) return false;
       if (!_sameDay(e.createdAt, date)) return false;
+      // If a specific paymentId is provided, clear both the payment-specific
+      // marker (refId == paymentId) AND any legacy date-scoped marker (refId == null)
+      // because legacy markers make individual payments uneditable.
+      if (paymentId != null && e.refId != paymentId && e.refId != null) {
+        return false;
+      }
       final s = e.status;
       return s == 'Paid' || s == 'Paid fully' || s == 'Will pay later';
     });
@@ -120,48 +129,6 @@ class ClientLocalDataSource {
         amount: old.amount ?? 0,
         createdAt: newDate,
         note: old.note,
-      ),
-    );
-  }
-
-  /// Merge two payments into one on the target date.
-  void mergePayments({
-    required String entityId,
-    required String sourcePaymentId,
-    required DateTime sourceDate,
-    required String targetPaymentId,
-    required DateTime targetDate,
-    required double mergedAmount,
-    String? mergedNote,
-  }) {
-    final entity = _data.firstWhere((e) => e.id == entityId);
-
-    ClientTimelineEvent? source;
-    ClientTimelineEvent? target;
-    for (final e in entity.timeline) {
-      if (e.type != ClientTimelineEventType.payment) continue;
-      if (e.id == sourcePaymentId && _sameDay(e.createdAt, sourceDate)) {
-        source = e;
-      }
-      if (e.id == targetPaymentId && _sameDay(e.createdAt, targetDate)) {
-        target = e;
-      }
-    }
-    source ??= entity.timeline.firstWhere(
-      (e) => e.type == ClientTimelineEventType.payment && e.id == sourcePaymentId,
-    );
-    target ??= entity.timeline.firstWhere(
-      (e) => e.type == ClientTimelineEventType.payment && e.id == targetPaymentId,
-    );
-
-    entity.timeline.remove(source);
-    entity.timeline.remove(target);
-    entity.timeline.add(
-      ClientTimelineEvent.payment(
-        id: target.id,
-        amount: mergedAmount,
-        createdAt: targetDate,
-        note: mergedNote,
       ),
     );
   }
@@ -203,31 +170,32 @@ class ClientLocalDataSource {
     required DateTime fromDate,
   }) {
     final entity = _data.firstWhere((e) => e.id == entityId);
-    final payments = entity.timeline
-        .where((e) => e.type == ClientTimelineEventType.payment)
+    final baseDay = DateTime(fromDate.year, fromDate.month, fromDate.day);
+
+    // Mark all payments on baseDay as paid (payment-specific).
+    // This supports multiple payments on the same day while keeping each payment
+    // individually editable.
+    final paymentsOnBaseDay = entity.timeline
+        .where((e) => e.type == ClientTimelineEventType.payment && _sameDay(e.createdAt, baseDay))
         .toList(growable: false);
 
-    for (final pay in payments) {
-      final payDay = DateTime(pay.createdAt.year, pay.createdAt.month, pay.createdAt.day);
-      final baseDay = DateTime(fromDate.year, fromDate.month, fromDate.day);
-      if (payDay.isBefore(baseDay)) continue;
+    for (final pay in paymentsOnBaseDay) {
+      // Clear any existing payment status markers for this payment on that day.
+      clearPaymentStatusesForDate(
+        entityId: entityId,
+        date: pay.createdAt,
+        paymentId: pay.id,
+      );
 
       entity.timeline.add(
         ClientTimelineEvent.statusChange(
           id: _nextId(),
           status: 'Paid',
-          createdAt: payDay,
+          createdAt: pay.createdAt,
+          refId: pay.id,
         ),
       );
     }
-
-    entity.timeline.add(
-      ClientTimelineEvent.statusChange(
-        id: _nextId(),
-        status: 'Paid fully',
-        createdAt: fromDate,
-      ),
-    );
   }
 
   /// Update client base details (name/contact)
@@ -241,6 +209,7 @@ class ClientLocalDataSource {
     String? gender,
     DateTime? dateOfBirth,
     String? address,
+    String? currency,
   }) {
     final idx = _data.indexWhere((e) => e.id == entityId);
     if (idx == -1) return;
@@ -256,6 +225,7 @@ class ClientLocalDataSource {
       gender: gender ?? existing.gender,
       dateOfBirth: dateOfBirth ?? existing.dateOfBirth,
       address: address ?? existing.address,
+      currency: currency ?? existing.currency,
       timeline: existing.timeline,
     );
   }
@@ -270,6 +240,7 @@ class ClientLocalDataSource {
     String? gender,
     DateTime? dateOfBirth,
     String? address,
+    String? currency,
   }) {
     _data.add(
       Client(
@@ -282,6 +253,7 @@ class ClientLocalDataSource {
         gender: gender,
         dateOfBirth: dateOfBirth,
         address: address,
+        currency: currency,
         timeline: [
           ClientTimelineEvent.profileCreated(
             id: _nextId(),
@@ -315,6 +287,69 @@ class ClientLocalDataSource {
       for (final item in decoded) {
         _data.add(Client.fromJson(item as Map<String, dynamic>));
       }
+
+      // Legacy migration (one-time):
+      // Older data used statuses: Pending (future) + Overdue (past-due).
+      // New UI uses: Upcoming (future) + Pending (past-due).
+      // We only migrate *client status* events (not payment statusChanged events).
+      final hasLegacyOverdue = _data.any(
+        (c) => c.timeline.any(
+          (e) => e.type == ClientTimelineEventType.statusChanged &&
+              (e.status?.trim() == 'Overdue'),
+        ),
+      );
+      if (hasLegacyOverdue) {
+        Client migrateClient(Client c) {
+          ClientTimelineEvent migrateEvent(ClientTimelineEvent e) {
+            if (e.type != ClientTimelineEventType.statusChanged) return e;
+            final s = e.status?.trim();
+            if (s == null || s.isEmpty) return e;
+
+            // Don't touch payment-related statuses.
+            if (s == 'Paid' || s == 'Paid fully' || s == 'Will pay later') return e;
+
+            final mapped = (s == 'Overdue')
+                ? 'Pending'
+                : (s == 'Pending')
+                    ? 'Upcoming'
+                    : s;
+
+            if (mapped == s) return e;
+            return ClientTimelineEvent(
+              id: e.id,
+              type: e.type,
+              createdAt: e.createdAt,
+              amount: e.amount,
+              note: e.note,
+              status: mapped,
+            );
+          }
+
+          final migratedTimeline = c.timeline.map(migrateEvent).toList();
+          return Client(
+            id: c.id,
+            name: c.name,
+            middleName: c.middleName,
+            primaryContact: c.primaryContact,
+            countryCode: c.countryCode,
+            email: c.email,
+            gender: c.gender,
+            dateOfBirth: c.dateOfBirth,
+            address: c.address,
+            currency: c.currency,
+            timeline: migratedTimeline,
+          );
+        }
+
+        final migrated = _data.map(migrateClient).toList();
+        _data
+          ..clear()
+          ..addAll(migrated);
+
+        // Persist back so we don't need to migrate again.
+        await persist();
+      }
+
       // Ensure ID counter stays ahead of any loaded IDs.
       for (final c in _data) {
         final parts = c.id.split('_');

@@ -41,11 +41,13 @@ class ClientRepositoryImpl implements ClientRepository {
     required String entityId,
     required String status,
     DateTime? createdAt,
+    String? refId,
   }) {
     localDataSource.addStatusChange(
       entityId: entityId,
       status: status,
       createdAt: createdAt,
+      refId: refId,
     );
   }
 
@@ -53,10 +55,12 @@ class ClientRepositoryImpl implements ClientRepository {
   void clearPaymentStatusesForDate({
     required String entityId,
     required DateTime date,
+    String? paymentId,
   }) {
     localDataSource.clearPaymentStatusesForDate(
       entityId: entityId,
       date: date,
+      paymentId: paymentId,
     );
   }
 
@@ -72,27 +76,6 @@ class ClientRepositoryImpl implements ClientRepository {
       paymentId: paymentId,
       oldDate: oldDate,
       newDate: newDate,
-    );
-  }
-
-  @override
-  void mergePayments({
-    required String entityId,
-    required String sourcePaymentId,
-    required DateTime sourceDate,
-    required String targetPaymentId,
-    required DateTime targetDate,
-    required double mergedAmount,
-    String? mergedNote,
-  }) {
-    localDataSource.mergePayments(
-      entityId: entityId,
-      sourcePaymentId: sourcePaymentId,
-      sourceDate: sourceDate,
-      targetPaymentId: targetPaymentId,
-      targetDate: targetDate,
-      mergedAmount: mergedAmount,
-      mergedNote: mergedNote,
     );
   }
 
@@ -123,6 +106,7 @@ class ClientRepositoryImpl implements ClientRepository {
     String? gender,
     DateTime? dateOfBirth,
     String? address,
+    String? currency,
   }) {
     localDataSource.updateClientDetails(
       entityId: entityId,
@@ -134,7 +118,13 @@ class ClientRepositoryImpl implements ClientRepository {
       gender: gender,
       dateOfBirth: dateOfBirth,
       address: address,
+      currency: currency,
     );
+  }
+
+  @override
+  void updateClientStatus({required String entityId, required String status}) {
+    localDataSource.addStatusChange(entityId: entityId, status: status);
   }
 
   @override

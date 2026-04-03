@@ -20,11 +20,13 @@ abstract class ClientRepository {
     required String entityId,
     required String status,
     DateTime? createdAt,
+    String? refId,
   });
 
   void clearPaymentStatusesForDate({
     required String entityId,
     required DateTime date,
+    String? paymentId,
   });
 
   void reschedulePayment({
@@ -32,16 +34,6 @@ abstract class ClientRepository {
     required String paymentId,
     required DateTime oldDate,
     required DateTime newDate,
-  });
-
-  void mergePayments({
-    required String entityId,
-    required String sourcePaymentId,
-    required DateTime sourceDate,
-    required String targetPaymentId,
-    required DateTime targetDate,
-    required double mergedAmount,
-    String? mergedNote,
   });
 
   void markPaidFully({
@@ -61,7 +53,10 @@ abstract class ClientRepository {
     String? gender,
     DateTime? dateOfBirth,
     String? address,
+    String? currency,
   });
+
+  void updateClientStatus({required String entityId, required String status});
 
   void createClient({
     required String name,

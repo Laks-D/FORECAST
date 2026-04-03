@@ -8,36 +8,36 @@ import '../bloc/client_event.dart';
 
 /// Common country-code suggestions for the autocomplete (without +, prefix shown in field).
 const _commonCodes = <String>[
-  '91',  // India
-  '1',   // US / Canada
-  '44',  // UK
+  '91', // India
+  '1', // US / Canada
+  '44', // UK
   '971', // UAE
-  '61',  // Australia
-  '65',  // Singapore
+  '61', // Australia
+  '65', // Singapore
   '966', // Saudi Arabia
   '974', // Qatar
   '965', // Kuwait
-  '92',  // Pakistan
+  '92', // Pakistan
   '880', // Bangladesh
   '977', // Nepal
-  '94',  // Sri Lanka
-  '86',  // China
-  '81',  // Japan
-  '82',  // South Korea
-  '49',  // Germany
-  '33',  // France
-  '39',  // Italy
-  '34',  // Spain
-  '55',  // Brazil
-  '52',  // Mexico
-  '27',  // South Africa
+  '94', // Sri Lanka
+  '86', // China
+  '81', // Japan
+  '82', // South Korea
+  '49', // Germany
+  '33', // France
+  '39', // Italy
+  '34', // Spain
+  '55', // Brazil
+  '52', // Mexico
+  '27', // South Africa
   '234', // Nigeria
   '254', // Kenya
-  '60',  // Malaysia
-  '63',  // Philippines
-  '66',  // Thailand
-  '62',  // Indonesia
-  '7',   // Russia
+  '60', // Malaysia
+  '63', // Philippines
+  '66', // Thailand
+  '62', // Indonesia
+  '7', // Russia
 ];
 
 class ClientRegistrationPage extends StatefulWidget {
@@ -105,8 +105,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
             email: _email.text.trim(),
             gender: _gender,
             dateOfBirth: _dateOfBirth,
-            address:
-                _address.text.trim().isEmpty ? null : _address.text.trim(),
+            address: _address.text.trim().isEmpty ? null : _address.text.trim(),
           ),
         );
 
@@ -116,13 +115,16 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
-    final scheme = Theme.of(context).colorScheme;
+    final onFrame = ThemeData.estimateBrightnessForColor(chrome.frameColor) ==
+            Brightness.dark
+        ? Colors.white
+        : Colors.black;
 
     return Scaffold(
       backgroundColor: chrome.frameColor,
       appBar: AppBar(
         backgroundColor: chrome.frameColor,
-        foregroundColor: Colors.white,
+        foregroundColor: onFrame,
         elevation: 0,
         title: const Text('Client Registration'),
       ),
@@ -133,7 +135,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
             borderRadius: BorderRadius.circular(28),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: scheme.surface,
+                color: chrome.surfaceColor,
                 boxShadow: const [
                   BoxShadow(
                     color: Color(0x14000000),
@@ -157,10 +159,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                               decoration: const InputDecoration(
                                 labelText: 'First name *',
                               ),
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty)
-                                      ? 'Required'
-                                      : null,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Required'
+                                  : null,
                               textInputAction: TextInputAction.next,
                             ),
                           ),
@@ -171,10 +172,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                               decoration: const InputDecoration(
                                 labelText: 'Last name *',
                               ),
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty)
-                                      ? 'Required'
-                                      : null,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Required'
+                                  : null,
                               textInputAction: TextInputAction.next,
                             ),
                           ),
@@ -220,8 +220,8 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                               optionsBuilder: (textEditingValue) {
                                 final input = textEditingValue.text.trim();
                                 if (input.isEmpty) return _commonCodes;
-                                return _commonCodes.where(
-                                    (c) => c.contains(input));
+                                return _commonCodes
+                                    .where((c) => c.contains(input));
                               },
                               fieldViewBuilder: (context, controller, focusNode,
                                   onFieldSubmitted) {
@@ -253,10 +253,9 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                                 labelText: 'Phone *',
                               ),
                               keyboardType: TextInputType.phone,
-                              validator: (v) =>
-                                  (v == null || v.trim().isEmpty)
-                                      ? 'Required'
-                                      : null,
+                              validator: (v) => (v == null || v.trim().isEmpty)
+                                  ? 'Required'
+                                  : null,
                               textInputAction: TextInputAction.next,
                             ),
                           ),

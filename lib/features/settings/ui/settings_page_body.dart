@@ -5,7 +5,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../design_system/theme/app_chrome_theme.dart';
+import '../../calendar/bloc/calendar_cubit.dart';
+import '../../calendar/bloc/sessions_cubit.dart';
 import '../../calendar/ui/widgets/calendar_page_body.dart';
+import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/pages/client_page.dart';
 import '../../dashboard/bloc/dashboard_cubit.dart';
 import '../../dashboard/bloc/dashboard_state.dart';
@@ -23,30 +26,130 @@ import '../../notifications/ui/notification_settings_page.dart';
 class SettingsPageBody extends StatelessWidget {
   const SettingsPageBody({super.key});
 
-  static const _cardRadius = 40.0;
-  static AppChromeTheme _chrome(BuildContext context) => AppChromeTheme.of(context);
-
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: IntrinsicHeight(
+    const bgColor = Color(0xFF0F0F0F); // Near-black background
+    const cardColor = Color(0xFF1C1C1E); // iOS-style dark surface
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: bgColor,
+            elevation: 0,
+            centerTitle: false,
+            automaticallyImplyLeading: false,
+            pinned: false,
+            floating: false,
+            snap: false,
+            primary: false,
+            titleSpacing: 16,
+            title: Text(
+              'Settings',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            sliver: SliverToBoxAdapter(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _ProfileCard(),
-                  const SizedBox(height: 14),
-                  const _ModulesSection(),
-                  const SizedBox(height: 14),
-                  _SectionCard(
-                    title: 'Customization',
+                  _ProfileCardCompact(),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Modules',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withOpacity(0.5),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  _SectionCardDark(
+                    color: cardColor,
                     children: [
-                      _SectionTile(
+                      BlocBuilder<NavModulesCubit, NavModulesState>(
+                        builder: (context, state) {
+                          final all = state.order
+                              .where((t) => t != DashboardTab.settings)
+                              .toList();
+                          return Column(
+                            children: [
+                              for (final tab in all)
+                                _SectionTileDark(
+                                  leading: _iconFor(tab),
+                                  title: _labelFor(tab),
+                                  subtitle: state.enabled.contains(tab) ||
+                                          tab == DashboardTab.home
+                                      ? null
+                                      : 'Hidden from nav bar',
+                                  onTap: () {
+                                    if (state.visibleTabs.contains(tab)) {
+                                      // Settings is a dashboard tab (not a pushed route),
+                                      // so don't pop the navigator here.
+                                      context
+                                          .read<DashboardCubit>()
+                                          .selectTab(tab);
+                                      return;
+                                    }
+
+                                    // When a module is hidden from the bottom nav, open it
+                                    // as a standalone screen, but keep required BLoCs.
+                                    final calendarCubit =
+                                        context.read<CalendarCubit>();
+                                    final sessionsCubit =
+                                        context.read<SessionsCubit>();
+                                    final clientBloc =
+                                        context.read<ClientBloc>();
+
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute<void>(
+                                        builder: (_) => MultiBlocProvider(
+                                          providers: [
+                                            BlocProvider.value(
+                                                value: calendarCubit),
+                                            BlocProvider.value(
+                                                value: sessionsCubit),
+                                            BlocProvider.value(
+                                                value: clientBloc),
+                                          ],
+                                          child:
+                                              _StandaloneModuleScreen(tab: tab),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                            ],
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Customization',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withOpacity(0.5),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  _SectionCardDark(
+                    color: cardColor,
+                    children: [
+                      _SectionTileDark(
                         leading: Icons.palette_outlined,
                         title: 'Theme & Style',
-                        subtitle: 'Customize colors and fonts',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -55,10 +158,9 @@ class SettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
-                      _SectionTile(
+                      _SectionTileDark(
                         leading: Icons.tune_outlined,
                         title: 'Module customization',
-                        subtitle: 'Show/hide modules in nav bar',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -67,10 +169,9 @@ class SettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
-                      _SectionTile(
+                      _SectionTileDark(
                         leading: Icons.menu_book_outlined,
                         title: 'Program management',
-                        subtitle: 'Create and manage programs',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -81,14 +182,23 @@ class SettingsPageBody extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  _SectionCard(
-                    title: 'Notifications',
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Notifications',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.white.withOpacity(0.5),
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  _SectionCardDark(
+                    color: cardColor,
                     children: [
-                      _SectionTile(
+                      _SectionTileDark(
                         leading: Icons.notifications_none_outlined,
                         title: 'Notifications',
-                        subtitle: 'View all notifications',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -100,10 +210,9 @@ class SettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
-                      _SectionTile(
+                      _SectionTileDark(
                         leading: Icons.tune_outlined,
                         title: 'Notification Settings',
-                        subtitle: 'Manage reminders & alerts',
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -117,142 +226,41 @@ class SettingsPageBody extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  _SectionCard(
-                    title: 'About',
+                  const SizedBox(height: 24),
+                  _SectionCardDark(
+                    color: cardColor,
                     children: [
-                      _SectionTile(
+                      _SectionTileDark(
                         leading: Icons.info_outline,
-                        title: 'About',
-                        subtitle: 'Version, credits & more',
+                        title: 'About application',
+                        onTap: () {},
+                      ),
+                      _SectionTileDark(
+                        leading: Icons.chat_bubble_outline,
+                        title: 'Help/FAQ',
                         onTap: () {},
                       ),
                     ],
                   ),
-                  const Spacer(),
-                  const SizedBox(height: 14),
-                  const _LogoutButton(),
+                  const SizedBox(height: 32),
+                  _SectionCardDark(
+                    color: cardColor,
+                    children: [
+                      _SectionTileDark(
+                        leading: Icons.logout,
+                        title: 'Log out',
+                        titleColor: VibrantColors.softPink,
+                        onTap: () => FirebaseAuth.instance.signOut(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
                 ],
               ),
             ),
           ),
-        );
-      },
-    );
-  }
-}
-
-class _ProfileCard extends StatelessWidget {
-  const _ProfileCard();
-
-  static const _profileCardRadius = 26.0;
-
-  @override
-  Widget build(BuildContext context) {
-    final nameStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Colors.black87,
-          fontWeight: FontWeight.w700,
-        );
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: 132),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(_profileCardRadius),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-          child: Row(
-            children: [
-              const _AvatarCircle(),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      BlocSelector<DashboardCubit, DashboardState, String>(
-                        selector: (state) => state.userName ?? 'User',
-                        builder: (context, name) {
-                          return Text(
-                            name,
-                            style: nameStyle,
-                            textAlign: TextAlign.center,
-                          );
-                        },
-                      ),
-                      const SizedBox(height: 10),
-                      _PillButton(
-                        text: 'more details',
-                        onTap: () {
-                          final dashboardCubit = context.read<DashboardCubit>();
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => BlocProvider.value(
-                                value: dashboardCubit,
-                                child: const ProfileDetailsScreen(),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        ],
       ),
-    );
-  }
-}
-
-class _ModulesSection extends StatelessWidget {
-  const _ModulesSection();
-
-  void _openModule(BuildContext context, NavModulesState navState, DashboardTab tab) {
-    if (navState.visibleTabs.contains(tab)) {
-      context.read<DashboardCubit>().selectTab(tab);
-      return;
-    }
-
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => _StandaloneModuleScreen(tab: tab),
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _SectionCard(
-      title: 'Modules',
-      children: [
-        BlocBuilder<NavModulesCubit, NavModulesState>(
-          buildWhen: (p, n) => p.order != n.order || p.enabled != n.enabled || p.visibleTabs != n.visibleTabs,
-          builder: (context, state) {
-            final all = state.order.where((t) => t != DashboardTab.settings).toList(growable: false);
-            return Column(
-              children: [
-                for (final tab in all)
-                  _SectionTile(
-                    leading: _iconFor(tab),
-                    title: _labelFor(tab),
-                    subtitle: state.enabled.contains(tab) || tab == DashboardTab.home ? null : 'Hidden from nav bar',
-                    onTap: () => _openModule(context, state, tab),
-                    trailing: Icon(
-                      Icons.chevron_right,
-                      color: Colors.black.withOpacity(0.35),
-                    ),
-                  ),
-              ],
-            );
-          },
-        ),
-      ],
     );
   }
 
@@ -278,7 +286,7 @@ class _ModulesSection extends StatelessWidget {
       case DashboardTab.calendar:
         return 'Calendar';
       case DashboardTab.people:
-        return 'Client';
+        return 'Clients';
       case DashboardTab.cards:
         return 'Cards';
       case DashboardTab.home:
@@ -298,7 +306,7 @@ class _StandaloneModuleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = SettingsPageBody._chrome(context);
+    const bgColor = Color(0xFF0F0F0F);
 
     Widget body;
     switch (tab) {
@@ -315,23 +323,19 @@ class _StandaloneModuleScreen extends StatelessWidget {
         body = const PaymentsPage();
         break;
       case DashboardTab.home:
-        body = const SizedBox.expand();
-        break;
       case DashboardTab.cards:
-        body = const SizedBox.expand();
-        break;
       case DashboardTab.settings:
         body = const SizedBox.expand();
         break;
     }
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: chrome.frameColor,
+        backgroundColor: bgColor,
         foregroundColor: Colors.white,
         elevation: 0,
-        title: Text(_ModulesSection._labelFor(tab)),
+        title: Text(SettingsPageBody._labelFor(tab)),
       ),
       body: SafeArea(
         top: false,
@@ -341,100 +345,73 @@ class _StandaloneModuleScreen extends StatelessWidget {
   }
 }
 
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.children});
+class _SectionCardDark extends StatelessWidget {
+  const _SectionCardDark({required this.children, required this.color});
 
-  final String title;
   final List<Widget> children;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 8, bottom: 6),
-          child: Text(
-            title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(SettingsPageBody._cardRadius),
-          ),
-          child: Column(children: children),
-        ),
-      ],
-    );
-  }
-}
-
-class _SectionTile extends StatelessWidget {
-  const _SectionTile({
-    required this.leading,
-    required this.title,
-    this.subtitle,
-    required this.onTap,
-    Widget? trailing,
-  }) : trailing = trailing;
-
-  final IconData leading;
-  final String title;
-  final String? subtitle;
-  final VoidCallback onTap;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Colors.black87,
-          fontWeight: FontWeight.w700,
-        );
-
-    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.black.withOpacity(0.55),
-          fontWeight: FontWeight.w600,
-        );
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
-          child: ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-            dense: true,
-            leading: DecoratedBox(
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: SizedBox(
-                width: 40,
-                height: 40,
-                child: Icon(leading, color: Colors.black87, size: 20),
-              ),
-            ),
-            title: Text(title, style: titleStyle),
-            subtitle: subtitle == null ? null : Text(subtitle!, style: subtitleStyle),
-            trailing: trailing ?? Icon(Icons.chevron_right, color: Colors.black.withOpacity(0.35)),
-          ),
-        ),
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        children: children,
       ),
     );
   }
 }
 
-class _AvatarCircle extends StatelessWidget {
-  const _AvatarCircle();
+class _SectionTileDark extends StatelessWidget {
+  const _SectionTileDark({
+    required this.leading,
+    required this.title,
+    required this.onTap,
+    this.subtitle,
+    this.titleColor,
+  });
 
-  static const _size = 88.0;
+  final IconData leading;
+  final String title;
+  final String? subtitle;
+  final VoidCallback onTap;
+  final Color? titleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
+          color: titleColor ?? Colors.white,
+          fontWeight: FontWeight.w600,
+        );
+
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.white.withOpacity(0.55),
+          fontWeight: FontWeight.w600,
+        );
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(22),
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Icon(leading, color: titleColor ?? Colors.white, size: 22),
+        title: Text(title, style: titleStyle),
+        subtitle:
+            subtitle == null ? null : Text(subtitle!, style: subtitleStyle),
+        trailing: Icon(Icons.chevron_right,
+            color: Colors.white.withOpacity(0.3), size: 20),
+      ),
+    );
+  }
+}
+
+class _AvatarCircleSmall extends StatelessWidget {
+  const _AvatarCircleSmall();
+
+  static const _size = 52.0;
 
   @override
   Widget build(BuildContext context) {
@@ -447,14 +424,14 @@ class _AvatarCircle extends StatelessWidget {
           child: ClipOval(
             child: DecoratedBox(
               decoration: const BoxDecoration(
-                color: Color(0xFFE6E6E6),
+                color: Color(0xFF2C2C2E),
               ),
               child: avatarBytes == null
                   ? Center(
                       child: Icon(
-                        Icons.person_outline,
-                        size: 34,
-                        color: Colors.black.withOpacity(0.6),
+                        Icons.person,
+                        size: 24,
+                        color: Colors.white.withOpacity(0.6),
                       ),
                     )
                   : Image.memory(
@@ -469,74 +446,62 @@ class _AvatarCircle extends StatelessWidget {
   }
 }
 
-class _LogoutButton extends StatelessWidget {
-  const _LogoutButton();
+class _ProfileCardCompact extends StatelessWidget {
+  const _ProfileCardCompact();
 
   @override
   Widget build(BuildContext context) {
-    final chrome = SettingsPageBody._chrome(context);
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 2, right: 2, bottom: 4),
-      child: SizedBox(
-        height: 56,
-        width: double.infinity,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              FirebaseAuth.instance.signOut();
-            },
-            borderRadius: BorderRadius.circular(18),
-            child: Ink(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: chrome.accentBlue.withOpacity(0.25)),
-              ),
-              child: Center(
-                child: Text(
-                  'Log out',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: Colors.black.withOpacity(0.78),
-                        fontWeight: FontWeight.w800,
-                      ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _PillButton extends StatelessWidget {
-  const _PillButton({required this.text, required this.onTap});
-
-  final String text;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    const cardColor = Color(0xFF1C1C1E);
+    final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        );
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: Colors.white.withOpacity(0.5),
+          fontWeight: FontWeight.w500,
+        );
 
     return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: DecoratedBox(
+      onTap: () {
+        final dashboardCubit = context.read<DashboardCubit>();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BlocProvider.value(
+              value: dashboardCubit,
+              child: const ProfileDetailsScreen(),
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(22),
+      child: Ink(
         decoration: BoxDecoration(
-          color: scheme.primary,
-          borderRadius: BorderRadius.circular(999),
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: scheme.onPrimary,
-                  fontWeight: FontWeight.w700,
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const _AvatarCircleSmall(),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocSelector<DashboardCubit, DashboardState, String>(
+                      selector: (state) => state.userName ?? 'User',
+                      builder: (context, name) {
+                        return Text(name, style: titleStyle);
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Product/UI Designer', style: subtitleStyle),
+                  ],
                 ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.3)),
+            ],
           ),
         ),
       ),

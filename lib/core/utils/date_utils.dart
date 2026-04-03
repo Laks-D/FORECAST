@@ -93,7 +93,8 @@ class AppDateUtils {
   ) {
     // Explicit statuses always win.
     if (currentStatus == 'Completed' || currentStatus == 'Cancelled') return currentStatus;
-    if (currentStatus == 'Overdue') return 'Overdue';
+    // Legacy mapping: previously "Overdue"; now displayed as "Pending".
+    if (currentStatus == 'Overdue') return 'Pending';
 
     try {
       final now = DateTime.now();
@@ -105,19 +106,22 @@ class AppDateUtils {
           DateTime(sessionDate.year, sessionDate.month, sessionDate.day);
 
       if (sessionOnlyDate.isBefore(todayDate)) {
-        return 'Overdue';
-      } else if (sessionOnlyDate.isAfter(todayDate)) {
         return 'Pending';
+      } else if (sessionOnlyDate.isAfter(todayDate)) {
+        return 'Upcoming';
       } else {
         final range = parseTimeRange(timeStr);
         final startMinutes = range['start'] ?? 0;
         final endMinutes = range['end'] ?? startMinutes;
 
         // If the session already ended and isn't completed, it is overdue.
-        if (nowInMinutes >= endMinutes) return 'Overdue';
-        return 'Pending';
+        if (nowInMinutes >= endMinutes) return 'Pending';
+        return 'Upcoming';
       }
     } catch (_) {
+      // Ensure legacy values don't leak into UI.
+      if (currentStatus == 'Overdue') return 'Pending';
+      if (currentStatus == 'Pending') return 'Upcoming';
       return currentStatus;
     }
   }

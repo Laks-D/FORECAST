@@ -60,45 +60,51 @@ class UpdateClientStatus extends ClientEvent {
   final String entityId;
   final String status;
   final DateTime? createdAt;
+  final String? refId;
 
   UpdateClientStatus({
     required this.entityId,
     required this.status,
     this.createdAt,
+    this.refId,
   });
 }
 
 class UpdateClientDetails extends ClientEvent {
   final String entityId;
-  final String name;
-  final String primaryContact;
+  final String? name;
   final String? middleName;
+  final String? primaryContact;
   final String? countryCode;
   final String? email;
   final String? gender;
   final DateTime? dateOfBirth;
   final String? address;
+  final String? currency;
 
   UpdateClientDetails({
     required this.entityId,
-    required this.name,
-    required this.primaryContact,
+    this.name,
     this.middleName,
+    this.primaryContact,
     this.countryCode,
     this.email,
     this.gender,
     this.dateOfBirth,
     this.address,
+    this.currency,
   });
 }
 
 class ClearPaymentStatusForDate extends ClientEvent {
   final String entityId;
   final DateTime date;
+  final String? paymentId;
 
   ClearPaymentStatusForDate({
     required this.entityId,
     required this.date,
+    this.paymentId,
   });
 }
 
@@ -113,26 +119,6 @@ class RescheduleClientPayment extends ClientEvent {
     required this.paymentId,
     required this.oldDate,
     required this.newDate,
-  });
-}
-
-class MergeClientPayments extends ClientEvent {
-  final String entityId;
-  final String sourcePaymentId;
-  final DateTime sourceDate;
-  final String targetPaymentId;
-  final DateTime targetDate;
-  final double mergedAmount;
-  final String? mergedNote;
-
-  MergeClientPayments({
-    required this.entityId,
-    required this.sourcePaymentId,
-    required this.sourceDate,
-    required this.targetPaymentId,
-    required this.targetDate,
-    required this.mergedAmount,
-    this.mergedNote,
   });
 }
 

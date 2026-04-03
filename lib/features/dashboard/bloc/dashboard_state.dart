@@ -8,6 +8,7 @@ final class DashboardState extends Equatable {
   const DashboardState({
     this.tab = DashboardTab.home,
     this.userName = 'User',
+    this.userHandle,
     this.userMiddleName,
     this.userEmail,
     this.userPhone,
@@ -26,6 +27,7 @@ final class DashboardState extends Equatable {
   final DashboardTab tab;
 
   final String? userName;
+  final String? userHandle;
   final String? userMiddleName;
   final String? userEmail;
   final String? userPhone;
@@ -46,6 +48,7 @@ final class DashboardState extends Equatable {
   DashboardState copyWith({
     DashboardTab? tab,
     String? userName,
+    String? userHandle,
     String? userMiddleName,
     String? userEmail,
     String? userPhone,
@@ -63,6 +66,7 @@ final class DashboardState extends Equatable {
     return DashboardState(
       tab: tab ?? this.tab,
       userName: userName ?? this.userName,
+      userHandle: userHandle ?? this.userHandle,
       userMiddleName: userMiddleName ?? this.userMiddleName,
       userEmail: userEmail ?? this.userEmail,
       userPhone: userPhone ?? this.userPhone,
@@ -82,7 +86,8 @@ final class DashboardState extends Equatable {
   @override
   List<Object?> get props => [
         tab,
-      userName,
+        userName,
+        userHandle,
         userMiddleName,
         userEmail,
         userPhone,

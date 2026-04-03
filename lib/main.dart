@@ -12,6 +12,8 @@ import 'design_system/theme/app_theme.dart';
 import 'design_system/theme/app_chrome_theme.dart';
 import 'firebase_options_dev.dart';
 import 'features/landing/ui/landing_screen.dart';
+import 'features/calendar/bloc/sessions_cubit.dart';
+import 'features/navigation/bloc/nav_modules_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_state.dart';
 
@@ -58,6 +60,8 @@ class App extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => AppThemeCubit()),
+        BlocProvider(create: (_) => sl<SessionsCubit>()),
+        BlocProvider(create: (_) => sl<NavModulesCubit>()),
       ],
       child: BlocBuilder<AppThemeCubit, AppThemeState>(
         builder: (context, state) {

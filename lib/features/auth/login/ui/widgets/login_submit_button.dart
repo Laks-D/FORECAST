@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../design_system/theme/app_chrome_theme.dart';
 import '../../bloc/login_bloc.dart';
 import '../../bloc/login_event.dart';
 import '../../bloc/login_state.dart';
@@ -10,6 +11,9 @@ class LoginSubmitButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    final theme = Theme.of(context);
+
     return BlocSelector<LoginBloc, LoginState, _ButtonModel>(
       selector: (state) => _ButtonModel(
         enabled: state.canSubmit,
@@ -17,17 +21,22 @@ class LoginSubmitButton extends StatelessWidget {
       ),
       builder: (context, model) {
         return SizedBox(
-          width: 150,
-          height: 44,
+          width: double.infinity,
+          height: 52,
           child: ElevatedButton(
             onPressed: model.enabled && !model.submitting
                 ? () => context.read<LoginBloc>().add(const LoginSubmitted())
                 : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8FA4C2),
-              disabledBackgroundColor: const Color(0xFF8FA4C2).withOpacity(0.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              backgroundColor: chrome.textColor,
+              foregroundColor: chrome.surfaceColor,
+              disabledBackgroundColor: chrome.textColor.withOpacity(0.35),
+              disabledForegroundColor: chrome.surfaceColor.withOpacity(0.75),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
               elevation: 0,
+              textStyle: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
             ),
             child: model.submitting
                 ? const SizedBox(
@@ -35,13 +44,7 @@ class LoginSubmitButton extends StatelessWidget {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text(
-                    'Login',
-                    style: TextStyle(
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                : const Text('Login'),
           ),
         );
       },

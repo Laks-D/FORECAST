@@ -54,42 +54,37 @@ class AppThemeState {
   /// only the colors it needs without inheriting from whatever the current
   /// default theme is).
   static const presetBase = AppThemeState(
-    // Matte Ivory
-    activeThemeId: 'matte_ivory',
+    activeThemeId: 'dark_fintech',
     customThemeName: 'Custom',
     font: AppFont.inter,
-    themeMode: ThemeMode.light,
-    lightBackground: Color(0xFFF8FAFC),
-    darkBackground: Color(0xFF0B0B0B),
+    themeMode: ThemeMode.dark,
+    lightBackground: Color(0xFFF0F4F8),
+    darkBackground: Color(0xFF0B0B0C),
     lightSurface: Color(0xFFFFFFFF),
-    darkSurface: Color(0xFF1C1524),
+    darkSurface: Color(0xFF1A1B1E),
     lightText: Color(0xFF111827),
-    darkText: Color(0xFFEDE9FE),
-    lightMuted: Color(0xFF64748B),
-    darkMuted: Color(0xFFA78BFA),
-    frameColor: Color(0xFFF1F5F9),
-    accentBlue: Color(0xFF6D73E6),
+    darkText: Color(0xFFF5F5F5),
+    lightMuted: Color(0xFF6B7280),
+    darkMuted: Color(0xFF9CA3AF),
+    frameColor: Color(0xFF0B0B0C),
+    accentBlue: Color(0xFFA8DEC5),
   );
 
-  /// App startup / reset theme.
   static const defaults = AppThemeState(
-    // Default to a warm neutral palette.
-    activeThemeId: 'warm_neutral',
+    activeThemeId: 'dark_fintech',
     customThemeName: 'Custom',
     font: AppFont.inter,
-    themeMode: ThemeMode.light,
-    // Provided palette (light)
-    lightBackground: Color(0xFFEFE9E1),
-    lightSurface: Color(0xFFD9D9D9),
-    lightText: Color(0xFF322D29),
-    lightMuted: Color(0xFFAC9C8D),
-    // Provided palette mapped to dark mode (fallback)
-    darkBackground: Color(0xFF322D29),
-    darkSurface: Color(0xFF322D29),
-    darkText: Color(0xFFEFE9E1),
-    darkMuted: Color(0xFFAC9C8D),
-    frameColor: Color(0xFFD1C7BD),
-    accentBlue: Color(0xFF72383D),
+    themeMode: ThemeMode.dark,
+    lightBackground: Color(0xFFF0F4F8),
+    lightSurface: Color(0xFFFFFFFF),
+    lightText: Color(0xFF111827),
+    lightMuted: Color(0xFF6B7280),
+    darkBackground: Color(0xFF0B0B0C),
+    darkSurface: Color(0xFF1A1B1E),
+    darkText: Color(0xFFF5F5F5),
+    darkMuted: Color(0xFF9CA3AF),
+    frameColor: Color(0xFF0B0B0C),
+    accentBlue: Color(0xFFA8DEC5),
   );
 
   AppThemeState copyWith({

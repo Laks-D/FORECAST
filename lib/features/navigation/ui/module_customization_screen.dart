@@ -12,18 +12,22 @@ class ModuleCustomizationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final onFrame = ThemeData.estimateBrightnessForColor(chrome.frameColor) ==
+            Brightness.dark
+        ? Colors.white
+        : Colors.black;
 
     return Scaffold(
       backgroundColor: chrome.frameColor,
       appBar: AppBar(
         backgroundColor: chrome.frameColor,
-        foregroundColor: Colors.white,
+        foregroundColor: onFrame,
         elevation: 0,
         title: const Text('Module customization'),
         actions: [
           TextButton(
             onPressed: () => context.read<NavModulesCubit>().resetDefaults(),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            style: TextButton.styleFrom(foregroundColor: onFrame),
             child: const Text('Reset'),
           ),
         ],
@@ -34,8 +38,9 @@ class ModuleCustomizationScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
           child: DecoratedBox(
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: chrome.surfaceColor,
               borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: chrome.mutedColor.withOpacity(0.14)),
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(28),
@@ -45,7 +50,9 @@ class ModuleCustomizationScreen extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(12, 10, 12, 18),
                     itemCount: state.order.length,
                     buildDefaultDragHandles: false,
-                    onReorder: (oldIndex, newIndex) => context.read<NavModulesCubit>().reorder(oldIndex, newIndex),
+                    onReorder: (oldIndex, newIndex) => context
+                        .read<NavModulesCubit>()
+                        .reorder(oldIndex, newIndex),
                     proxyDecorator: (child, index, animation) {
                       return AnimatedBuilder(
                         animation: animation,
@@ -67,31 +74,42 @@ class ModuleCustomizationScreen extends StatelessWidget {
                     },
                     itemBuilder: (context, index) {
                       final tab = state.order[index];
-                      final isEnabled = state.enabled.contains(tab) || tab == DashboardTab.settings || tab == DashboardTab.home;
-                      final isLocked = tab == DashboardTab.settings || tab == DashboardTab.home;
+                      final isEnabled = state.enabled.contains(tab) ||
+                          tab == DashboardTab.settings ||
+                          tab == DashboardTab.home;
+                      final isLocked = tab == DashboardTab.settings ||
+                          tab == DashboardTab.home;
 
                       return Container(
                         key: ValueKey(tab),
                         margin: const EdgeInsets.only(bottom: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: Colors.black.withOpacity(0.08)),
+                          color: chrome.surfaceColor,
+                          border: Border.all(
+                              color: chrome.mutedColor.withOpacity(0.18)),
                           borderRadius: BorderRadius.circular(18),
                         ),
                         child: ListTile(
-                          leading: Icon(_iconFor(tab), color: Colors.black87),
+                          leading: Icon(_iconFor(tab),
+                              color: chrome.textColor.withOpacity(0.9)),
                           title: Text(
                             _labelFor(tab),
-                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleSmall
+                                ?.copyWith(
                                   fontWeight: FontWeight.w700,
-                                  color: Colors.black87,
+                                  color: chrome.textColor,
                                 ),
                           ),
                           subtitle: isLocked
                               ? Text(
                                   'Always available',
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                        color: Colors.black.withOpacity(0.55),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(
+                                        color: chrome.mutedColor,
                                       ),
                                 )
                               : null,
@@ -102,13 +120,18 @@ class ModuleCustomizationScreen extends StatelessWidget {
                                 value: isEnabled,
                                 onChanged: isLocked
                                     ? null
-                                    : (v) => context.read<NavModulesCubit>().toggleEnabled(tab, v),
+                                    : (v) => context
+                                        .read<NavModulesCubit>()
+                                        .toggleEnabled(tab, v),
                               ),
                               ReorderableDragStartListener(
                                 index: index,
-                                child: const Padding(
-                                  padding: EdgeInsets.only(left: 6),
-                                  child: Icon(Icons.drag_handle),
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 6),
+                                  child: Icon(
+                                    Icons.drag_handle,
+                                    color: chrome.mutedColor.withOpacity(0.85),
+                                  ),
                                 ),
                               ),
                             ],
@@ -148,7 +171,7 @@ class ModuleCustomizationScreen extends StatelessWidget {
       case DashboardTab.calendar:
         return 'Calendar';
       case DashboardTab.people:
-        return 'Client';
+        return 'Clients';
       case DashboardTab.cards:
         return 'Cards';
       case DashboardTab.home:

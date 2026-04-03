@@ -14,7 +14,6 @@ import '../../features/client/domain/usecases/create_client_usecase.dart';
 import '../../features/client/domain/usecases/update_client_details_usecase.dart';
 import '../../features/client/domain/usecases/clear_payment_status_usecase.dart';
 import '../../features/client/domain/usecases/reschedule_payment_usecase.dart';
-import '../../features/client/domain/usecases/merge_payments_usecase.dart';
 import '../../features/client/domain/usecases/mark_paid_fully_usecase.dart';
 import '../../features/client/domain/usecases/revert_paid_fully_usecase.dart';
 
@@ -30,6 +29,9 @@ import '../../features/calendar/domain/repositories/schedule_repository.dart';
 
 /* ================= CALENDAR/SCHEDULE – PRESENTATION ================= */
 import '../../features/calendar/bloc/sessions_cubit.dart';
+
+/* ================= NAVIGATION – PRESENTATION ================= */
+import '../../features/navigation/bloc/nav_modules_cubit.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -84,10 +86,6 @@ Future<void> setupServiceLocator() async {
     () => ReschedulePaymentUseCase(sl()),
   );
 
-  sl.registerLazySingleton<MergePaymentsUseCase>(
-    () => MergePaymentsUseCase(sl()),
-  );
-
   sl.registerLazySingleton<MarkPaidFullyUseCase>(
     () => MarkPaidFullyUseCase(sl()),
   );
@@ -107,7 +105,6 @@ Future<void> setupServiceLocator() async {
       sl<UpdateClientDetailsUseCase>(),
       sl<ClearPaymentStatusUseCase>(),
       sl<ReschedulePaymentUseCase>(),
-      sl<MergePaymentsUseCase>(),
       sl<MarkPaidFullyUseCase>(),
       sl<RevertPaidFullyUseCase>(),
     ),
@@ -125,8 +122,18 @@ Future<void> setupServiceLocator() async {
 
   /* ================= CALENDAR/SCHEDULE – PRESENTATION ================= */
 
-  sl.registerFactory<SessionsCubit>(
+  // Single shared instance across the whole app to avoid Provider scope issues
+  // when opening bottom sheets / routes.
+  sl.registerLazySingleton<SessionsCubit>(
     () => SessionsCubit(sl<ScheduleRepository>()),
+  );
+
+  /* ================= NAVIGATION – PRESENTATION ================= */
+
+  // Single shared instance across the whole app to avoid Provider scope issues
+  // when opening routes / bottom sheets.
+  sl.registerLazySingleton<NavModulesCubit>(
+    () => NavModulesCubit(),
   );
 
   _isSetup = true;
