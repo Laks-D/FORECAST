@@ -18,8 +18,8 @@ class DashboardBottomNav extends StatefulWidget {
 
 class _DashboardBottomNavState extends State<DashboardBottomNav> {
   List<DashboardTab> _tabs = const <DashboardTab>[
-    DashboardTab.calendar,
     DashboardTab.people,
+    DashboardTab.calendar,
     DashboardTab.home,
     DashboardTab.phone,
     DashboardTab.settings,
@@ -54,10 +54,17 @@ class _DashboardBottomNavState extends State<DashboardBottomNav> {
       ],
       child: SizedBox(
         height: 68,
-        // The nav uses transparent background to blend fully into the black frame
         child: DecoratedBox(
-          decoration: const BoxDecoration(
-            color: Colors.transparent,
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            border: Border(
+              top: BorderSide(
+                color: Theme.of(context)
+                    .colorScheme
+                    .outlineVariant
+                    .withOpacity(0.65),
+              ),
+            ),
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -92,7 +99,7 @@ IconData _iconFor(DashboardTab tab) {
     case DashboardTab.home:
       return Icons.home_outlined;
     case DashboardTab.phone:
-      return Icons.credit_card_outlined;
+      return Icons.receipt_long_outlined;
     case DashboardTab.settings:
       return Icons.person_outline;
   }
@@ -108,16 +115,17 @@ class _NavIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return BlocSelector<DashboardCubit, DashboardState, bool>(
       selector: (state) => state.tab == tab,
       builder: (context, selected) {
-        final color = selected ? Colors.white : chrome.mutedColor;
+        final color = selected ? scheme.onSurface : chrome.mutedColor;
         
         return InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           highlightColor: Colors.transparent,
-          splashColor: Colors.white.withOpacity(0.05),
+          splashColor: scheme.onSurface.withOpacity(0.05),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [

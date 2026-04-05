@@ -18,7 +18,9 @@ class LoginPhoneFrame extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final statusTop = MediaQuery.viewPaddingOf(context).top;
-        final frameColor = AppChromeTheme.of(context).frameColor;
+        final chrome = AppChromeTheme.of(context);
+        final isLight = Theme.of(context).brightness == Brightness.light;
+        final frameColor = isLight ? Theme.of(context).scaffoldBackgroundColor : chrome.frameColor;
 
         return SizedBox.expand(
           child: Stack(

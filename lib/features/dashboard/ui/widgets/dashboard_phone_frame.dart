@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/utils/date_utils.dart';
-import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../calendar/ui/widgets/calendar_page_body.dart';
 import '../../../client/presentation/pages/client_page.dart';
@@ -24,16 +24,21 @@ class DashboardPhoneFrame extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final w = constraints.maxWidth;
         final h = constraints.maxHeight;
         final statusTop = MediaQuery.viewPaddingOf(context).top;
-        final frameColor = AppChromeTheme.of(context).frameColor;
+        final scheme = Theme.of(context).colorScheme;
+        final visual = AppVisualStyle.of(context);
+        final frameColor = visual.neumorphism
+            ? scheme.surface
+          : Theme.of(context).scaffoldBackgroundColor;
 
-        final horizontalPadding = (w * 0.045).clamp(12.0, 20.0);
-        final topPadding = statusTop + (h * 0.012).clamp(6.0, 14.0);
-        const bottomPadding = 10.0;
+        // Full-bleed: remove the outer "frame" padding so module pages
+        // (Settings/Clients/etc.) fill the screen edge-to-edge.
+        const horizontalPadding = 8.0;
+        final topPadding = statusTop;
+        const bottomPadding = 0.0;
         const navHeight = 68.0;
-        const navGap = 6.0;
+        const navGap = 0.0;
 
         final contentH = (h - topPadding - bottomPadding - navHeight - navGap).clamp(480.0, 4000.0);
         final topCardH = (contentH * 0.29).clamp(180.0, 260.0);

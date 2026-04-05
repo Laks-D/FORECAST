@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
@@ -80,8 +81,10 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
     });
   }
 
-  void _toggleEdit() {
+  Future<void> _toggleEdit() async {
     if (_editing) {
+      final profileCubit = context.read<UserProfileCubit>();
+
       // Save all fields via bulk update
       context.read<DashboardCubit>().updateProfile(
             name: _nameCtrl.text,
@@ -94,14 +97,28 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
           );
 
       // Save to Storage (Nationality/Currency)
-      if (_signupProfile != null) {
-        SignupProfileStorage.saveProfile(
-          _signupProfile!.copyWith(
-            nationality: _nationalityCtrl.text.trim(),
-            currency: _currencyCtrl.text.trim(),
-          ),
-        );
-      }
+      final updatedProfile = (_signupProfile ??
+              SignupProfileData(
+                fullName: _nameCtrl.text.trim(),
+                userName: _handleCtrl.text.trim(),
+                email: _emailCtrl.text.trim(),
+              ))
+          .copyWith(
+        nationality: _nationalityCtrl.text.trim(),
+        currency: _currencyCtrl.text.trim(),
+      );
+
+      await SignupProfileStorage.saveProfile(updatedProfile);
+      if (!mounted) return;
+
+      setState(() {
+        _signupProfile = updatedProfile;
+      });
+
+      // Propagate new default currency across app.
+      try {
+        profileCubit.refresh();
+      } catch (_) {}
     }
     setState(() => _editing = !_editing);
   }
@@ -207,7 +224,9 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
                         ),
                   ),
                   GestureDetector(
-                    onTap: _toggleEdit,
+                    onTap: () {
+                      _toggleEdit();
+                    },
                     child: Row(
                       children: [
                         Icon(

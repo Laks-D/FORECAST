@@ -13,6 +13,21 @@ class ClientRepositoryImpl implements ClientRepository {
   }
 
   @override
+  List<Client> getDeletedClients() {
+    return localDataSource.fetchDeletedClients();
+  }
+
+  @override
+  void deleteClient({required String entityId}) {
+    localDataSource.deleteClient(entityId);
+  }
+
+  @override
+  void restoreClient({required String entityId}) {
+    localDataSource.restoreClient(entityId);
+  }
+
+  @override
   void addNote({
     required String entityId,
     required String note,

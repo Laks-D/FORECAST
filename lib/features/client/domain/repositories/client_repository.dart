@@ -3,6 +3,15 @@ import '../entities/client.dart';
 abstract class ClientRepository {
   List<Client> getClients();
 
+  /// Soft-deleted clients kept for restore.
+  List<Client> getDeletedClients();
+
+  /// Soft delete (move to deleted bucket).
+  void deleteClient({required String entityId});
+
+  /// Restore from deleted bucket.
+  void restoreClient({required String entityId});
+
   void addNote({
     required String entityId,
     required String note,

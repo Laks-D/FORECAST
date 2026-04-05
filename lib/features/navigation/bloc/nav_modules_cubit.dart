@@ -82,8 +82,39 @@ class NavModulesCubit extends Cubit<NavModulesState> {
         return;
       }
 
-      final orderStrings = (jsonMap['order'] as List?)?.whereType<String>().toList() ?? const <String>[];
+      var orderStrings = (jsonMap['order'] as List?)?.whereType<String>().toList() ?? const <String>[];
       final enabledStrings = (jsonMap['enabled'] as List?)?.whereType<String>().toList() ?? const <String>[];
+
+      // Migration: older versions persisted the old default order. If the user
+      // never customized their nav order (i.e., it matches the old default
+      // exactly), update it to the new default (People before Calendar).
+      const oldDefault = <String>[
+        'calendar',
+        'people',
+        'home',
+        'phone',
+        'settings',
+      ];
+
+      if (orderStrings.length == oldDefault.length) {
+        var matchesOldDefault = true;
+        for (var i = 0; i < oldDefault.length; i++) {
+          if (orderStrings[i] != oldDefault[i]) {
+            matchesOldDefault = false;
+            break;
+          }
+        }
+
+        if (matchesOldDefault) {
+          orderStrings = const <String>[
+            'people',
+            'calendar',
+            'home',
+            'phone',
+            'settings',
+          ];
+        }
+      }
 
       final order = _parseTabList(orderStrings);
       final enabled = _parseTabList(enabledStrings).toSet()

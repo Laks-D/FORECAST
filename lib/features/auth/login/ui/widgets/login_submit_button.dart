@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../../design_system/theme/app_visual_style.dart';
 import '../../bloc/login_bloc.dart';
 import '../../bloc/login_event.dart';
 import '../../bloc/login_state.dart';
@@ -13,6 +14,7 @@ class LoginSubmitButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
     final theme = Theme.of(context);
+    final visual = AppVisualStyle.of(context);
 
     return BlocSelector<LoginBloc, LoginState, _ButtonModel>(
       selector: (state) => _ButtonModel(
@@ -27,17 +29,27 @@ class LoginSubmitButton extends StatelessWidget {
             onPressed: model.enabled && !model.submitting
                 ? () => context.read<LoginBloc>().add(const LoginSubmitted())
                 : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: chrome.textColor,
-              foregroundColor: chrome.surfaceColor,
-              disabledBackgroundColor: chrome.textColor.withOpacity(0.35),
-              disabledForegroundColor: chrome.surfaceColor.withOpacity(0.75),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-              elevation: 0,
-              textStyle: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            style: visual.neumorphism
+                ? Theme.of(context).elevatedButtonTheme.style?.copyWith(
+                      textStyle: WidgetStatePropertyAll(
+                        theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    )
+                : ElevatedButton.styleFrom(
+                    backgroundColor: chrome.textColor,
+                    foregroundColor: chrome.surfaceColor,
+                    disabledBackgroundColor: chrome.textColor.withOpacity(0.35),
+                    disabledForegroundColor: chrome.surfaceColor.withOpacity(0.75),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    elevation: 0,
+                    textStyle: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
             child: model.submitting
                 ? const SizedBox(
                     width: 18,

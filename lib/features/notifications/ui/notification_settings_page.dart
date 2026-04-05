@@ -12,143 +12,111 @@ class NotificationSettingsPage extends StatelessWidget {
     final chrome = AppChromeTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final bgColor = scheme.surface;
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            /* ─── Header ─── */
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
-                  ),
-                  Text(
-                    'Notification Settings',
-                    style: tt.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            /* ─── Body ─── */
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: scheme.surface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: BlocBuilder<NotificationCubit, NotificationState>(
-                  builder: (context, state) {
-                    if (state.loading) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    return ListView(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-                      children: [
-                        /* ─ Session Reminders ─ */
-                        _SectionHeader(title: 'Session Reminders', chrome: chrome),
-                        const SizedBox(height: 4),
-                        _ToggleTile(
-                          title: 'Enabled',
-                          subtitle: 'Get notified before upcoming sessions',
-                          value: state.sessionReminders,
-                          chrome: chrome,
-                          onChanged: (v) => context
-                              .read<NotificationCubit>()
-                              .toggleSessionReminders(v),
-                        ),
-                        if (state.sessionReminders) ...[
-                          const SizedBox(height: 8),
-                          _LeadTimePicker(
-                            label: 'Remind me before',
-                            options: const {
-                              5: '5 minutes',
-                              10: '10 minutes',
-                              15: '15 minutes',
-                              30: '30 minutes',
-                              60: '1 hour',
-                            },
-                            selected: state.sessionLeadMinutes,
-                            chrome: chrome,
-                            onChanged: (v) => context
-                                .read<NotificationCubit>()
-                                .setSessionLeadMinutes(v),
-                          ),
-                        ],
-                        const _Separator(),
-
-                        /* ─ Payment Reminders ─ */
-                        _SectionHeader(title: 'Payment Reminders', chrome: chrome),
-                        const SizedBox(height: 4),
-                        _ToggleTile(
-                          title: 'Enabled',
-                          subtitle: 'Get notified about payments at the start of the day',
-                          value: state.paymentReminders,
-                          chrome: chrome,
-                          onChanged: (v) => context
-                              .read<NotificationCubit>()
-                              .togglePaymentReminders(v),
-                        ),
-                        if (state.paymentReminders) ...[
-                          const SizedBox(height: 12),
-                          _TimePicker(
-                            label: 'Notification time',
-                            hour: state.paymentReminderHour,
-                            minute: state.paymentReminderMinute,
-                            chrome: chrome,
-                            onChanged: (h, m) => context
-                                .read<NotificationCubit>()
-                                .setPaymentReminderTime(h, m),
-                          ),
-                          const SizedBox(height: 12),
-                          _LeadTimePicker(
-                            label: 'Remind me',
-                            options: const {
-                              0: 'Same day',
-                              1: '1 day before',
-                              2: '2 days before',
-                              3: '3 days before',
-                              7: '1 week before',
-                            },
-                            selected: state.paymentDaysBefore,
-                            chrome: chrome,
-                            onChanged: (v) => context
-                                .read<NotificationCubit>()
-                                .setPaymentDaysBefore(v),
-                          ),
-                          const SizedBox(height: 8),
-                          _ToggleTile(
-                            title: 'Daily pending reminders',
-                            subtitle:
-                              'Keep reminding every morning for unpaid pending payments',
-                            value: state.paymentOverdueDaily,
-                            chrome: chrome,
-                            onChanged: (v) => context
-                                .read<NotificationCubit>()
-                                .togglePaymentOverdueDaily(v),
-                          ),
-                        ],
-                      ],
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: bgColor,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
+        title: Text(
+          'Notification Settings',
+          style: tt.titleLarge?.copyWith(
+            color: scheme.onSurface,
+            fontWeight: FontWeight.w900,
+          ),
         ),
+      ),
+      body: BlocBuilder<NotificationCubit, NotificationState>(
+        builder: (context, state) {
+          if (state.loading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+            children: [
+              /* ─ Session Reminders ─ */
+              _SectionHeader(title: 'Session Reminders'),
+              const SizedBox(height: 4),
+              _ToggleTile(
+                title: 'Enabled',
+                subtitle: 'Get notified before upcoming sessions',
+                value: state.sessionReminders,
+                chrome: chrome,
+                onChanged: (v) =>
+                    context.read<NotificationCubit>().toggleSessionReminders(v),
+              ),
+              if (state.sessionReminders) ...[
+                const SizedBox(height: 8),
+                _LeadTimePicker(
+                  label: 'Remind me before',
+                  options: const {
+                    5: '5 minutes',
+                    10: '10 minutes',
+                    15: '15 minutes',
+                    30: '30 minutes',
+                    60: '1 hour',
+                  },
+                  selected: state.sessionLeadMinutes,
+                  chrome: chrome,
+                  onChanged: (v) =>
+                      context.read<NotificationCubit>().setSessionLeadMinutes(v),
+                ),
+              ],
+              const _Separator(),
+
+              /* ─ Payment Reminders ─ */
+              _SectionHeader(title: 'Payment Reminders'),
+              const SizedBox(height: 4),
+              _ToggleTile(
+                title: 'Enabled',
+                subtitle: 'Get notified about payments at the start of the day',
+                value: state.paymentReminders,
+                chrome: chrome,
+                onChanged: (v) =>
+                    context.read<NotificationCubit>().togglePaymentReminders(v),
+              ),
+              if (state.paymentReminders) ...[
+                const SizedBox(height: 12),
+                _TimePicker(
+                  label: 'Notification time',
+                  hour: state.paymentReminderHour,
+                  minute: state.paymentReminderMinute,
+                  chrome: chrome,
+                  onChanged: (h, m) =>
+                      context.read<NotificationCubit>().setPaymentReminderTime(h, m),
+                ),
+                const SizedBox(height: 12),
+                _LeadTimePicker(
+                  label: 'Remind me',
+                  options: const {
+                    0: 'Same day',
+                    1: '1 day before',
+                    2: '2 days before',
+                    3: '3 days before',
+                    7: '1 week before',
+                  },
+                  selected: state.paymentDaysBefore,
+                  chrome: chrome,
+                  onChanged: (v) =>
+                      context.read<NotificationCubit>().setPaymentDaysBefore(v),
+                ),
+                const SizedBox(height: 8),
+                _ToggleTile(
+                  title: 'Daily pending reminders',
+                  subtitle:
+                      'Keep reminding every morning for unpaid pending payments',
+                  value: state.paymentOverdueDaily,
+                  chrome: chrome,
+                  onChanged: (v) => context
+                      .read<NotificationCubit>()
+                      .togglePaymentOverdueDaily(v),
+                ),
+              ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -157,19 +125,19 @@ class NotificationSettingsPage extends StatelessWidget {
 /* ──────────────────── Helpers ──────────────────── */
 
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.chrome});
+  const _SectionHeader({required this.title});
   final String title;
-  final AppChromeTheme chrome;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),
       child: Text(
         title,
         style: Theme.of(context).textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              color: chrome.textColor,
+              color: scheme.onSurface,
             ),
       ),
     );
@@ -192,18 +160,19 @@ class _ToggleTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return SwitchListTile.adaptive(
       contentPadding: EdgeInsets.zero,
       title: Text(title,
           style: Theme.of(context)
               .textTheme
               .bodyLarge
-              ?.copyWith(color: chrome.textColor)),
+              ?.copyWith(color: scheme.onSurface)),
       subtitle: Text(subtitle,
           style: Theme.of(context)
               .textTheme
               .bodySmall
-              ?.copyWith(color: chrome.mutedColor)),
+              ?.copyWith(color: scheme.onSurface.withOpacity(0.60))),
       value: value,
       activeColor: chrome.accentBlue,
       onChanged: onChanged,
@@ -227,6 +196,7 @@ class _LeadTimePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -235,7 +205,7 @@ class _LeadTimePicker extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .bodyMedium
-              ?.copyWith(color: chrome.mutedColor),
+              ?.copyWith(color: scheme.onSurface.withOpacity(0.60)),
         ),
         const SizedBox(height: 6),
         Wrap(
@@ -248,7 +218,7 @@ class _LeadTimePicker extends StatelessWidget {
               selected: isSelected,
               selectedColor: chrome.accentBlue.withOpacity(0.18),
               labelStyle: TextStyle(
-                color: isSelected ? chrome.accentBlue : chrome.textColor,
+                color: isSelected ? chrome.accentBlue : scheme.onSurface,
                 fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
               ),
               onSelected: (_) => onChanged(e.key),
@@ -294,6 +264,7 @@ class _TimePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -302,7 +273,7 @@ class _TimePicker extends StatelessWidget {
           style: Theme.of(context)
               .textTheme
               .bodyMedium
-              ?.copyWith(color: chrome.mutedColor),
+              ?.copyWith(color: scheme.onSurface.withOpacity(0.60)),
         ),
         const SizedBox(height: 6),
         InkWell(
@@ -319,7 +290,7 @@ class _TimePicker extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
             decoration: BoxDecoration(
-              border: Border.all(color: chrome.mutedColor.withOpacity(0.3)),
+              border: Border.all(color: scheme.outlineVariant.withOpacity(0.8)),
               borderRadius: BorderRadius.circular(12),
             ),
             child: Row(
@@ -330,7 +301,7 @@ class _TimePicker extends StatelessWidget {
                 Text(
                   _format(hour, minute),
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: chrome.textColor,
+                        color: scheme.onSurface,
                         fontWeight: FontWeight.w600,
                       ),
                 ),

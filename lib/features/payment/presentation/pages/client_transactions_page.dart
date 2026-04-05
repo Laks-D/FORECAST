@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 
 import 'package:gendral_app/design_system/widgets/app_card.dart';
@@ -25,13 +26,17 @@ class ClientTransactionsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final bgColor = scheme.surface;
+    final onSurface = scheme.onSurface;
+    final defaultCurrency =
+        context.select((UserProfileCubit c) => c.state.currency);
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: bgColor,
       appBar: AppBar(
-        backgroundColor: chrome.frameColor,
-        foregroundColor: Colors.white,
+        backgroundColor: bgColor,
+        foregroundColor: onSurface,
         elevation: 0,
         title: const Text('Transactions'),
         actions: [
@@ -60,8 +65,11 @@ class ClientTransactionsPage extends StatelessWidget {
                           );
                         },
                   style: TextButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Colors.white, width: 1.5),
+                    foregroundColor: onSurface,
+                    side: BorderSide(
+                      color: scheme.outlineVariant.withOpacity(0.75),
+                      width: 1.5,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
@@ -80,7 +88,7 @@ class ClientTransactionsPage extends StatelessWidget {
           child: BlocBuilder<ClientBloc, ClientState>(
             builder: (context, state) {
               if (state is! ClientLoaded) {
-                return const AppLoading(color: Colors.white);
+                return AppLoading(color: onSurface);
               }
 
               final client = _findClient(state);
@@ -93,7 +101,10 @@ class ClientTransactionsPage extends StatelessWidget {
                 );
               }
 
+              final currency = client.currency ?? defaultCurrency;
+
               final payments = _extractPayments(client);
+              final listItems = _buildMonthGroupedItems(payments);
 
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -108,13 +119,49 @@ class ClientTransactionsPage extends StatelessWidget {
                               icon: Icons.receipt_long_outlined,
                             ),
                           )
-                        : ListView.separated(
+                        : ListView.builder(
                             padding: EdgeInsets.zero,
-                            itemCount: payments.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 12),
+                            itemCount: listItems.length,
                             itemBuilder: (context, index) {
-                              final p = payments[index];
-                              return _TransactionCard(payment: p);
+                              final item = listItems[index];
+                              if (item is _MonthHeaderItem) {
+                                return Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(2, 2, 2, 10),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.label,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall
+                                              ?.copyWith(
+                                                color: AppChromeTheme.of(context)
+                                                    .mutedColor,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                      Text(
+                                        '${currency}${item.total.toStringAsFixed(0)}',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              final p = (item as _PaymentItem).payment;
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: _TransactionCard(payment: p, currency: currency),
+                              );
                             },
                           ),
                   ),
@@ -186,6 +233,68 @@ class ClientTransactionsPage extends StatelessWidget {
     out.sort((a, b) => b.date.compareTo(a.date));
     return out;
   }
+
+  List<_PaymentsListItem> _buildMonthGroupedItems(List<_PaymentVM> payments) {
+    int ymKey(DateTime d) => d.year * 100 + d.month;
+
+    String monthLabel(DateTime d) {
+      const months = [
+        'JAN',
+        'FEB',
+        'MAR',
+        'APR',
+        'MAY',
+        'JUN',
+        'JUL',
+        'AUG',
+        'SEP',
+        'OCT',
+        'NOV',
+        'DEC'
+      ];
+      return '${months[d.month - 1]} ${d.year}';
+    }
+
+    final totals = <int, double>{};
+    for (final p in payments) {
+      final key = ymKey(p.date);
+      totals[key] = (totals[key] ?? 0) + p.amount;
+    }
+
+    final items = <_PaymentsListItem>[];
+    int? lastKey;
+    for (final p in payments) {
+      final key = ymKey(p.date);
+      if (lastKey != key) {
+        lastKey = key;
+        items.add(
+          _MonthHeaderItem(
+            label: monthLabel(p.date),
+            total: totals[key] ?? 0,
+          ),
+        );
+      }
+      items.add(_PaymentItem(p));
+    }
+    return items;
+  }
+}
+
+abstract class _PaymentsListItem {
+  const _PaymentsListItem();
+}
+
+class _MonthHeaderItem extends _PaymentsListItem {
+  const _MonthHeaderItem({required this.label, required this.total});
+
+  final String label;
+  final double total;
+}
+
+class _PaymentItem extends _PaymentsListItem {
+  const _PaymentItem(this.payment);
+
+  final _PaymentVM payment;
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -249,9 +358,10 @@ class _HeaderCard extends StatelessWidget {
 }
 
 class _TransactionCard extends StatelessWidget {
-  const _TransactionCard({required this.payment});
+  const _TransactionCard({required this.payment, required this.currency});
 
   final _PaymentVM payment;
+  final String currency;
 
   @override
   Widget build(BuildContext context) {
@@ -286,7 +396,7 @@ class _TransactionCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '₹${payment.amount.toStringAsFixed(0)}',
+                    '${currency}${payment.amount.toStringAsFixed(0)}',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w900,
                         ),

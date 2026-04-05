@@ -36,10 +36,13 @@ class _LoginView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final background = isLight ? Theme.of(context).scaffoldBackgroundColor : chrome.frameColor;
     final error = context.select((LoginBloc bloc) => bloc.state.errorMessage);
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: background,
       body: Stack(
         children: [
           LoginPhoneFrame(
@@ -66,12 +69,12 @@ class _LoginView extends StatelessWidget {
               child: SafeArea(
                 top: false,
                 child: AppCard(
-                  color: Colors.white.withOpacity(0.88),
+                  color: scheme.errorContainer.withOpacity(0.92),
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Text(
                     error,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.black87,
+                          color: scheme.onErrorContainer,
                           fontWeight: FontWeight.w600,
                         ),
                   ),

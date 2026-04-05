@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
+import 'package:gendral_app/design_system/theme/app_visual_style.dart';
 import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
 import 'package:gendral_app/design_system/widgets/app_loading.dart';
 import 'package:gendral_app/design_system/widgets/app_search_field.dart';
+import 'package:gendral_app/design_system/widgets/app_neumorphic_buttons.dart';
 
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../domain/entities/client.dart';
@@ -58,6 +64,114 @@ class ClientPage extends StatefulWidget {
 }
 
 class _ClientPageState extends State<ClientPage> {
+  static const _pinnedPrefsKey = 'pinned_clients_v1';
+  Set<String> _pinnedClientIds = <String>{};
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPinnedClients();
+  }
+
+  Future<void> _loadPinnedClients() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList(_pinnedPrefsKey) ?? const <String>[];
+      if (!mounted) return;
+      setState(() => _pinnedClientIds = list.toSet());
+    } catch (_) {
+      // Ignore load failures.
+    }
+  }
+
+  Future<void> _persistPinnedClients() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setStringList(
+        _pinnedPrefsKey,
+        _pinnedClientIds.toList(growable: false),
+      );
+    } catch (_) {
+      // Ignore persistence failures.
+    }
+  }
+
+  Future<void> _togglePin(Client entity) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final isPinned = _pinnedClientIds.contains(entity.id);
+
+    setState(() {
+      if (isPinned) {
+        _pinnedClientIds.remove(entity.id);
+      } else {
+        _pinnedClientIds.add(entity.id);
+      }
+    });
+
+    await _persistPinnedClients();
+
+    messenger.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 1),
+        content: Text(isPinned ? 'Client unpinned.' : 'Client pinned.'),
+      ),
+    );
+  }
+
+  List<Client> _orderedClients(List<Client> input) {
+    if (_pinnedClientIds.isEmpty) return input;
+    final pinned = <Client>[];
+    final rest = <Client>[];
+    for (final c in input) {
+      if (_pinnedClientIds.contains(c.id)) {
+        pinned.add(c);
+      } else {
+        rest.add(c);
+      }
+    }
+    return [...pinned, ...rest];
+  }
+
+  Future<void> _confirmDeleteClient(Client entity) async {
+    final sessionsCubit = context.read<SessionsCubit>();
+    final clientBloc = context.read<ClientBloc>();
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Delete client?'),
+          content: Text(
+            'This will remove ${entity.displayName} from the clients list and delete upcoming classes.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true) return;
+
+    if (!mounted) return;
+    clientBloc.add(DeleteClient(entityId: entity.id));
+    messenger.showSnackBar(
+      const SnackBar(duration: Duration(seconds: 1), content: Text('Client deleted.')),
+    );
+
+    // Clean up derived upcoming sessions in the background so the client
+    // disappears from the list immediately.
+    unawaited(sessionsCubit.deleteUpcomingSessionsForClient(entity.id));
+  }
+
   void _showQuickAddClientModal() {
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
@@ -251,62 +365,82 @@ class _ClientPageState extends State<ClientPage> {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
+    final visual = AppVisualStyle.of(context);
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final onSurface = scheme.onSurface;
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: bgColor,
       body: SafeArea(
         top: !widget.embedInDashboard,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          padding: const EdgeInsets.fromLTRB(0, 14, 0, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Clients',
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                                letterSpacing: -0.5,
-                              ),
-                    ),
-                  ),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: scheme.surface.withOpacity(0.18),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(
-                        color: Colors.white.withOpacity(0.12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Clients',
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineSmall
+                            ?.copyWith(
+                              color: onSurface,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: -0.5,
+                            ),
                       ),
                     ),
-                    child: IconButton(
-                      tooltip: 'Add Client',
-                      onPressed: _showAddClientOptions,
-                      icon: const Icon(Icons.add, size: 24),
-                      color: Colors.white,
-                    ),
-                  ),
-                ],
+                    if (visual.neumorphism)
+                      AppNeumorphicIconButton(
+                        tooltip: 'Add Client',
+                        icon: Icons.add,
+                        iconSize: 24,
+                        onPressed: _showAddClientOptions,
+                      )
+                    else
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: scheme.surface,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: scheme.outlineVariant.withOpacity(0.55),
+                          ),
+                        ),
+                        child: IconButton(
+                          tooltip: 'Add Client',
+                          onPressed: _showAddClientOptions,
+                          icon: const Icon(Icons.add, size: 24),
+                          color: onSurface,
+                        ),
+                      ),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
-              _SearchPill(
-                hintText: 'Search customer / phone / program',
-                onChanged: (value) {
-                  final sessions = context.read<SessionsCubit>().state.sessions;
-                  context
-                      .read<ClientBloc>()
-                      .add(SearchClients(value, sessions: sessions));
-                },
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: _SearchPill(
+                  hintText: 'Search customer / phone / program',
+                  onChanged: (value) {
+                    final sessions =
+                        context.read<SessionsCubit>().state.sessions;
+                    context
+                        .read<ClientBloc>()
+                        .add(SearchClients(value, sessions: sessions));
+                  },
+                ),
               ),
               const SizedBox(height: 14),
               Expanded(
                 child: BlocBuilder<ClientBloc, ClientState>(
                   builder: (context, state) {
                     if (state is ClientLoading || state is ClientInitial) {
-                      return const AppLoading(color: Colors.white);
+                      return AppLoading(color: onSurface);
                     }
 
                     if (state is ClientLoaded) {
@@ -319,12 +453,14 @@ class _ClientPageState extends State<ClientPage> {
                         );
                       }
 
+                      final entities = _orderedClients(state.entities);
                       return ListView.separated(
-                        padding: EdgeInsets.zero,
-                        itemCount: state.entities.length,
+                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                        itemCount: entities.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 14),
                         itemBuilder: (context, index) {
-                          final entity = state.entities[index];
+                          final entity = entities[index];
+                          final isPinned = _pinnedClientIds.contains(entity.id);
 
                           return _ClientCard(
                             entity: entity,
@@ -347,6 +483,9 @@ class _ClientPageState extends State<ClientPage> {
                                 ),
                               );
                             },
+                            pinned: isPinned,
+                            onPinToggle: () => _togglePin(entity),
+                            onDelete: () => _confirmDeleteClient(entity),
                           );
                         },
                       );
@@ -396,30 +535,42 @@ class _ClientCard extends StatelessWidget {
   final ColorScheme scheme;
   final AppChromeTheme chrome;
   final VoidCallback onTap;
+  final bool pinned;
+  final VoidCallback? onPinToggle;
+  final VoidCallback? onDelete;
 
   const _ClientCard({
     required this.entity,
     required this.scheme,
     required this.chrome,
     required this.onTap,
+    required this.pinned,
+    this.onPinToggle,
+    this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
+    final visual = AppVisualStyle.of(context);
     final statusColor = _clientStatusColor(entity.status);
 
-    return Container(
+    final cardColor = visual.neumorphism ? scheme.surface : chrome.surfaceColor;
+    final shadows = visual.neumorphism
+        ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+        : <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withOpacity(0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ];
+
+    Widget cardBody = Container(
       decoration: BoxDecoration(
-        color: chrome.surfaceColor,
+        color: cardColor,
         borderRadius: BorderRadius.circular(28),
         border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 15,
-            offset: const Offset(0, 8),
-          ),
-        ],
+        boxShadow: shadows,
       ),
       child: Material(
         color: Colors.transparent,
@@ -452,21 +603,42 @@ class _ClientCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        entity.name,
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: chrome.textColor,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 18,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              entity.name,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    color: chrome.textColor,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 18,
+                                  ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                          ),
+                          if (pinned)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 8),
+                              child: Icon(
+                                Icons.push_pin,
+                                size: 16,
+                                color: chrome.accentBlue,
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       Row(
                         children: [
-                          Icon(Icons.phone_outlined,
-                              size: 14, color: chrome.mutedColor),
+                          Icon(
+                            Icons.phone_outlined,
+                            size: 14,
+                            color: chrome.mutedColor,
+                          ),
                           const SizedBox(width: 6),
                           Expanded(
                             child: Text(
@@ -490,12 +662,16 @@ class _ClientCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: statusColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: statusColor.withOpacity(0.2)),
+                    border: Border.all(
+                      color: statusColor.withOpacity(0.2),
+                    ),
                   ),
                   child: Text(
                     entity.status.toUpperCase(),
@@ -511,6 +687,112 @@ class _ClientCard extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+
+    // Swipe actions:
+    // - Left -> Right: Pin/Unpin
+    // - Right -> Left: Delete
+    if (onDelete == null && onPinToggle == null) return cardBody;
+    final pinLabel = pinned ? 'Unpin' : 'Pin';
+    final pinIcon = pinned ? Icons.push_pin_outlined : Icons.push_pin;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: Slidable(
+        key: ValueKey('client_${entity.id}'),
+        startActionPane: onPinToggle == null
+            ? null
+            : ActionPane(
+                motion: const BehindMotion(),
+                extentRatio: 0.28,
+                children: [
+                  CustomSlidableAction(
+                    onPressed: (ctx) {
+                      Slidable.of(ctx)?.close();
+                      onPinToggle?.call();
+                    },
+                    padding: EdgeInsets.zero,
+                    child: SizedBox.expand(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: scheme.primary,
+                          borderRadius: const BorderRadius.horizontal(
+                            left: Radius.circular(28),
+                          ),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(pinIcon, color: scheme.onPrimary),
+                              const SizedBox(height: 6),
+                              Text(
+                                pinLabel,
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(
+                                      color: scheme.onPrimary,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+        endActionPane: onDelete == null
+            ? null
+            : ActionPane(
+                motion: const BehindMotion(),
+                extentRatio: 0.28,
+                children: [
+                  CustomSlidableAction(
+                    onPressed: (ctx) {
+                      Slidable.of(ctx)?.close();
+                      onDelete?.call();
+                    },
+                    padding: EdgeInsets.zero,
+                    child: SizedBox.expand(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: scheme.error,
+                          borderRadius: const BorderRadius.horizontal(
+                            right: Radius.circular(28),
+                          ),
+                        ),
+                        child: Center(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.delete_outline,
+                                color: scheme.onError,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                'Delete',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .labelLarge
+                                    ?.copyWith(
+                                      color: scheme.onError,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+        child: cardBody,
       ),
     );
   }

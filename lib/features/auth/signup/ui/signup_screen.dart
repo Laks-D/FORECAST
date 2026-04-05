@@ -3,12 +3,15 @@ import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/auth/username_key.dart';
 import '../../../../core/firebase/firestore_db.dart';
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -112,8 +115,8 @@ class _SignupScreenState extends State<SignupScreen> {
     await _pickProfileImage(source);
   }
 
-  String _nationality = 'India';
-  String _currency = '₹';
+  final String _nationality = 'India';
+  final String _currency = '₹';
 
   @override
   void dispose() {
@@ -283,6 +286,11 @@ class _SignupScreenState extends State<SignupScreen> {
     await SignupProfileStorage.saveProfile(profile);
     if (!mounted) return;
 
+    // Ensure global default currency reflects saved profile.
+    try {
+      context.read<UserProfileCubit>().refresh();
+    } catch (_) {}
+
     // No navigation needed: LandingScreen listens to FirebaseAuth and will
     // switch to the signed-in app automatically.
     Navigator.of(context).popUntil((route) => route.isFirst);
@@ -293,6 +301,7 @@ class _SignupScreenState extends State<SignupScreen> {
     final chrome = AppChromeTheme.of(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final visual = AppVisualStyle.of(context);
 
     Widget googleWideButton() {
       final textStyle = theme.textTheme.bodyMedium?.copyWith(
@@ -308,7 +317,7 @@ class _SignupScreenState extends State<SignupScreen> {
             backgroundColor: scheme.surface,
             shape:
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            side: BorderSide(color: scheme.outlineVariant),
+            side: BorderSide(color: chrome.mutedColor.withOpacity(0.18)),
             padding: const EdgeInsets.symmetric(horizontal: 14),
           ),
           child: Row(
@@ -320,7 +329,7 @@ class _SignupScreenState extends State<SignupScreen> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: scheme.surfaceContainerHighest,
+                  color: chrome.mutedColor.withOpacity(0.12),
                 ),
                 child: Text(
                   'G',
@@ -345,8 +354,12 @@ class _SignupScreenState extends State<SignupScreen> {
       );
     }
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final background =
+        isLight ? Theme.of(context).scaffoldBackgroundColor : chrome.frameColor;
+
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: background,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(18, 14, 18, 20),
@@ -356,10 +369,29 @@ class _SignupScreenState extends State<SignupScreen> {
               child: SingleChildScrollView(
                 keyboardDismissBehavior:
                     ScrollViewKeyboardDismissBehavior.onDrag,
-                child: DecoratedBox(
+                child: Container(
                   decoration: BoxDecoration(
                     color: scheme.surface,
                     borderRadius: BorderRadius.circular(40),
+                    boxShadow: visual.neumorphism
+                        ? AppVisualStyle.neumorphicShadows(
+                            context,
+                            blurRadius: 28,
+                            offset: const Offset(8, 8),
+                            shadowOpacityLight: 0.10,
+                          )
+                        : <BoxShadow>[
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.10),
+                              blurRadius: 28,
+                              offset: const Offset(0, 14),
+                            ),
+                          ],
+                    border: Border.all(
+                      color: chrome.mutedColor
+                          .withOpacity(visual.neumorphism ? 0.14 : 0.10),
+                      width: 1,
+                    ),
                   ),
                   child: Form(
                     key: _formKey,
@@ -373,7 +405,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             height: 56,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: scheme.surfaceContainerHighest,
+                              color: chrome.mutedColor.withOpacity(0.12),
                             ),
                             child: Icon(
                               Icons.edit_outlined,
@@ -407,7 +439,7 @@ class _SignupScreenState extends State<SignupScreen> {
                                   height: 96,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: scheme.surfaceContainerHighest,
+                                    color: chrome.mutedColor.withOpacity(0.12),
                                     border: Border.all(
                                         color: chrome.surfaceColor, width: 3),
                                   ),
@@ -511,104 +543,6 @@ class _SignupScreenState extends State<SignupScreen> {
                               }
                               return null;
                             },
-                          ),
-                          const SizedBox(height: 14),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Nationality',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurface.withOpacity(0.70),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              DropdownButtonFormField<String>(
-                                value: _nationality,
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: scheme.surfaceContainerHighest,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                        color: scheme.outlineVariant),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                        color: scheme.outlineVariant),
-                                  ),
-                                ),
-                                dropdownColor: scheme.surfaceContainerHighest,
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: 'India', child: Text('India')),
-                                  DropdownMenuItem(
-                                      value: 'USA', child: Text('USA')),
-                                  DropdownMenuItem(
-                                      value: 'UK', child: Text('UK')),
-                                  DropdownMenuItem(
-                                      value: 'UAE', child: Text('UAE')),
-                                  DropdownMenuItem(
-                                      value: 'Europe', child: Text('Europe')),
-                                  DropdownMenuItem(
-                                      value: 'Other', child: Text('Other')),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _nationality = v ?? 'India'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Primary Currency',
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: scheme.onSurface.withOpacity(0.70),
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              DropdownButtonFormField<String>(
-                                value: _currency,
-                                decoration: InputDecoration(
-                                  filled: true,
-                                  fillColor: scheme.surfaceContainerHighest,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                        color: scheme.outlineVariant),
-                                  ),
-                                  enabledBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(14),
-                                    borderSide: BorderSide(
-                                        color: scheme.outlineVariant),
-                                  ),
-                                ),
-                                dropdownColor: scheme.surfaceContainerHighest,
-                                items: const [
-                                  DropdownMenuItem(
-                                      value: '₹', child: Text('INR (₹)')),
-                                  DropdownMenuItem(
-                                      value: '\$', child: Text('USD (\$)')),
-                                  DropdownMenuItem(
-                                      value: '€', child: Text('EUR (€)')),
-                                  DropdownMenuItem(
-                                      value: '£', child: Text('GBP (£)')),
-                                  DropdownMenuItem(
-                                      value: 'AED', child: Text('AED')),
-                                ],
-                                onChanged: (v) =>
-                                    setState(() => _currency = v ?? '₹'),
-                              ),
-                            ],
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -876,6 +810,7 @@ class _SignupField extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final chrome = AppChromeTheme.of(context);
     final labelStyle = theme.textTheme.bodySmall?.copyWith(
       color: scheme.onSurface.withOpacity(0.70),
       fontWeight: FontWeight.w600,
@@ -904,16 +839,20 @@ class _SignupField extends StatelessWidget {
               hintText: hintText,
               hintStyle: hintStyle,
               filled: true,
-              fillColor: scheme.surfaceContainerHighest,
+              fillColor: chrome.mutedColor.withOpacity(0.08),
               contentPadding:
                   const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: scheme.outlineVariant),
+                borderSide: BorderSide(
+                  color: chrome.mutedColor.withOpacity(0.22),
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),
-                borderSide: BorderSide(color: scheme.outlineVariant),
+                borderSide: BorderSide(
+                  color: chrome.mutedColor.withOpacity(0.18),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(14),

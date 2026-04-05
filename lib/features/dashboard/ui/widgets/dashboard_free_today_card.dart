@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 
 class DashboardFreeTodayCard extends StatelessWidget {
   const DashboardFreeTodayCard({super.key, this.height});
@@ -9,8 +10,14 @@ class DashboardFreeTodayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
-    const cardBgColor = Color(0xFF111214);
+    final visual = AppVisualStyle.of(context);
+
+    final cardBgColor = visual.neumorphism ? scheme.surface : chrome.surfaceColor;
+    final shadows = visual.neumorphism
+        ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+        : const <BoxShadow>[];
 
     final messageStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
           color: chrome.textColor,
@@ -26,6 +33,7 @@ class DashboardFreeTodayCard extends StatelessWidget {
           color: cardBgColor,
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+          boxShadow: shadows,
         ),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -33,16 +41,46 @@ class DashboardFreeTodayCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Expanded(
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: VibrantColors.softBlue.withOpacity(0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Image.asset(
-                    'assets/no_schedule_image-removebg-preview.png',
-                    fit: BoxFit.contain,
-                  ),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final circleColor = scheme.onSurface.withOpacity(
+                      visual.neumorphism ? 0.06 : 0.10,
+                    );
+
+                    final s = constraints.biggest.shortestSide;
+
+                    return Center(
+                      child: SizedBox(
+                        width: s,
+                        height: s,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: RadialGradient(
+                                  colors: [
+                                    circleColor,
+                                    Colors.transparent,
+                                  ],
+                                  stops: const [0.0, 1.0],
+                                ),
+                              ),
+                              child: const SizedBox.expand(),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Image.asset(
+                                'assets/no_schedule_image-removebg-preview.png',
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 24),

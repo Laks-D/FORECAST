@@ -64,8 +64,20 @@ class SessionsCubit extends Cubit<SessionsState> {
     return repository.updateSession(session);
   }
 
+  Future<void> updateSessions(List<ScheduleSession> sessions) {
+    return repository.updateSessions(sessions);
+  }
+
   Future<void> deleteSession(int id) {
     return repository.deleteSession(id);
+  }
+
+  Future<void> deleteUpcomingSessionsForClient(String clientId) {
+    return repository.deleteUpcomingSessionsForClient(clientId);
+  }
+
+  Future<void> restoreDeletedUpcomingSessionsForClient(String clientId) {
+    return repository.restoreDeletedUpcomingSessionsForClient(clientId);
   }
 
   @override

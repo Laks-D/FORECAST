@@ -12,16 +12,16 @@ final class NavModulesState extends Equatable {
 
   factory NavModulesState.defaults() {
     const order = <DashboardTab>[
-      DashboardTab.calendar,
       DashboardTab.people,
+      DashboardTab.calendar,
       DashboardTab.home,
       DashboardTab.phone,
       DashboardTab.settings,
     ];
 
     const enabled = <DashboardTab>[
-      DashboardTab.calendar,
       DashboardTab.people,
+      DashboardTab.calendar,
       DashboardTab.home,
       DashboardTab.phone,
       DashboardTab.settings,

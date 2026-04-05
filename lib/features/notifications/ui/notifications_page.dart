@@ -10,119 +10,98 @@ class NotificationsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final bgColor = scheme.surface;
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            /* ─── Header ─── */
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 6, 8, 0),
-              child: Row(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: bgColor,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
+        title: Text(
+          'Notifications',
+          style: tt.titleLarge?.copyWith(
+            color: scheme.onSurface,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        actions: [
+          BlocBuilder<NotificationCubit, NotificationState>(
+            builder: (context, state) {
+              final now = DateTime.now();
+              final hasVisible =
+                  state.records.any((n) => !n.createdAt.isAfter(now));
+              if (!hasVisible) return const SizedBox.shrink();
+              return PopupMenuButton<String>(
+                icon: Icon(Icons.more_vert, color: scheme.onSurface),
+                onSelected: (value) {
+                  final cubit = context.read<NotificationCubit>();
+                  if (value == 'read') cubit.markAllRead();
+                  if (value == 'clear') cubit.clearAll();
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'read',
+                    child: Text('Mark all as read'),
+                  ),
+                  PopupMenuItem(
+                    value: 'clear',
+                    child: Text('Clear all'),
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+      body: BlocBuilder<NotificationCubit, NotificationState>(
+        builder: (context, state) {
+          final now = DateTime.now();
+          // Only show notifications that are due/triggered (not future scheduled).
+          final visibleRecords = state.records
+              .where((n) => !n.createdAt.isAfter(now))
+              .toList(growable: false);
+
+          if (state.loading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (visibleRecords.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.arrow_back, color: Colors.white),
-                    onPressed: () => Navigator.of(context).pop(),
+                  Icon(
+                    Icons.notifications_off_outlined,
+                    size: 64,
+                    color: scheme.onSurface.withOpacity(0.35),
                   ),
+                  const SizedBox(height: 12),
                   Text(
-                    'Notifications',
-                    style: tt.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
+                    'No notifications yet',
+                    style: tt.bodyLarge?.copyWith(
+                      color: scheme.onSurface.withOpacity(0.65),
+                      fontWeight: FontWeight.w700,
                     ),
-                  ),
-                  const Spacer(),
-                  BlocBuilder<NotificationCubit, NotificationState>(
-                    builder: (context, state) {
-                      final now = DateTime.now();
-                      final hasVisible = state.records.any((n) => !n.createdAt.isAfter(now));
-                      if (!hasVisible) return const SizedBox.shrink();
-                      return PopupMenuButton<String>(
-                        icon: const Icon(Icons.more_vert, color: Colors.white),
-                        onSelected: (value) {
-                          final cubit = context.read<NotificationCubit>();
-                          if (value == 'read') cubit.markAllRead();
-                          if (value == 'clear') cubit.clearAll();
-                        },
-                        itemBuilder: (_) => [
-                          const PopupMenuItem(
-                            value: 'read',
-                            child: Text('Mark all as read'),
-                          ),
-                          const PopupMenuItem(
-                            value: 'clear',
-                            child: Text('Clear all'),
-                          ),
-                        ],
-                      );
-                    },
                   ),
                 ],
               ),
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+            itemCount: visibleRecords.length,
+            separatorBuilder: (_, __) => Divider(
+              height: 1,
+              color: scheme.outlineVariant.withOpacity(0.45),
             ),
-            const SizedBox(height: 8),
-
-            /* ─── Body ─── */
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: scheme.surface,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(28),
-                  ),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: BlocBuilder<NotificationCubit, NotificationState>(
-                  builder: (context, state) {
-                    final now = DateTime.now();
-                    // Only show notifications that are due/triggered (not future scheduled).
-                    final visibleRecords = state.records
-                        .where((n) => !n.createdAt.isAfter(now))
-                        .toList(growable: false);
-
-                    if (state.loading) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    if (visibleRecords.isEmpty) {
-                      return Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.notifications_off_outlined,
-                              size: 64,
-                              color: chrome.mutedColor.withOpacity(0.4),
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              'No notifications yet',
-                              style: tt.bodyLarge
-                                  ?.copyWith(color: chrome.mutedColor),
-                            ),
-                          ],
-                        ),
-                      );
-                    }
-                    return ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-                      itemCount: visibleRecords.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final n = visibleRecords[index];
-                        return _NotificationTile(notification: n);
-                      },
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        ),
+            itemBuilder: (context, index) {
+              final n = visibleRecords[index];
+              return _NotificationTile(notification: n);
+            },
+          );
+        },
       ),
     );
   }
@@ -160,6 +139,7 @@ class _NotificationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final unread = !notification.read;
 
@@ -204,19 +184,21 @@ class _NotificationTile extends StatelessWidget {
                       notification.title,
                       style: tt.bodyMedium?.copyWith(
                         fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
-                        color: chrome.textColor,
+                        color: scheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       notification.body,
-                      style: tt.bodySmall?.copyWith(color: chrome.mutedColor),
+                      style: tt.bodySmall?.copyWith(
+                        color: scheme.onSurface.withOpacity(0.60),
+                      ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _timeAgo(notification.createdAt),
                       style: tt.labelSmall?.copyWith(
-                        color: chrome.mutedColor.withOpacity(0.7),
+                        color: scheme.onSurface.withOpacity(0.45),
                       ),
                     ),
                   ],

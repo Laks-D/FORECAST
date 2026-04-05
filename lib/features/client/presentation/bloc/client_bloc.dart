@@ -60,6 +60,8 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     on<RescheduleClientPayment>(_onReschedulePayment);
     on<MarkClientPaidFully>(_onMarkPaidFully);
     on<RevertClientPaidFully>(_onRevertPaidFully);
+    on<DeleteClient>(_onDeleteClient);
+    on<RestoreClient>(_onRestoreClient);
   }
 
   @override
@@ -261,6 +263,24 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     Emitter<ClientState> emit,
   ) {
     revertPaidFullyUseCase.execute(entityId: event.entityId);
+    _reload(emit);
+  }
+
+  /* ================= DELETE/RESTORE ================= */
+
+  void _onDeleteClient(
+    DeleteClient event,
+    Emitter<ClientState> emit,
+  ) {
+    repository.deleteClient(entityId: event.entityId);
+    _reload(emit);
+  }
+
+  void _onRestoreClient(
+    RestoreClient event,
+    Emitter<ClientState> emit,
+  ) {
+    repository.restoreClient(entityId: event.entityId);
     _reload(emit);
   }
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../domain/entities/client.dart';
 import '../../domain/entities/client_timeline_event.dart';
@@ -27,6 +28,7 @@ class ClientPaymentsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final defaultCurrency = context.select((UserProfileCubit c) => c.state.currency);
     return Scaffold(
       appBar: AppBar(
         title: Text('${entity.name} — Payments'),
@@ -34,6 +36,7 @@ class ClientPaymentsPage extends StatelessWidget {
       body: BlocBuilder<ClientBloc, ClientState>(
         builder: (context, state) {
           final current = _findUpdatedEntity(state) ?? entity;
+          final currency = current.currency ?? defaultCurrency;
           final payments = [...current.payments]
             ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
 
@@ -72,12 +75,14 @@ class ClientPaymentsPage extends StatelessWidget {
                         label: 'Paid',
                         amount: paidTotal,
                         color: VibrantColors.deep(VibrantColors.pastelGreen),
+                        currency: currency,
                       ),
                       const SizedBox(width: 12),
                       _SummaryChip(
                         label: 'Upcoming',
                         amount: upcomingTotal,
                         color: VibrantColors.deep(VibrantColors.warmYellow),
+                        currency: currency,
                       ),
                       if (pendingTotal > 0) ...[
                         const SizedBox(width: 12),
@@ -85,6 +90,7 @@ class ClientPaymentsPage extends StatelessWidget {
                           label: 'Pending',
                           amount: pendingTotal,
                           color: VibrantColors.deep(VibrantColors.softPink),
+                          currency: currency,
                         ),
                       ],
                     ],
@@ -127,9 +133,11 @@ class ClientPaymentsPage extends StatelessWidget {
               ...payments.map((pay) {
                 final status = _paymentStatusFor(current, pay.createdAt, pay.id);
                 return _PaymentRow(
+                  key: ValueKey(pay.id),
                   client: current,
                   paymentEvent: pay,
                   status: status,
+                  currency: currency,
                 );
               }),
             ],
@@ -158,7 +166,9 @@ class ClientPaymentsPage extends StatelessWidget {
       if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
       if (e.refId != paymentEventId) continue;
       final s = e.status?.trim();
-      if (s == 'Paid') return 'Paid';
+      if (s == 'Paid' || s == 'Paid fully') return 'Paid';
+      if (s == 'Will pay later') return 'Will pay later';
+      if (s == 'Unpaid') return 'Pending';
     }
 
     // Fallback to legacy date-based status changes (no refId).
@@ -170,7 +180,9 @@ class ClientPaymentsPage extends StatelessWidget {
         if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
         if (e.refId != null) continue;
         final s = e.status?.trim();
-        if (s == 'Paid') return 'Paid';
+        if (s == 'Paid' || s == 'Paid fully') return 'Paid';
+        if (s == 'Will pay later') return 'Will pay later';
+        if (s == 'Unpaid') return 'Pending';
       }
     }
 
@@ -185,11 +197,13 @@ class _SummaryChip extends StatelessWidget {
   final String label;
   final double amount;
   final Color color;
+  final String currency;
 
   const _SummaryChip({
     required this.label,
     required this.amount,
     required this.color,
+    required this.currency,
   });
 
   @override
@@ -206,7 +220,7 @@ class _SummaryChip extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '₹${amount.toStringAsFixed(0)}',
+            '${currency}${amount.toStringAsFixed(0)}',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: color,
                   fontWeight: FontWeight.w800,
@@ -224,11 +238,14 @@ class _PaymentRow extends StatelessWidget {
   final Client client;
   final ClientTimelineEvent paymentEvent;
   final String status;
+  final String currency;
 
   const _PaymentRow({
+    super.key,
     required this.client,
     required this.paymentEvent,
     required this.status,
+    required this.currency,
   });
 
   @override
@@ -236,7 +253,7 @@ class _PaymentRow extends StatelessWidget {
     final chrome = AppChromeTheme.of(context);
     final dateStr = AppDateUtils.displayDate(paymentEvent.createdAt);
     final amountStr = paymentEvent.amount != null
-        ? '₹${paymentEvent.amount!.toStringAsFixed(0)}'
+      ? '${currency}${paymentEvent.amount!.toStringAsFixed(0)}'
         : 'No amount';
 
     Color statusColor;
@@ -373,14 +390,21 @@ class _PaymentRow extends StatelessWidget {
     }
 
     if (newStatus == 'Will pay later') {
-      // If currently paid, clear the paid status first, then reschedule.
-      if (status == 'Paid') {
-        context.read<ClientBloc>().add(ClearPaymentStatusForDate(
-          entityId: client.id,
-          date: paymentEvent.createdAt,
-          paymentId: paymentEvent.id,
-        ));
-      }
+      // Clear any existing paid marker for this payment/day, then tag as "Will pay later"
+      // so UI/payment module can reflect the change immediately.
+      context.read<ClientBloc>().add(ClearPaymentStatusForDate(
+        entityId: client.id,
+        date: paymentEvent.createdAt,
+        paymentId: paymentEvent.id,
+      ));
+
+      context.read<ClientBloc>().add(UpdateClientStatus(
+        entityId: client.id,
+        status: 'Will pay later',
+        createdAt: paymentEvent.createdAt,
+        refId: paymentEvent.id,
+      ));
+
       _openReschedule(context);
       return;
     }
@@ -409,7 +433,7 @@ class _PaymentRow extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           duration: const Duration(seconds: 1),
-          content: Text('Marked Paid for all payments on ${AppDateUtils.displayDate(paymentEvent.createdAt)}'),
+          content: const Text('Combined remaining payments and recorded as paid today'),
         ),
       );
       return;
@@ -419,6 +443,7 @@ class _PaymentRow extends StatelessWidget {
   /* ── Reschedule sheet ── */
 
   void _openReschedule(BuildContext context) {
+    final parentContext = context;
     DateTime newDate = DateTime(
       paymentEvent.createdAt.year,
       paymentEvent.createdAt.month,
@@ -501,7 +526,8 @@ class _PaymentRow extends StatelessWidget {
                             const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () {
-                        _doReschedule(ctx, newDate);
+                        _doReschedule(parentContext, newDate);
+                        Navigator.of(ctx).pop();
                       },
                       child: const Text('Save'),
                     ),
@@ -516,18 +542,36 @@ class _PaymentRow extends StatelessWidget {
   }
 
   void _doReschedule(BuildContext context, DateTime newDate) {
-    final timeline = client.timeline;
+    // Use the freshest state at the moment of saving.
+    // Without this, the widget may hold a stale payment instance after
+    // status changes/rebuilds, and the reschedule can appear to do nothing.
+    Client? latestClient;
+    ClientTimelineEvent? latestPayment;
+    final blocState = context.read<ClientBloc>().state;
+    if (blocState is ClientLoaded) {
+      try {
+        latestClient = blocState.entities.firstWhere((c) => c.id == client.id);
+        latestPayment = latestClient.timeline.firstWhere(
+          (e) => e.type == ClientTimelineEventType.payment && e.id == paymentEvent.id,
+        );
+      } catch (_) {
+        // Fall back to the widget's captured values.
+      }
+    }
+
+    final timeline = (latestClient ?? client).timeline;
+    final effectivePayment = latestPayment ?? paymentEvent;
+
     final oldDay = DateTime(
-      paymentEvent.createdAt.year,
-      paymentEvent.createdAt.month,
-      paymentEvent.createdAt.day,
+      effectivePayment.createdAt.year,
+      effectivePayment.createdAt.month,
+      effectivePayment.createdAt.day,
     );
     final targetDay =
         DateTime(newDate.year, newDate.month, newDate.day);
     final targetKey = AppDateUtils.dateToStr(targetDay);
 
     if (AppDateUtils.dateToStr(oldDay) == targetKey) {
-      Navigator.of(context).pop();
       return;
     }
 
@@ -549,23 +593,20 @@ class _PaymentRow extends StatelessWidget {
     if (existing != null) {
       context.read<ClientBloc>().add(RescheduleClientPayment(
         entityId: client.id,
-        paymentId: paymentEvent.id,
+        paymentId: effectivePayment.id,
         oldDate: oldDay,
         newDate: targetDay,
       ));
-      Navigator.of(context).pop();
       return;
     }
 
     // Simple move.
     context.read<ClientBloc>().add(RescheduleClientPayment(
       entityId: client.id,
-      paymentId: paymentEvent.id,
+      paymentId: effectivePayment.id,
       oldDate: oldDay,
       newDate: targetDay,
     ));
-
-    Navigator.of(context).pop();
   }
 }
 

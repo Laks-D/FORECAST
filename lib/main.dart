@@ -8,6 +8,7 @@ import 'core/di/service_locator.dart';
 import 'core/firebase/firestore_db.dart';
 import 'core/platform/web_online_status.dart';
 import 'core/services/notification_service.dart';
+import 'core/profile/user_profile_cubit.dart';
 import 'design_system/theme/app_theme.dart';
 import 'design_system/theme/app_chrome_theme.dart';
 import 'firebase_options_dev.dart';
@@ -60,6 +61,7 @@ class App extends StatelessWidget {
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => AppThemeCubit()),
+        BlocProvider(create: (_) => UserProfileCubit()),
         BlocProvider(create: (_) => sl<SessionsCubit>()),
         BlocProvider(create: (_) => sl<NavModulesCubit>()),
       ],
@@ -88,12 +90,14 @@ class App extends StatelessWidget {
               scaffoldBackgroundColor: state.lightBackground,
               chromeTheme: chromeLight,
               font: state.font,
+              neumorphism: state.activeThemeId == 'neumorphism',
             ),
             darkTheme: buildAppTheme(
               brightness: Brightness.dark,
               scaffoldBackgroundColor: state.darkBackground,
               chromeTheme: chromeDark,
               font: state.font,
+              neumorphism: state.activeThemeId == 'neumorphism',
             ),
             themeMode: state.themeMode,
             home: const LandingScreen(),

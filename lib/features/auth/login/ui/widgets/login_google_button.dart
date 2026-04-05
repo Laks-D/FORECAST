@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../design_system/theme/app_chrome_theme.dart';
 import '../../bloc/login_bloc.dart';
 import '../../bloc/login_event.dart';
 import '../../bloc/login_state.dart';
@@ -12,6 +13,7 @@ class LoginGoogleButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
+    final chrome = AppChromeTheme.of(context);
     final labelStyle = theme.textTheme.bodySmall?.copyWith(
           color: scheme.onSurface.withOpacity(0.55),
           fontWeight: FontWeight.w600,
@@ -34,7 +36,7 @@ class LoginGoogleButton extends StatelessWidget {
           style: OutlinedButton.styleFrom(
             backgroundColor: scheme.surface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-            side: BorderSide(color: scheme.outlineVariant),
+            side: BorderSide(color: chrome.mutedColor.withOpacity(0.18)),
             padding: const EdgeInsets.symmetric(horizontal: 14),
           ),
           child: Row(
@@ -46,7 +48,7 @@ class LoginGoogleButton extends StatelessWidget {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: scheme.surfaceContainerHighest,
+                  color: chrome.mutedColor.withOpacity(0.12),
                 ),
                 child: Text(
                   'G',

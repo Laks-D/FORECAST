@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flex_color_picker/flex_color_picker.dart';
 
 import '../../../design_system/theme/app_chrome_theme.dart';
+import '../../../design_system/theme/app_visual_style.dart';
 import '../bloc/app_theme_cubit.dart';
 import '../bloc/app_theme_state.dart';
 
@@ -20,59 +21,53 @@ class _ThemeCustomizationScreenState extends State<ThemeCustomizationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final visual = AppVisualStyle.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final bgColor = scheme.surface;
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        backgroundColor: bgColor,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
+        title: const Text('Theme & Style'),
+      ),
       body: SafeArea(
+        top: false,
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back),
-                    color: Colors.white,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      'Theme & Style',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+              padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
               child: _TabPills(
                 tab: _tab,
+                neumorphism: visual.neumorphism,
                 onChanged: (t) => setState(() => _tab = t),
               ),
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                child: DecoratedBox(
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                child: Container(
                   decoration: BoxDecoration(
-                    color: chrome.surfaceColor,
+                    color: scheme.surface,
                     borderRadius: BorderRadius.circular(26),
+                    border: Border.all(color: scheme.outlineVariant),
+                    boxShadow: visual.neumorphism
+                        ? AppVisualStyle.neumorphicShadows(
+                            context,
+                            blurRadius: 22,
+                            offset: const Offset(7, 7),
+                          )
+                        : const <BoxShadow>[],
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(26),
-                    child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 180),
-                      child: switch (_tab) {
-                        _ThemeStyleTab.themes => const _ThemesTab(key: ValueKey('themes')),
-                        _ThemeStyleTab.custom => const _CustomTab(key: ValueKey('custom')),
-                      },
-                    ),
+                  clipBehavior: Clip.antiAlias,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: switch (_tab) {
+                      _ThemeStyleTab.themes => const _ThemesTab(key: ValueKey('themes')),
+                      _ThemeStyleTab.custom => const _CustomTab(key: ValueKey('custom')),
+                    },
                   ),
                 ),
               ),
@@ -85,15 +80,21 @@ class _ThemeCustomizationScreenState extends State<ThemeCustomizationScreen> {
 }
 
 class _TabPills extends StatelessWidget {
-  const _TabPills({required this.tab, required this.onChanged});
+  const _TabPills({
+    required this.tab,
+    required this.neumorphism,
+    required this.onChanged,
+  });
 
   final _ThemeStyleTab tab;
+  final bool neumorphism;
   final ValueChanged<_ThemeStyleTab> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
-    final bg = Colors.black.withOpacity(0.18);
+    final scheme = Theme.of(context).colorScheme;
+    final bg = scheme.surface;
     final sel = chrome.accentBlue;
 
     return Container(
@@ -101,6 +102,21 @@ class _TabPills extends StatelessWidget {
       decoration: BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: neumorphism
+            ? <BoxShadow>[
+                BoxShadow(
+                  color: Colors.white.withOpacity(0.85),
+                  blurRadius: 18,
+                  offset: const Offset(-6, -6),
+                ),
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.10),
+                  blurRadius: 18,
+                  offset: const Offset(6, 6),
+                ),
+              ]
+            : const <BoxShadow>[],
       ),
       child: Row(
         children: [
@@ -145,10 +161,12 @@ class _TabPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = scheme.onSurface.withOpacity(selected ? 1 : 0.78);
     return Padding(
       padding: const EdgeInsets.all(5),
       child: Material(
-        color: selected ? selectedColor.withOpacity(0.30) : Colors.transparent,
+        color: selected ? selectedColor.withOpacity(0.18) : Colors.transparent,
         borderRadius: BorderRadius.circular(14),
         child: InkWell(
           onTap: onTap,
@@ -157,12 +175,12 @@ class _TabPill extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, size: 16, color: Colors.white.withOpacity(selected ? 1 : 0.85)),
+                Icon(icon, size: 16, color: fg),
                 const SizedBox(width: 8),
                 Text(
                   label,
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: Colors.white.withOpacity(selected ? 1 : 0.85),
+                        color: fg,
                         fontWeight: FontWeight.w800,
                       ),
                 ),
@@ -629,7 +647,8 @@ class _ThemeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
-    final border = selected ? chrome.accentBlue : Colors.black.withOpacity(0.10);
+    final scheme = Theme.of(context).colorScheme;
+    final border = selected ? chrome.accentBlue : scheme.outlineVariant;
 
     return Material(
       color: Colors.transparent,
@@ -662,7 +681,9 @@ class _ThemeCard extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: preset.background,
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.black.withOpacity(0.06)),
+                      border: Border.all(
+                        color: scheme.outlineVariant.withOpacity(0.6),
+                      ),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(10),
@@ -686,7 +707,9 @@ class _ThemeCard extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: preset.surface,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                                    border: Border.all(
+                                      color: scheme.outlineVariant.withOpacity(0.6),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -697,7 +720,9 @@ class _ThemeCard extends StatelessWidget {
                                   decoration: BoxDecoration(
                                     color: preset.surface,
                                     borderRadius: BorderRadius.circular(10),
-                                    border: Border.all(color: Colors.black.withOpacity(0.06)),
+                                    border: Border.all(
+                                      color: scheme.outlineVariant.withOpacity(0.6),
+                                    ),
                                   ),
                                 ),
                               ),
@@ -741,13 +766,14 @@ class _Dot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       width: 12,
       height: 12,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.black.withOpacity(0.12)),
+        border: Border.all(color: scheme.outlineVariant),
       ),
     );
   }
@@ -762,12 +788,12 @@ class _Block extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       child: Column(
@@ -779,7 +805,7 @@ class _Block extends StatelessWidget {
             Text(
               subtitle!,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: chrome.mutedColor,
+                    color: scheme.onSurface.withOpacity(0.60),
                     fontWeight: FontWeight.w600,
                   ),
             ),
@@ -803,14 +829,15 @@ class _ColorPickRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     final hex = '#${color.value.toRadixString(16).padLeft(8, '0').toUpperCase().substring(2)}';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Row(
         children: [
@@ -820,7 +847,12 @@ class _ColorPickRow extends StatelessWidget {
               children: [
                 Text(title, style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900)),
                 const SizedBox(height: 6),
-                Text(hex, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: chrome.mutedColor)),
+                Text(
+                  hex,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: scheme.onSurface.withOpacity(0.60),
+                      ),
+                ),
               ],
             ),
           ),
@@ -830,7 +862,7 @@ class _ColorPickRow extends StatelessWidget {
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: Colors.black.withOpacity(0.14)),
+              border: Border.all(color: scheme.outlineVariant),
             ),
           ),
           const SizedBox(width: 10),
@@ -847,7 +879,10 @@ class _ColorPickRow extends StatelessWidget {
             IconButton(
               tooltip: 'Revert',
               onPressed: onReset,
-              icon: Icon(Icons.refresh, color: chrome.mutedColor),
+              icon: Icon(
+                Icons.refresh,
+                color: scheme.onSurface.withOpacity(0.55),
+              ),
             ),
           ],
         ],
@@ -866,12 +901,13 @@ class _ThemePreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.03),
+        color: scheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black.withOpacity(0.06)),
+        border: Border.all(color: scheme.outlineVariant),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -889,7 +925,7 @@ class _ThemePreviewCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
+              border: Border.all(color: scheme.outlineVariant.withOpacity(0.7)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -931,13 +967,14 @@ Future<void> _showColorDialog(
   required ValueChanged<Color> onApply,
 }) async {
   final chrome = AppChromeTheme.of(context);
+  final scheme = Theme.of(context).colorScheme;
   final picked = await showDialog<Color>(
     context: context,
     builder: (context) {
       Color current = initial;
       return AlertDialog(
         title: Text(title),
-        backgroundColor: chrome.surfaceColor,
+        backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
         content: StatefulBuilder(
@@ -1037,150 +1074,32 @@ class _ThemePreset {
 class _ThemePresets {
   static const light = <_ThemePreset>[
     _ThemePreset(
-      id: 'warm_neutral',
-      name: 'Warm Neutral',
+      id: 'neumorphism',
+      name: 'Neumorphism',
       isDark: false,
-      accent: Color(0xFF72383D),
-      background: Color(0xFFEFE9E1),
-      surface: Color(0xFFD9D9D9),
-      text: Color(0xFF322D29),
-      muted: Color(0xFFAC9C8D),
-      frame: Color(0xFFD1C7BD),
-    ),
-    _ThemePreset(
-      id: 'matte_ivory',
-      name: 'Matte Ivory',
-      isDark: false,
-      accent: Color(0xFF6D73E6),
-      background: Color(0xFFF8FAFC),
-      surface: Color(0xFFFFFFFF),
-      text: Color(0xFF111827),
-      muted: Color(0xFF64748B),
-      frame: Color(0xFFF1F5F9),
-    ),
-    _ThemePreset(
-      id: 'fogstone',
-      name: 'Fogstone',
-      isDark: false,
-      accent: Color(0xFF64748B),
-      background: Color(0xFFF8FAFC),
-      surface: Color(0xFFFFFFFF),
-      text: Color(0xFF0F172A),
-      muted: Color(0xFF64748B),
-      frame: Color(0xFFE2E8F0),
-    ),
-    _ThemePreset(
-      id: 'matte_copper_light',
-      name: 'Matte Copper Light',
-      isDark: false,
-      accent: Color(0xFFB45309),
-      background: Color(0xFFFFF7ED),
-      surface: Color(0xFFFFFFFF),
-      text: Color(0xFF111827),
-      muted: Color(0xFF9A3412),
-      frame: Color(0xFFFFEDD5),
-    ),
-    _ThemePreset(
-      id: 'slate_mist',
-      name: 'Slate Mist',
-      isDark: false,
+      // Soft blue accent like the reference.
       accent: Color(0xFF3B82F6),
-      background: Color(0xFFF8FAFC),
-      surface: Color(0xFFFFFFFF),
-      text: Color(0xFF0F172A),
-      muted: Color(0xFF64748B),
-      frame: Color(0xFFE2E8F0),
-    ),
-    _ThemePreset(
-      id: 'rose_linen',
-      name: 'Rose Linen',
-      isDark: false,
-      accent: Color(0xFFF472B6),
-      background: Color(0xFFFFF1F2),
-      surface: Color(0xFFFFFFFF),
+      // Very light blue-grey background.
+      background: Color(0xFFEFF4FA),
+      // Surface is close to background for the neumorphic look.
+      surface: Color(0xFFF5F8FC),
       text: Color(0xFF111827),
-      muted: Color(0xFFBE185D),
-      frame: Color(0xFFFFE4E6),
-    ),
-    _ThemePreset(
-      id: 'peach_mist',
-      name: 'Peach Mist',
-      isDark: false,
-      accent: Color(0xFFFB923C),
-      background: Color(0xFFFFF7ED),
-      surface: Color(0xFFFFFFFF),
-      text: Color(0xFF111827),
-      muted: Color(0xFF9A3412),
-      frame: Color(0xFFFFEDD5),
+      muted: Color(0xFF6B7280),
+      frame: Color(0xFFE6EEF7),
     ),
   ];
 
   static const dark = <_ThemePreset>[
     _ThemePreset(
-      id: 'graphite',
-      name: 'Graphite',
+      id: 'dark_fintech',
+      name: 'Default',
       isDark: true,
-      accent: Color(0xFF93C5FD),
-      background: Color(0xFF0F172A),
-      surface: Color(0xFF111827),
-      text: Color(0xFFE5E7EB),
-      muted: Color(0xFF94A3B8),
-      frame: Color(0xFF0B1020),
-    ),
-    _ThemePreset(
-      id: 'obsidian',
-      name: 'Obsidian',
-      isDark: true,
-      accent: Color(0xFF93C5FD),
-      background: Color(0xFF0B0B0B),
-      surface: Color(0xFF111827),
-      text: Color(0xFFE5E7EB),
+      accent: Color(0xFFA8DEC5),
+      background: Color(0xFF0B0B0C),
+      surface: Color(0xFF1A1B1E),
+      text: Color(0xFFF5F5F5),
       muted: Color(0xFF9CA3AF),
-      frame: Color(0xFF050505),
-    ),
-    _ThemePreset(
-      id: 'midnight_azure',
-      name: 'Midnight Azure',
-      isDark: true,
-      accent: Color(0xFF38BDF8),
-      background: Color(0xFF0B1220),
-      surface: Color(0xFF0F172A),
-      text: Color(0xFFE0F2FE),
-      muted: Color(0xFF7DD3FC),
-      frame: Color(0xFF070B14),
-    ),
-    _ThemePreset(
-      id: 'charcoal_rose',
-      name: 'Charcoal Rose',
-      isDark: true,
-      accent: Color(0xFFF472B6),
-      background: Color(0xFF1B1420),
-      surface: Color(0xFF241A2B),
-      text: Color(0xFFFCE7F3),
-      muted: Color(0xFFF9A8D4),
-      frame: Color(0xFF130F1A),
-    ),
-    _ThemePreset(
-      id: 'copper_dark',
-      name: 'Copper Dark',
-      isDark: true,
-      accent: Color(0xFFFB923C),
-      background: Color(0xFF1A120D),
-      surface: Color(0xFF241A12),
-      text: Color(0xFFFFEDD5),
-      muted: Color(0xFFFDBA74),
-      frame: Color(0xFF130C09),
-    ),
-    _ThemePreset(
-      id: 'velvet_noir',
-      name: 'Velvet Noir',
-      isDark: true,
-      accent: Color(0xFF8B5CF6),
-      background: Color(0xFF130F1A),
-      surface: Color(0xFF1C1524),
-      text: Color(0xFFEDE9FE),
-      muted: Color(0xFFA78BFA),
-      frame: Color(0xFF100B16),
+      frame: Color(0xFF0B0B0C),
     ),
   ];
 

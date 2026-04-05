@@ -137,3 +137,13 @@ class RevertClientPaidFully extends ClientEvent {
 
   RevertClientPaidFully({required this.entityId});
 }
+
+class DeleteClient extends ClientEvent {
+  final String entityId;
+  DeleteClient({required this.entityId});
+}
+
+class RestoreClient extends ClientEvent {
+  final String entityId;
+  RestoreClient({required this.entityId});
+}

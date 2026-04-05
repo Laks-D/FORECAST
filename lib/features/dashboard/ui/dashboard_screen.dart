@@ -3,7 +3,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:typed_data';
 
 import '../../calendar/bloc/calendar_cubit.dart';
-import '../../../design_system/theme/app_chrome_theme.dart';
 import '../bloc/dashboard_cubit.dart';
 import 'widgets/dashboard_phone_frame.dart';
 
@@ -58,10 +57,10 @@ class _DashboardView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: bgColor,
       body: const DashboardPhoneFrame(),
     );
   }

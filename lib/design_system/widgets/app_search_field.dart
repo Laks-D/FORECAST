@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'app_neumorphic_field_container.dart';
 import '../tokens/app_radii.dart';
 import '../tokens/app_spacing.dart';
 
@@ -19,18 +20,8 @@ class AppSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+    return AppNeumorphicFieldContainer(
+      borderRadius: BorderRadius.circular(AppRadii.pill),
       child: TextField(
         controller: controller,
         onChanged: onChanged,
@@ -49,6 +40,7 @@ class AppSearchField extends StatelessWidget {
             borderSide: BorderSide.none,
           ),
         ),
+        style: TextStyle(color: scheme.onSurface),
       ),
     );
   }

@@ -470,20 +470,33 @@ class _NumberStepperField extends StatelessWidget {
             onPressed: value <= min ? null : () => onChanged(value - 1),
             icon: const Icon(Icons.remove),
             color: chrome.textColor,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            iconSize: 20,
           ),
           Expanded(
-            child: Text(
-              '$value',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  '$value',
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
             ),
           ),
           IconButton(
             onPressed: value >= max ? null : () => onChanged(value + 1),
             icon: const Icon(Icons.add),
             color: chrome.textColor,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            iconSize: 20,
           ),
         ],
       ),

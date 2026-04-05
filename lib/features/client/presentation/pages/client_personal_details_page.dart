@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
@@ -106,7 +107,8 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
     return AppDateUtils.displayDate(dt);
   }
 
-  String _money(double amount) => '₹${amount.toStringAsFixed(1)}';
+  String _money(double amount, String currency) =>
+      '${currency}${amount.toStringAsFixed(1)}';
 
   Future<void> _pickDateOfBirth() async {
     final now = DateTime.now();
@@ -178,6 +180,9 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final defaultCurrency =
+        context.select((UserProfileCubit c) => c.state.currency);
+    final currency = widget.entity.currency ?? defaultCurrency;
 
     Widget row(String label, Widget value) {
       return Padding(
@@ -407,7 +412,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                     row(
                       'Total Payments',
                       Text(
-                        _money(widget.entity.outstandingAmount),
+                        _money(widget.entity.outstandingAmount, currency),
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: chrome.textColor,
                               fontWeight: FontWeight.w800,

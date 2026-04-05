@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
 class VibrantColors {
-  static const pastelGreen = Color(0xFFA8DEC5);
-  static const softBlue = Color(0xFFC1E1FF);
-  static const warmYellow = Color(0xFFFFE09A);
-  static const softPink = Color(0xFFFFD1CF);
+  // Slightly deeper pastels for better contrast on light surfaces.
+  static const pastelGreen = Color(0xFF8FD4B6);
+  static const softBlue = Color(0xFFAED7FF);
+  static const warmYellow = Color(0xFFFFD178);
+  static const softPink = Color(0xFFFFBDBC);
 
   /// Derive a deeper (more readable) tone from a pastel.
   /// Useful for text/icons on light tinted backgrounds.

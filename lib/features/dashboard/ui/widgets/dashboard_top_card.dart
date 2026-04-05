@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/services/notification_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../notifications/ui/notifications_page.dart';
 import '../../bloc/dashboard_cubit.dart';
@@ -17,8 +18,21 @@ class DashboardTopCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
+    final visual = AppVisualStyle.of(context);
     final textColor = chrome.textColor;
+
+    final cardColor = visual.neumorphism ? scheme.surface : chrome.surfaceColor;
+    final shadows = visual.neumorphism
+        ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+        : <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
+          ];
 
     final titleStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
           color: textColor,
@@ -30,16 +44,10 @@ class DashboardTopCard extends StatelessWidget {
       height: height,
       child: Container(
         decoration: BoxDecoration(
-          color: chrome.surfaceColor,
+          color: cardColor,
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
-            ),
-          ],
+          boxShadow: shadows,
         ),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 20),
@@ -230,7 +238,7 @@ class DashboardTopCard extends StatelessWidget {
                                 Text(
                                   '$value',
                                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                        color: Colors.white,
+                                        color: chrome.textColor,
                                         fontWeight: FontWeight.w900,
                                         fontSize: 18,
                                       ),

@@ -4,7 +4,9 @@ import 'package:flutter/services.dart';
 import '../../../core/storage/program_catalog_storage.dart';
 import '../../../core/services/user_firestore_sync.dart';
 import '../../../design_system/theme/app_chrome_theme.dart';
+import '../../../design_system/widgets/app_card.dart';
 import '../../../design_system/widgets/app_empty_state.dart';
+import '../../../design_system/widgets/app_search_field.dart';
 import 'add_program_screen.dart';
 
 class ProgramManagementScreen extends StatefulWidget {
@@ -158,8 +160,37 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
     if (index < 0) return;
 
     if (action == 'delete') {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dctx) {
+          return AlertDialog(
+            title: const Text('Delete program?'),
+            content: Text('Delete "${item.name}"? This can’t be undone.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dctx).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(dctx).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
+      );
+
+      if (!mounted || confirmed != true) return;
+
       setState(() => _programs.removeAt(index));
       await _persistPrograms();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 1),
+          content: Text('Program deleted.'),
+        ),
+      );
       return;
     }
 
@@ -204,6 +235,7 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
+        final scheme = Theme.of(ctx).colorScheme;
         return Padding(
           padding: EdgeInsets.only(
             bottom: MediaQuery.of(ctx).viewInsets.bottom,
@@ -214,7 +246,7 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: Theme.of(ctx).scaffoldBackgroundColor,
+                color: scheme.surface,
               ),
               child: _ProgramFormSheet(
                 initialData: initialData,
@@ -244,39 +276,25 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final filtered = _filteredPrograms;
 
     return Scaffold(
-      backgroundColor: chrome.frameColor,
+      backgroundColor: scheme.surface,
+      appBar: AppBar(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
+        title: const Text('Program Management'),
+      ),
       body: SafeArea(
+        top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+          padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => Navigator.of(context).maybePop(),
-                    icon: const Icon(Icons.arrow_back),
-                    color: Colors.white,
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Program Management',
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w800,
-                              ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _SearchPill(
+              AppSearchField(
                 hintText: 'Search program',
                 onChanged: (value) => setState(() => _query = value),
               ),
@@ -292,7 +310,7 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
                     : ListView.separated(
                         padding: EdgeInsets.zero,
                         itemCount: filtered.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
                           final item = filtered[index];
                           return _ProgramCard(
@@ -305,18 +323,27 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
-                height: 44,
-                child: ElevatedButton(
-                  onPressed: _openAddProgram,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: scheme.surface,
-                    foregroundColor: chrome.textColor.withOpacity(0.78),
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
+                child: AppCard(
+                  onTap: _openAddProgram,
+                  radius: 16,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
                   ),
-                  child: const Text('Add New Program'),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add, size: 18, color: scheme.primary),
+                      const SizedBox(width: 10),
+                      Text(
+                        'Add New Program',
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: scheme.onSurface,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -345,54 +372,6 @@ class _ProgramItem {
   final int customDays;
 }
 
-class _SearchPill extends StatelessWidget {
-  const _SearchPill({
-    required this.hintText,
-    required this.onChanged,
-  });
-
-  final String hintText;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: chrome.surfaceColor,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: TextField(
-        onChanged: onChanged,
-        decoration: InputDecoration(
-          hintText: hintText,
-          prefixIcon: const Icon(Icons.search),
-          prefixIconColor: chrome.mutedColor,
-          hintStyle: TextStyle(color: chrome.mutedColor),
-          filled: true,
-          fillColor: Colors.transparent,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: BorderSide.none,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _ProgramCard extends StatelessWidget {
   const _ProgramCard({
     required this.name,
@@ -404,61 +383,44 @@ class _ProgramCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(28),
+    return AppCard(
       onTap: onTap,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: chrome.surfaceColor,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 15,
-              offset: const Offset(0, 8),
+      radius: 22,
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              color: scheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: scheme.outlineVariant),
             ),
-          ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Row(
-            children: [
-              Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(
-                  color: chrome.mutedColor.withOpacity(0.18),
-                  borderRadius: BorderRadius.circular(18),
-                  border:
-                      Border.all(color: chrome.mutedColor.withOpacity(0.14)),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  name.isEmpty ? '?' : name.characters.first,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w900,
-                        color: chrome.textColor,
-                      ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text(
-                  name,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: chrome.textColor,
-                      ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+            alignment: Alignment.center,
+            child: Text(
+              name.isEmpty ? '?' : name.characters.first,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: scheme.onSurface,
+                  ),
+            ),
           ),
-        ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              name,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w800,
+                    color: scheme.onSurface,
+                  ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -666,12 +628,13 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
 
     return SafeArea(
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         decoration: BoxDecoration(
-          color: const Color(0xFF111214),
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
         ),
@@ -691,14 +654,17 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                         widget.title,
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: chrome.textColor,
+                                  color: scheme.onSurface,
                                   fontWeight: FontWeight.w800,
                                 ),
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close, color: chrome.mutedColor),
+                      icon: Icon(
+                        Icons.close,
+                        color: scheme.onSurface.withOpacity(0.55),
+                      ),
                     ),
                   ],
                 ),
@@ -713,7 +679,7 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                   decoration: InputDecoration(
                     labelText: 'Name of the program',
                     filled: true,
-                    fillColor: chrome.surfaceColor,
+                    fillColor: scheme.surfaceContainerHighest,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -727,7 +693,7 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                   decoration: InputDecoration(
                     labelText: 'Program description (optional)',
                     filled: true,
-                    fillColor: chrome.surfaceColor,
+                    fillColor: scheme.surfaceContainerHighest,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -756,7 +722,7 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                         decoration: InputDecoration(
                           labelText: 'Frequency',
                           filled: true,
-                          fillColor: chrome.surfaceColor,
+                          fillColor: scheme.surfaceContainerHighest,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -800,7 +766,7 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                   decoration: InputDecoration(
                     labelText: 'Duration',
                     filled: true,
-                    fillColor: chrome.surfaceColor,
+                    fillColor: scheme.surfaceContainerHighest,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -813,9 +779,9 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                       child: OutlinedButton(
                         onPressed: () => Navigator.of(context).pop(),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: chrome.textColor,
+                          foregroundColor: scheme.onSurface,
                           side: BorderSide(
-                              color: chrome.mutedColor.withOpacity(0.35)),
+                              color: scheme.outlineVariant.withOpacity(0.9)),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -829,8 +795,8 @@ class _ProgramFormSheetState extends State<_ProgramFormSheet> {
                       child: FilledButton(
                         onPressed: _submit,
                         style: FilledButton.styleFrom(
-                          backgroundColor: VibrantColors.pastelGreen,
-                          foregroundColor: Colors.black,
+                          backgroundColor: scheme.primary,
+                          foregroundColor: scheme.onPrimary,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -870,12 +836,12 @@ class _NumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return InputDecorator(
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: chrome.surfaceColor,
+        fillColor: scheme.surfaceContainerHighest,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       ),
       child: Row(
@@ -891,7 +857,7 @@ class _NumberField extends StatelessWidget {
                 '$value',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.w800,
-                      color: chrome.textColor,
+                      color: scheme.onSurface,
                     ),
               ),
             ),

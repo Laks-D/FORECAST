@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../../design_system/theme/app_visual_style.dart';
 import 'login_fields.dart';
 import 'login_footer_links.dart';
 import 'login_google_button.dart';
@@ -18,11 +20,33 @@ class LoginCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final chrome = AppChromeTheme.of(context);
+    final visual = AppVisualStyle.of(context);
 
-    return DecoratedBox(
+    final shadows = visual.neumorphism
+        ? AppVisualStyle.neumorphicShadows(
+            context,
+            blurRadius: 28,
+            offset: const Offset(8, 8),
+            shadowOpacityLight: 0.10,
+          )
+        : <BoxShadow>[
+            BoxShadow(
+              color: Colors.black.withOpacity(0.10),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ];
+
+    return Container(
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(40),
+        boxShadow: shadows,
+        border: Border.all(
+          color: chrome.mutedColor.withOpacity(visual.neumorphism ? 0.14 : 0.10),
+          width: 1,
+        ),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(22, 26, 22, 18),
@@ -34,7 +58,7 @@ class LoginCard extends StatelessWidget {
               height: 56,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: scheme.surfaceContainerHighest,
+                color: chrome.mutedColor.withOpacity(0.12),
               ),
               child: Icon(
                 Icons.edit_outlined,

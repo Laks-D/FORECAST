@@ -3,9 +3,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
 import 'package:gendral_app/design_system/widgets/app_card.dart';
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../calendar/domain/entities/schedule_session.dart';
+import '../../../calendar/domain/services/schedule_generator.dart';
+import '../../../calendar/ui/widgets/schedule_sessions_sheet.dart';
 import '../../domain/entities/client.dart';
 import '../../domain/entities/client_timeline_event.dart';
 import '../bloc/client_bloc.dart';
@@ -209,8 +212,34 @@ class ClientProfilePage extends StatelessWidget {
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
 
-    return BlocBuilder<ClientBloc, ClientState>(
+    return BlocConsumer<ClientBloc, ClientState>(
+      listenWhen: (previous, current) {
+        if (current is! ClientLoaded) return false;
+        final currHas = current.entities.any((e) => e.id == entity.id);
+        if (currHas) return false;
+
+        if (previous is ClientLoaded) {
+          final prevHas = previous.entities.any((e) => e.id == entity.id);
+          return prevHas;
+        }
+
+        return true;
+      },
+      listener: (context, state) {
+        Navigator.of(context).maybePop();
+      },
       builder: (context, state) {
+        if (state is ClientLoaded) {
+          final exists = state.entities.any((e) => e.id == entity.id);
+          if (!exists) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!context.mounted) return;
+              Navigator.of(context).maybePop();
+            });
+            return const Scaffold(body: SizedBox.shrink());
+          }
+        }
+
         final updated = _findUpdatedEntity(state);
         final current = updated ?? entity;
 
@@ -440,9 +469,8 @@ class _ProfileStatsCard extends StatelessWidget {
 
   const _ProfileStatsCard({required this.entity});
 
-  String _money(double amount) {
-    return '₹${amount.toStringAsFixed(0)}';
-  }
+  String _money(double amount, String currency) =>
+      '${currency}${amount.toStringAsFixed(0)}';
 
   String _formatDate(DateTime? dt) {
     if (dt == null) return '—';
@@ -488,6 +516,9 @@ class _ProfileStatsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final defaultCurrency =
+        context.select((UserProfileCubit c) => c.state.currency);
+    final currency = entity.currency ?? defaultCurrency;
 
     double paidTotal = 0;
     double upcomingTotal = 0;
@@ -517,7 +548,7 @@ class _ProfileStatsCard extends StatelessWidget {
           const SizedBox(height: 12),
           _StatRow(
             label: 'Total Amount',
-            value: _money(entity.outstandingAmount),
+            value: _money(entity.outstandingAmount, currency),
             valueStyle: Theme.of(context)
                 .textTheme
                 .bodyMedium
@@ -527,7 +558,7 @@ class _ProfileStatsCard extends StatelessWidget {
           const SizedBox(height: 12),
           _StatRow(
             label: 'Paid',
-            value: _money(paidTotal),
+            value: _money(paidTotal, currency),
             valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: VibrantColors.deep(VibrantColors.pastelGreen)),
@@ -536,7 +567,7 @@ class _ProfileStatsCard extends StatelessWidget {
           const SizedBox(height: 12),
           _StatRow(
             label: 'Upcoming',
-            value: _money(upcomingTotal),
+            value: _money(upcomingTotal, currency),
             valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: VibrantColors.deep(VibrantColors.warmYellow)),
@@ -545,7 +576,7 @@ class _ProfileStatsCard extends StatelessWidget {
           const SizedBox(height: 12),
           _StatRow(
             label: 'Pending',
-            value: _money(pendingTotal),
+            value: _money(pendingTotal, currency),
             valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w700,
                 color: VibrantColors.deep(VibrantColors.softPink)),
@@ -711,11 +742,32 @@ class _ScheduledClassesButton extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text(
-                        'Scheduled Classes',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              fontWeight: FontWeight.w800,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Scheduled Classes',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
                             ),
+                          ),
+                          if (sessions.isNotEmpty)
+                            TextButton(
+                              onPressed: () async {
+                                await showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (_) => _ModifySessionsRangeSheet(
+                                    clientId: clientId,
+                                    sessions: sessions,
+                                  ),
+                                );
+                              },
+                              child: const Text('Modify'),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -926,79 +978,6 @@ class _ScheduledClassesButton extends StatelessWidget {
         final rating = session.rating;
         final comments = session.comments;
 
-        String restoredStatusForCancelledSession() {
-          try {
-            final now = DateTime.now();
-            final todayDate = DateTime(now.year, now.month, now.day);
-            final nowInMinutes = now.hour * 60 + now.minute;
-
-            final sessionDate = AppDateUtils.parseSessionDate(session.date);
-            final sessionOnlyDate =
-                DateTime(sessionDate.year, sessionDate.month, sessionDate.day);
-
-            if (sessionOnlyDate.isBefore(todayDate)) {
-              return 'Pending';
-            }
-            if (sessionOnlyDate.isAfter(todayDate)) {
-              return 'Upcoming';
-            }
-
-            final range = AppDateUtils.parseTimeRange(session.time);
-            final startMinutes = range['start'] ?? 0;
-            final endMinutes = range['end'] ?? startMinutes;
-            if (nowInMinutes >= endMinutes) return 'Pending';
-            return 'Upcoming';
-          } catch (_) {
-            return 'Upcoming';
-          }
-        }
-
-        bool overlapsTimeRange(String a, String b) {
-          final ra = AppDateUtils.parseTimeRange(a);
-          final rb = AppDateUtils.parseTimeRange(b);
-          final aStart = ra['start'] ?? 0;
-          final aEnd = ra['end'] ?? aStart;
-          final bStart = rb['start'] ?? 0;
-          final bEnd = rb['end'] ?? bStart;
-          // Treat touching endpoints as NOT a clash.
-          return aStart < bEnd && bStart < aEnd;
-        }
-
-        bool hasRestoreClash(
-            List<ScheduleSession> all, ScheduleSession restoring) {
-          for (final other in all) {
-            if (other.id == restoring.id) continue;
-            if (other.date != restoring.date) continue;
-
-            final otherStatus = AppDateUtils.determineSessionStatus(
-              other.status,
-              other.date,
-              other.time,
-            );
-            if (otherStatus == 'Cancelled' || otherStatus == 'Completed') {
-              continue;
-            }
-
-            if (overlapsTimeRange(other.time, restoring.time)) {
-              return true;
-            }
-          }
-          return false;
-        }
-
-        Future<void> openRescheduleCancelledSessionSheet() async {
-          if (!context.mounted) return;
-          // Close the session details sheet first.
-          Navigator.of(ctx).pop();
-
-          await showModalBottomSheet<void>(
-            context: context,
-            isScrollControlled: true,
-            backgroundColor: Colors.transparent,
-            builder: (_) => _RescheduleSingleSessionSheet(session: session),
-          );
-        }
-
         Widget stars(int value) {
           return Row(
             mainAxisSize: MainAxisSize.min,
@@ -1032,8 +1011,7 @@ class _ScheduledClassesButton extends StatelessWidget {
                       children: [
                         Expanded(
                           child: Text(
-                            session.courseName ??
-                                'Session #${session.sessionNo}',
+                            session.courseName ?? 'Session #${session.sessionNo}',
                             style: Theme.of(ctx).textTheme.titleSmall?.copyWith(
                                   color: chrome.textColor,
                                   fontWeight: FontWeight.w900,
@@ -1066,7 +1044,9 @@ class _ScheduledClassesButton extends StatelessWidget {
                         const Spacer(),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 5),
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
                           decoration: BoxDecoration(
                             color: statusColor.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(10),
@@ -1081,63 +1061,6 @@ class _ScheduledClassesButton extends StatelessWidget {
                         ),
                       ],
                     ),
-                    if (displayStatus == 'Cancelled') ...[
-                      const SizedBox(height: 14),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 46,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: scheme.primary,
-                            foregroundColor: scheme.onPrimary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          onPressed: () {
-                            final cubit = ctx.read<SessionsCubit>();
-                            final restored =
-                                restoredStatusForCancelledSession();
-                            final restoring =
-                                session.copyWith(status: restored);
-
-                            if (hasRestoreClash(
-                                cubit.state.sessions, restoring)) {
-                              showDialog<void>(
-                                context: ctx,
-                                builder: (dctx) {
-                                  return AlertDialog(
-                                    title: const Text('Slot already booked'),
-                                    content: const Text(
-                                      'This time slot already has another class. Please reschedule this cancelled class to a free slot.',
-                                    ),
-                                    actions: [
-                                      TextButton(
-                                        onPressed: () {
-                                          Navigator.of(dctx).pop();
-                                          openRescheduleCancelledSessionSheet();
-                                        },
-                                        child: const Text('Reschedule'),
-                                      ),
-                                      TextButton(
-                                        onPressed: () =>
-                                            Navigator.of(dctx).pop(),
-                                        child: const Text('OK'),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-                              return;
-                            }
-
-                            cubit.updateSession(restoring);
-                            Navigator.of(ctx).pop();
-                          },
-                          child: const Text('Restore'),
-                        ),
-                      ),
-                    ],
                     if (displayStatus == 'Completed') ...[
                       const SizedBox(height: 12),
                       Row(
@@ -1183,6 +1106,839 @@ class _ScheduledClassesButton extends StatelessWidget {
   }
 }
 
+class _ModifySessionsRangeSheet extends StatefulWidget {
+  const _ModifySessionsRangeSheet({
+    required this.clientId,
+    required this.sessions,
+  });
+
+  final String clientId;
+  final List<ScheduleSession> sessions;
+
+  @override
+  State<_ModifySessionsRangeSheet> createState() =>
+      _ModifySessionsRangeSheetState();
+}
+
+class _ModifySessionsRangeSheetState extends State<_ModifySessionsRangeSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late List<ScheduleSession> _sortedSessions;
+  late List<ScheduleSession> _editableSessions;
+  int? _fromSessionNo;
+
+  int? _toSessionNo;
+  late DateTime _startDate;
+
+  bool _hasGenerated = false;
+  List<ScheduleSession> _draftUpdated = const [];
+  List<ScheduleSession> _draftClashes = const [];
+
+  String _frequency = 'Weekly';
+  int _weeklyDay = DateTime.monday;
+  int _monthlyDate = 1;
+  int _customDays = 1;
+  int _startTimeMinutes = 10 * 60;
+  SessionDuration _duration = SessionDuration.oneHour;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _sortedSessions = [...widget.sessions]
+      ..sort((a, b) => a.sessionNo.compareTo(b.sessionNo));
+
+    _editableSessions = _sortedSessions.where(_canEditSession).toList(growable: false);
+    _fromSessionNo = _editableSessions.isEmpty ? null : _editableSessions.first.sessionNo;
+    _toSessionNo = _editableSessions.isEmpty ? null : _editableSessions.last.sessionNo;
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final firstSessionDate = _editableSessions.isNotEmpty
+        ? AppDateUtils.parseSessionDate(_editableSessions.first.date)
+        : today;
+    _startDate = firstSessionDate.isBefore(today) ? today : firstSessionDate;
+
+    if (_editableSessions.isNotEmpty) {
+      final parsed = AppDateUtils.parseTimeRange(_editableSessions.first.time);
+      _startTimeMinutes = parsed['start'] ?? _startTimeMinutes;
+      if (_editableSessions.first.duration != null) {
+        _duration = _editableSessions.first.duration!;
+      }
+      _weeklyDay = _startDate.weekday;
+      _monthlyDate = _startDate.day;
+    }
+  }
+
+  bool _canEditSession(ScheduleSession s) {
+    final derived = AppDateUtils.determineSessionStatus(s.status, s.date, s.time);
+    return derived != 'Completed' && derived != 'Cancelled';
+  }
+
+  bool _rangeHasLockedSessions(int from, int to) {
+    final a = from <= to ? from : to;
+    final b = from <= to ? to : from;
+
+    for (final s in widget.sessions) {
+      if (s.clientId != widget.clientId) continue;
+      if (s.sessionNo < a || s.sessionNo > b) continue;
+      if (!_canEditSession(s)) return true;
+    }
+    return false;
+  }
+
+  void _invalidateDraft() {
+    _hasGenerated = false;
+    _draftUpdated = const [];
+    _draftClashes = const [];
+  }
+
+  Future<void> _pickStartDate() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate,
+      firstDate: today,
+      lastDate: DateTime(now.year + 5, 12, 31),
+    );
+    if (picked == null) return;
+    setState(() {
+      _startDate = picked;
+      _weeklyDay = picked.weekday;
+      _monthlyDate = picked.day;
+      _invalidateDraft();
+    });
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(
+        hour: (_startTimeMinutes ~/ 60) % 24,
+        minute: _startTimeMinutes % 60,
+      ),
+    );
+    if (picked == null) return;
+    setState(() {
+      _startTimeMinutes = picked.hour * 60 + picked.minute;
+      _invalidateDraft();
+    });
+  }
+
+  List<ScheduleSession> _sessionsInRange(int from, int to) {
+    final a = from <= to ? from : to;
+    final b = from <= to ? to : from;
+
+    final items = widget.sessions
+        .where((s) => s.clientId == widget.clientId)
+        .where((s) => s.sessionNo >= a && s.sessionNo <= b)
+        .where(_canEditSession)
+        .toList();
+    items.sort((x, y) => x.sessionNo.compareTo(y.sessionNo));
+    return items;
+  }
+
+  List<ScheduleSession> _buildUpdatedSessions({
+    required List<ScheduleSession> target,
+    required List<ScheduleSession> generated,
+  }) {
+    final out = <ScheduleSession>[];
+    for (var i = 0; i < target.length && i < generated.length; i++) {
+      final old = target[i];
+      final gen = generated[i];
+
+      out.add(
+        old.copyWith(
+          date: gen.date,
+          time: gen.time,
+          duration: _duration,
+        ),
+      );
+    }
+    return out;
+  }
+
+  List<ScheduleSession> _findClashes({
+    required List<ScheduleSession> updated,
+    required List<ScheduleSession> all,
+  }) {
+    bool overlapsTimeRange(String a, String b) {
+      final ra = AppDateUtils.parseTimeRange(a);
+      final rb = AppDateUtils.parseTimeRange(b);
+      final aStart = ra['start'] ?? 0;
+      final aEnd = ra['end'] ?? aStart;
+      final bStart = rb['start'] ?? 0;
+      final bEnd = rb['end'] ?? bStart;
+      // Treat touching endpoints as NOT a clash.
+      return aStart < bEnd && bStart < aEnd;
+    }
+
+    final updatedIds = updated.map((e) => e.id).toSet();
+    final clashes = <ScheduleSession>[];
+
+    for (final u in updated) {
+      final uDate = u.date;
+      for (final other in all) {
+        if (updatedIds.contains(other.id)) continue;
+        if (other.date != uDate) continue;
+
+        final derived = AppDateUtils.determineSessionStatus(
+          other.status,
+          other.date,
+          other.time,
+        );
+        if (derived == 'Cancelled' || derived == 'Completed') continue;
+
+        if (overlapsTimeRange(u.time, other.time)) {
+          clashes.add(other);
+          break;
+        }
+      }
+    }
+
+    return clashes;
+  }
+
+  String _sessionInfoLabel(ScheduleSession s) {
+    return '#${s.sessionNo}  •  ${AppDateUtils.displayDateStr(s.date)}  •  ${s.time}';
+  }
+
+  String _draftInfoLabel(ScheduleSession s) {
+    return '#${s.sessionNo}  •  ${AppDateUtils.displayDateStr(s.date)}  •  ${s.time}';
+  }
+
+  String _sessionDisplayStatus(ScheduleSession s) {
+    return AppDateUtils.determineSessionStatus(s.status, s.date, s.time);
+  }
+
+  Color _sessionStatusColor(
+    String status,
+    ColorScheme scheme,
+    AppChromeTheme chrome,
+  ) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return VibrantColors.pastelGreen;
+      case 'cancelled':
+        return VibrantColors.softPink;
+      case 'pending':
+        return VibrantColors.softPink;
+      case 'upcoming':
+        return VibrantColors.warmYellow;
+      // Legacy.
+      case 'overdue':
+        return VibrantColors.softPink;
+      default:
+        return chrome.mutedColor;
+    }
+  }
+
+  Widget _statusChip(
+    BuildContext context, {
+    required String status,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withOpacity(0.18)),
+      ),
+      child: Text(
+        status,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
+      ),
+    );
+  }
+
+  Widget _sessionDropdownRow(
+    BuildContext context,
+    ScheduleSession s, {
+    required bool showStatus,
+  }) {
+    final scheme = Theme.of(context).colorScheme;
+    final chrome = AppChromeTheme.of(context);
+    final status = _sessionDisplayStatus(s);
+    final color = _sessionStatusColor(status, scheme, chrome);
+
+    return Row(
+      children: [
+        Expanded(
+          child: Text(
+            _sessionInfoLabel(s),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        if (showStatus) ...[
+          const SizedBox(width: 10),
+          _statusChip(context, status: status, color: color),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _generate() async {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+
+    final from = _fromSessionNo;
+    final to = _toSessionNo;
+    if (from == null || to == null) return;
+
+    if (_rangeHasLockedSessions(from, to)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 2),
+          content: Text(
+            'Completed/Cancelled classes cannot be modified. Select a range without them.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final target = _sessionsInRange(from, to);
+    if (target.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 1),
+          content: Text('No editable sessions found in this range.'),
+        ),
+      );
+      return;
+    }
+
+    final timeRange = AppDateUtils.formatTimeRangeFromStartAndDuration(
+      startLabel: AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes),
+      durationMinutes: (_duration.hours * 60).round(),
+    );
+
+    final generated = ScheduleGenerator.generate(
+      count: target.length,
+      startDate: _startDate,
+      frequency: _frequency,
+      timeSlot: timeRange,
+      weeklyDay: _weeklyDay,
+      monthlyDate: _monthlyDate,
+      customDays: _customDays,
+      clientId: widget.clientId,
+      duration: _duration,
+    );
+
+    final updated = _buildUpdatedSessions(target: target, generated: generated);
+
+    final cubit = context.read<SessionsCubit>();
+    final clashes = _findClashes(updated: updated, all: cubit.state.sessions);
+
+    setState(() {
+      _hasGenerated = true;
+      _draftUpdated = updated;
+      _draftClashes = clashes;
+    });
+  }
+
+  Future<void> _save() async {
+    if (!_hasGenerated) {
+      await _generate();
+      return;
+    }
+    if (_draftUpdated.isEmpty) return;
+    if (_draftClashes.isNotEmpty) return;
+
+    final cubit = context.read<SessionsCubit>();
+    await cubit.updateSessions(_draftUpdated);
+    if (!mounted) return;
+    Navigator.of(context).pop();
+  }
+
+  Future<void> _openAddClassPopup() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final initial = _startDate.isBefore(today) ? today : _startDate;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => ScheduleSessionsSheet(
+        initialDate: initial,
+        presetClientId: widget.clientId,
+        lockClient: true,
+        initialCount: 1,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final hasEditableSessions = _editableSessions.isNotEmpty;
+
+    final fromNo = _fromSessionNo;
+    final toNo = _toSessionNo;
+    final a = (fromNo != null && toNo != null) ? (fromNo <= toNo ? fromNo : toNo) : null;
+    final b = (fromNo != null && toNo != null) ? (fromNo <= toNo ? toNo : fromNo) : null;
+    final targetCount = (a != null && b != null) ? (b - a + 1) : 0;
+
+    final clashText = _draftClashes.isEmpty
+      ? 'No clash for the new schedule.'
+      : 'Clash with existing session (#${_draftClashes.first.sessionNo}) on ${AppDateUtils.displayDateStr(_draftClashes.first.date)} at ${_draftClashes.first.time}.';
+
+    final fromOptions = _editableSessions
+      .where((s) => toNo == null ? true : s.sessionNo <= toNo)
+      .toList(growable: false);
+    final toOptions = _editableSessions
+      .where((s) => fromNo == null ? true : s.sessionNo >= fromNo)
+      .toList(growable: false);
+
+    final startLabel =
+        AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes);
+    final timeRangeLabel = AppDateUtils.formatTimeRangeFromStartAndDuration(
+      startLabel: startLabel,
+      durationMinutes: (_duration.hours * 60).round(),
+    );
+
+    const weekDayItems = <MapEntry<int, String>>[
+      MapEntry(DateTime.monday, 'Monday'),
+      MapEntry(DateTime.tuesday, 'Tuesday'),
+      MapEntry(DateTime.wednesday, 'Wednesday'),
+      MapEntry(DateTime.thursday, 'Thursday'),
+      MapEntry(DateTime.friday, 'Friday'),
+      MapEntry(DateTime.saturday, 'Saturday'),
+      MapEntry(DateTime.sunday, 'Sunday'),
+    ];
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: chrome.surfaceColor,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: chrome.mutedColor.withOpacity(0.18)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+            child: SingleChildScrollView(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Modify classes',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(
+                                  color: chrome.textColor,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: Icon(Icons.close, color: chrome.mutedColor),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    if (!hasEditableSessions)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Text(
+                          'No editable classes. Completed/Cancelled classes cannot be modified.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: chrome.mutedColor,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                      ),
+                    DropdownButtonFormField<int>(
+                      value: _fromSessionNo,
+                      isExpanded: true,
+                      items: fromOptions
+                          .map(
+                            (s) => DropdownMenuItem<int>(
+                              value: s.sessionNo,
+                              child:
+                                  _sessionDropdownRow(context, s, showStatus: true),
+                            ),
+                          )
+                          .toList(growable: false),
+                      selectedItemBuilder: (context) {
+                        return fromOptions
+                            .map(
+                              (s) => _sessionDropdownRow(
+                                context,
+                                s,
+                                showStatus: false,
+                              ),
+                            )
+                            .toList(growable: false);
+                      },
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _fromSessionNo = v;
+
+                          final picked = _editableSessions.firstWhere(
+                            (s) => s.sessionNo == v,
+                            orElse: () => _editableSessions.first,
+                          );
+                          final fromDate =
+                              AppDateUtils.parseSessionDate(picked.date);
+                          _startDate = fromDate.isBefore(today) ? today : fromDate;
+                          _weeklyDay = _startDate.weekday;
+                          _monthlyDate = _startDate.day;
+
+                          // Keep To >= From.
+                          if (_toSessionNo != null && _toSessionNo! < v) {
+                            _toSessionNo = v;
+                          }
+
+                          _invalidateDraft();
+                        });
+                      },
+                      validator: (v) => v == null ? 'Select a class' : null,
+                      decoration: const InputDecoration(
+                        labelText: 'From class',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _toSessionNo,
+                      isExpanded: true,
+                      items: toOptions
+                          .map(
+                            (s) => DropdownMenuItem<int>(
+                              value: s.sessionNo,
+                              child:
+                                  _sessionDropdownRow(context, s, showStatus: true),
+                            ),
+                          )
+                          .toList(growable: false),
+                      selectedItemBuilder: (context) {
+                        return toOptions
+                            .map(
+                              (s) => _sessionDropdownRow(
+                                context,
+                                s,
+                                showStatus: false,
+                              ),
+                            )
+                            .toList(growable: false);
+                      },
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _toSessionNo = v;
+                          _invalidateDraft();
+                        });
+                      },
+                      validator: (v) => v == null ? 'Select a class' : null,
+                      decoration: const InputDecoration(
+                        labelText: 'To class',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      targetCount <= 0 || a == null || b == null
+                          ? 'Select From/To classes'
+                          : 'Modifying $targetCount class${targetCount == 1 ? '' : 'es'} (#$a to #$b)',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: chrome.mutedColor,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _pickStartDate,
+                      icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                      label: Text(
+                        'Start date: ${AppDateUtils.displayDate(_startDate)}',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: chrome.textColor,
+                        side: BorderSide(
+                          color: chrome.mutedColor.withOpacity(0.35),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _pickStartTime,
+                        borderRadius: BorderRadius.circular(14),
+                        child: InputDecorator(
+                          decoration: InputDecoration(
+                            labelText: 'Time',
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  timeRangeLabel,
+                                  style: Theme.of(context).textTheme.bodyLarge,
+                                ),
+                              ),
+                              Icon(
+                                Icons.access_time,
+                                color: chrome.mutedColor,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: DropdownButtonFormField<String>(
+                            value: _frequency,
+                            items: const [
+                              DropdownMenuItem(
+                                value: 'Daily',
+                                child: Text('Daily'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Weekly',
+                                child: Text('Weekly'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Monthly',
+                                child: Text('Monthly'),
+                              ),
+                              DropdownMenuItem(
+                                value: 'Custom',
+                                child: Text('Custom'),
+                              ),
+                            ],
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() {
+                                _frequency = v;
+                                _invalidateDraft();
+                              });
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'Frequency',
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: DropdownButtonFormField<SessionDuration>(
+                            value: _duration,
+                            items: SessionDuration.values
+                                .map(
+                                  (d) => DropdownMenuItem<SessionDuration>(
+                                    value: d,
+                                    child: Text(d.displayName),
+                                  ),
+                                )
+                                .toList(growable: false),
+                            onChanged: (v) {
+                              if (v == null) return;
+                              setState(() {
+                                _duration = v;
+                                _invalidateDraft();
+                              });
+                            },
+                            decoration: const InputDecoration(
+                              labelText: 'Duration',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    if (_frequency == 'Weekly')
+                      DropdownButtonFormField<int>(
+                        value: _weeklyDay,
+                        items: weekDayItems
+                            .map(
+                              (e) => DropdownMenuItem<int>(
+                                value: e.key,
+                                child: Text(e.value),
+                              ),
+                            )
+                            .toList(growable: false),
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() {
+                            _weeklyDay = v;
+                            _invalidateDraft();
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Day of week',
+                        ),
+                      )
+                    else if (_frequency == 'Monthly')
+                      DropdownButtonFormField<int>(
+                        value: _monthlyDate.clamp(1, 28),
+                        items: List.generate(
+                          28,
+                          (i) => DropdownMenuItem<int>(
+                            value: i + 1,
+                            child: Text('${i + 1}'),
+                          ),
+                        ),
+                        onChanged: (v) {
+                          if (v == null) return;
+                          setState(() {
+                            _monthlyDate = v;
+                            _invalidateDraft();
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Monthly date',
+                        ),
+                      )
+                    else if (_frequency == 'Custom')
+                      TextFormField(
+                        initialValue: _customDays.toString(),
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Every N days',
+                        ),
+                        validator: (v) {
+                          final n = int.tryParse((v ?? '').trim());
+                          if (n == null || n <= 0) return 'Enter days';
+                          return null;
+                        },
+                        onChanged: (v) {
+                          final n = int.tryParse(v.trim());
+                          if (n == null) return;
+                          setState(() {
+                            _customDays = n.clamp(1, 365);
+                            _invalidateDraft();
+                          });
+                        },
+                      ),
+                    const SizedBox(height: 14),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 46,
+                            child: OutlinedButton(
+                              onPressed:
+                                  (_startDate.isBefore(today) || !hasEditableSessions)
+                                      ? null
+                                      : _generate,
+                              child: const Text('Generate'),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: SizedBox(
+                            height: 46,
+                            child: ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                              onPressed:
+                                  (_startDate.isBefore(today) || !_hasGenerated || !hasEditableSessions)
+                                      ? null
+                                      : (_draftClashes.isNotEmpty
+                                          ? null
+                                          : _save),
+                              child: const Text('Save changes'),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: OutlinedButton.icon(
+                        onPressed: _startDate.isBefore(today) ? null : _openAddClassPopup,
+                        icon: const Icon(Icons.add, size: 18),
+                        label: const Text('Add new class'),
+                      ),
+                    ),
+                    if (_hasGenerated) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        clashText,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: chrome.mutedColor,
+                              fontWeight: FontWeight.w800,
+                            ),
+                      ),
+                      if (_draftUpdated.isNotEmpty) ...[
+                        const SizedBox(height: 10),
+                        ...(() {
+                          final items = _draftUpdated.length <= 10
+                              ? _draftUpdated
+                              : _draftUpdated.take(10).toList(growable: false);
+                          return [
+                            for (final s in items)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  _draftInfoLabel(s),
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall
+                                      ?.copyWith(color: chrome.mutedColor),
+                                ),
+                              ),
+                            if (_draftUpdated.length > items.length)
+                              Text(
+                                '+ ${_draftUpdated.length - items.length} more',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(color: chrome.mutedColor),
+                              ),
+                          ];
+                        })(),
+                      ],
+                      const SizedBox(height: 12),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /* ================= TIMELINE (NON-PAYMENT) ================= */
 
 class _Timeline extends StatelessWidget {
@@ -1192,6 +1948,9 @@ class _Timeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final defaultCurrency =
+        context.select((UserProfileCubit c) => c.state.currency);
+    final currency = entity.currency ?? defaultCurrency;
     final events = [...entity.timeline]
       ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
@@ -1224,7 +1983,7 @@ class _Timeline extends StatelessWidget {
           ),
         ),
         ...nonPaymentEvents.map((e) {
-          final subtitle = _subtitleForEvent(e);
+          final subtitle = _subtitleForEvent(e, currency);
           return Card(
             child: ListTile(
               title: Text(_titleForEvent(e)),
@@ -1240,14 +1999,14 @@ class _Timeline extends StatelessWidget {
     );
   }
 
-  String? _subtitleForEvent(ClientTimelineEvent e) {
+  String? _subtitleForEvent(ClientTimelineEvent e, String currency) {
     switch (e.type) {
       case ClientTimelineEventType.payment:
         if (e.amount == null) return e.note;
         if (e.note != null && e.note!.trim().isNotEmpty) {
-          return '₹${e.amount} • ${e.note!}';
+          return '${currency}${e.amount} • ${e.note!}';
         }
-        return '₹${e.amount}';
+        return '${currency}${e.amount}';
       case ClientTimelineEventType.statusChanged:
         return e.status;
       case ClientTimelineEventType.note:
@@ -1389,10 +2148,6 @@ class _RescheduleSingleSessionSheetState
         durationMinutes: durationMinutes,
       ),
       duration: _duration,
-      // Rescheduling a cancelled class restores it back to active scheduling.
-      status: widget.session.status == 'Cancelled'
-          ? 'Upcoming'
-          : widget.session.status,
     );
 
     await cubit.updateSession(updated);

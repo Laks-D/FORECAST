@@ -21,8 +21,22 @@ class ScheduleRepositoryImpl implements ScheduleRepository {
   Future<void> updateSession(ScheduleSession session) =>
       local.updateSession(session);
 
+    @override
+    Future<void> updateSessions(List<ScheduleSession> sessions) =>
+      local.updateSessions(sessions);
+
   @override
   Future<void> deleteSession(int id) => local.deleteSession(id);
+
+  @override
+  Future<void> deleteUpcomingSessionsForClient(String clientId) {
+    return local.deleteUpcomingSessionsForClient(clientId);
+  }
+
+  @override
+  Future<void> restoreDeletedUpcomingSessionsForClient(String clientId) {
+    return local.restoreDeletedUpcomingSessionsForClient(clientId);
+  }
 
   @override
   Future<void> loadFromStorage() => local.loadFromStorage();

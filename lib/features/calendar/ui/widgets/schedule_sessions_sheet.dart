@@ -6,6 +6,7 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/storage/program_catalog_storage.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../client/domain/entities/client.dart';
 import '../../../client/domain/usecases/get_clients_usecase.dart';
 import '../../bloc/sessions_cubit.dart';
@@ -16,9 +17,15 @@ class ScheduleSessionsSheet extends StatefulWidget {
   const ScheduleSessionsSheet({
     super.key,
     required this.initialDate,
+    this.presetClientId,
+    this.lockClient = false,
+    this.initialCount,
   });
 
   final DateTime initialDate;
+  final String? presetClientId;
+  final bool lockClient;
+  final int? initialCount;
 
   @override
   State<ScheduleSessionsSheet> createState() => _ScheduleSessionsSheetState();
@@ -50,6 +57,10 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   void initState() {
     super.initState();
     _clients = sl<GetClientsUseCase>().execute();
+    _clientId = widget.presetClientId;
+    if (widget.initialCount != null) {
+      _sessionCount = widget.initialCount!.clamp(1, 60);
+    }
     _weeklyDay = widget.initialDate.weekday;
     _monthlyDate = widget.initialDate.day;
     _loadRegisteredPrograms();
@@ -140,6 +151,20 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     if (!_formKey.currentState!.validate()) return;
     if (_clientId == null) return;
 
+    if (_duration == null && _customDurationMinutes == null) {
+      setState(() {
+        _draft = const [];
+        _clashIds = const {};
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 1),
+          content: Text('Select duration'),
+        ),
+      );
+      return;
+    }
+
     // Never generate sessions starting in the past.
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -147,17 +172,22 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
         ? today
         : widget.initialDate;
 
+    final maxSessionNo = existingSessions
+        .where((s) => s.clientId == _clientId)
+        .fold<int>(0, (m, s) => s.sessionNo > m ? s.sessionNo : m);
+
     final generated = ScheduleGenerator.generate(
       count: _sessionCount,
       startDate: effectiveStart,
       frequency: _frequency,
       timeSlot: AppDateUtils.formatTimeRangeFromStartAndDuration(
         startLabel: AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes),
-        durationMinutes: _customDurationMinutes ?? (((_duration ?? SessionDuration.oneHour).hours) * 60).round(),
+        durationMinutes: _customDurationMinutes ?? ((_duration!.hours) * 60).round(),
       ),
       weeklyDay: _weeklyDay,
       monthlyDate: _monthlyDate,
       clientId: _clientId!,
+      startSessionNo: maxSessionNo + 1,
       courseName: _programName,
       duration: _duration,
       customDays: _customDays,
@@ -184,6 +214,8 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
 
     final selectedProgram = _registeredPrograms.any((p) => p.name == _programName) ? _programName : null;
     final startLabel = AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes);
@@ -257,9 +289,16 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         decoration: BoxDecoration(
-          color: const Color(0xFF111214),
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+          boxShadow: visual.neumorphism
+              ? AppVisualStyle.neumorphicShadows(
+                  context,
+                  blurRadius: 22,
+                  offset: const Offset(10, 10),
+                  highlightOpacityLight: 0.55,
+                )
+              : null,
         ),
         padding: const EdgeInsets.all(20.0),
         child: BlocBuilder<SessionsCubit, SessionsState>(
@@ -274,14 +313,14 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                       child: Text(
                         'Schedule Sessions',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: chrome.textColor,
+                              color: scheme.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close, color: chrome.mutedColor),
+                      icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -300,6 +339,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                     .firstOrNull ??
                                 'Select')
                             : 'Select',
+                        enabled: !widget.lockClient,
                         options: _clients
                             .map((c) => _OptionItem(
                                   value: c.id,
@@ -370,7 +410,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                   decoration: InputDecoration(
                                     labelText: 'Time',
                                     filled: true,
-                                    fillColor: chrome.surfaceColor,
+                                    fillColor: scheme.surfaceContainerHighest,
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(16),
                                     ),
@@ -383,7 +423,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                           style: Theme.of(context).textTheme.bodyLarge,
                                         ),
                                       ),
-                                      Icon(Icons.access_time, color: chrome.mutedColor),
+                                      Icon(Icons.access_time, color: scheme.onSurfaceVariant),
                                     ],
                                   ),
                                 ),
@@ -433,10 +473,15 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                   });
                                 }
                               },
+                              validator: (v) {
+                                if (_duration != null) return null;
+                                if (_customDurationMinutes != null) return null;
+                                return 'Select duration';
+                              },
                               decoration: InputDecoration(
                                 labelText: 'Duration',
                                 filled: true,
-                                fillColor: chrome.surfaceColor,
+                                fillColor: scheme.surfaceContainerHighest,
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -494,8 +539,8 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                                   ? null
                                   : () => _generateDraft(state.sessions),
                               style: OutlinedButton.styleFrom(
-                                foregroundColor: chrome.textColor,
-                                side: BorderSide(color: chrome.mutedColor.withOpacity(0.35)),
+                                  foregroundColor: scheme.onSurface,
+                                  side: BorderSide(color: scheme.outlineVariant),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(16),
                                 ),
@@ -628,7 +673,7 @@ class _DropdownField<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return DropdownButtonFormField<T>(
       value: value,
       items: items,
@@ -637,7 +682,7 @@ class _DropdownField<T> extends StatelessWidget {
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: chrome.surfaceColor,
+        fillColor: scheme.surfaceContainerHighest,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       ),
     );
@@ -661,38 +706,51 @@ class _NumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
     return InputDecorator(
       decoration: InputDecoration(
         labelText: label,
         filled: true,
-        fillColor: chrome.surfaceColor,
+        fillColor: scheme.surfaceContainerHighest,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            onPressed: value <= min ? null : () => onChanged(value - 1),
-            icon: const Icon(Icons.remove),
-            splashRadius: 18,
-          ),
-          Expanded(
-            child: Center(
-              child: Text(
-                '$value',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      color: chrome.textColor,
-                    ),
+      child: SizedBox(
+        height: 40,
+        child: Row(
+          children: [
+            IconButton(
+              onPressed: value <= min ? null : () => onChanged(value - 1),
+              icon: const Icon(Icons.remove),
+              splashRadius: 18,
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            ),
+            Expanded(
+              child: Center(
+                child: Text(
+                  '$value',
+                  maxLines: 1,
+                  softWrap: false,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        color: scheme.onSurface,
+                        height: 1.0,
+                      ),
+                ),
               ),
             ),
-          ),
-          IconButton(
-            onPressed: value >= max ? null : () => onChanged(value + 1),
-            icon: const Icon(Icons.add),
-            splashRadius: 18,
-          ),
-        ],
+            IconButton(
+              onPressed: value >= max ? null : () => onChanged(value + 1),
+              icon: const Icon(Icons.add),
+              splashRadius: 18,
+              padding: EdgeInsets.zero,
+              visualDensity: VisualDensity.compact,
+              constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -785,15 +843,17 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
 
     return FormField<T>(
       initialValue: widget.value,
       validator: widget.validator,
       builder: (state) {
         final textStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: widget.enabled ? chrome.textColor : chrome.mutedColor,
-            );
+            color: widget.enabled
+              ? scheme.onSurface
+              : scheme.onSurfaceVariant,
+          );
 
         final query = _searchController.text.toLowerCase();
         final filtered = query.isEmpty
@@ -813,7 +873,7 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                   labelText: widget.label,
                   filled: true,
                   enabled: widget.enabled,
-                  fillColor: chrome.surfaceColor,
+                  fillColor: scheme.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                   errorText: state.errorText,
                 ),
@@ -826,7 +886,7 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Icon(Icons.filter_list, color: chrome.mutedColor),
+                    Icon(Icons.filter_list, color: scheme.onSurfaceVariant),
                   ],
                 ),
               ),
@@ -840,8 +900,9 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
             children: [
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: chrome.mutedColor.withOpacity(0.18),
+                  color: scheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: scheme.outlineVariant.withOpacity(0.7)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -854,11 +915,11 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                         decoration: InputDecoration(
                           hintText: 'Search for ${widget.label}',
                           filled: true,
-                          fillColor: chrome.surfaceColor,
+                          fillColor: scheme.surface,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          suffixIcon: Icon(Icons.filter_list, color: chrome.mutedColor),
+                          suffixIcon: Icon(Icons.filter_list, color: scheme.onSurfaceVariant),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -872,7 +933,7 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                                   child: Text(
                                     'No matches found',
                                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          color: chrome.mutedColor,
+                                            color: scheme.onSurfaceVariant,
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),
@@ -887,7 +948,7 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(vertical: 5),
                                     child: Material(
-                                      color: chrome.surfaceColor,
+                                        color: scheme.surface,
                                       borderRadius: BorderRadius.circular(14),
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(14),
@@ -901,7 +962,7 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                                             borderRadius: BorderRadius.circular(14),
                                             border: Border.all(
                                               color: isSelected
-                                                  ? chrome.textColor.withOpacity(0.55)
+                                                  ? scheme.primary.withOpacity(0.35)
                                                   : Colors.transparent,
                                             ),
                                           ),
@@ -915,12 +976,12 @@ class _SearchableSelectFieldState<T> extends State<_SearchableSelectField<T>> {
                                                       .bodyMedium
                                                       ?.copyWith(
                                                         fontWeight: FontWeight.w700,
-                                                        color: chrome.textColor,
+                                                        color: scheme.onSurface,
                                                       ),
                                                 ),
                                               ),
                                               if (isSelected)
-                                                Icon(Icons.check, color: chrome.textColor),
+                                                Icon(Icons.check, color: scheme.primary),
                                             ],
                                           ),
                                         ),

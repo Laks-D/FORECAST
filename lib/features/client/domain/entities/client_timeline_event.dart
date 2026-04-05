@@ -54,7 +54,7 @@ class ClientTimelineEvent {
         return status;
       case ClientTimelineEventType.payment:
         if (amount == null) return null;
-        return '₹$amount';
+        return amount!.toString();
       case ClientTimelineEventType.note:
         return note;
     }

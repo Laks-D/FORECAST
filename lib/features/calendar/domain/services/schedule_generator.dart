@@ -10,6 +10,7 @@ class ScheduleGenerator {
     required int weeklyDay, // DateTime.monday..sunday
     required int monthlyDate,
     required String clientId,
+    int startSessionNo = 1,
     int customDays = 1,
     SessionDuration? duration,
     ProgramType? programType,
@@ -18,6 +19,8 @@ class ScheduleGenerator {
   }) {
     final sessions = <ScheduleSession>[];
     var cursor = DateTime(startDate.year, startDate.month, startDate.day);
+
+    final baseSessionNo = startSessionNo <= 0 ? 1 : startSessionNo;
 
     final timeRange = _resolveTimeRange(timeSlot, duration);
 
@@ -41,7 +44,7 @@ class ScheduleGenerator {
       sessions.add(
         ScheduleSession(
           id: DateTime.now().millisecondsSinceEpoch + i,
-          sessionNo: i + 1,
+          sessionNo: baseSessionNo + i,
           clientId: clientId,
           status: 'Upcoming',
           time: timeRange,

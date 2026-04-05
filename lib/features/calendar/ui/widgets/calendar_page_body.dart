@@ -3,8 +3,11 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
+import '../../../../design_system/widgets/app_neumorphic_buttons.dart';
 import '../../../client/domain/entities/client.dart';
 import '../../../client/domain/usecases/get_clients_usecase.dart';
 import '../../../client/domain/entities/client_timeline_event.dart';
@@ -72,7 +75,7 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
             slivers: [
               SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 390,
+                  height: 360,
                   child: _CalendarTopCard(
                     mode: mode,
                     scheduleType: _scheduleType,
@@ -475,11 +478,8 @@ class _WeeklyTopContent extends StatelessWidget {
                 if (derived == 'Cancelled') continue;
                 dates.add(s.date);
                 sessionCounts[s.date] = (sessionCounts[s.date] ?? 0) + 1;
-                if (derived == 'Completed') {
-                  allCompletedMap[s.date] ??= true;
-                } else {
-                  allCompletedMap[s.date] = false;
-                }
+                allCompletedMap[s.date] =
+                    (allCompletedMap[s.date] ?? true) && (derived == 'Completed');
               }
               markerDates = dates;
             } else {
@@ -582,80 +582,119 @@ class _WeekDayChip extends StatelessWidget {
     const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
     final label = dayNames[date.weekday - 1];
     final chrome = AppChromeTheme.of(context);
+    final visual = AppVisualStyle.of(context);
+    final scheme = Theme.of(context).colorScheme;
 
-    final bg = selected ? VibrantColors.softBlue : Colors.transparent;
+    final completedHighlight = hasSessions && allCompleted && sessionCount > 0;
 
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(24),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  label,
-                  maxLines: 1,
-                  softWrap: false,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: selected ? Colors.black54 : chrome.textColor.withOpacity(0.5),
-                        fontWeight: FontWeight.w700,
-                        height: 1.0,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${date.day}',
-                  maxLines: 1,
-                  softWrap: false,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: selected ? Colors.black : chrome.textColor,
-                        fontWeight: FontWeight.w900,
-                        height: 1.0,
-                      ),
-                ),
-                if (hasSessions && sessionCount > 0) ...[
-                  const SizedBox(height: 2),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: allCompleted
-                          ? VibrantColors.pastelGreen
-                          : (selected
-                              ? Colors.black87
-                              : VibrantColors.warmYellow),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '$sessionCount',
-                      style: TextStyle(
-                        color: selected ? VibrantColors.softBlue : chrome.surfaceColor,
-                        fontSize: 8,
-                        fontWeight: FontWeight.w800,
-                        height: 1.2,
-                      ),
-                    ),
+    final bg = visual.neumorphism
+      ? (selected
+        ? scheme.surface
+        : (completedHighlight
+          ? VibrantColors.pastelGreen.withOpacity(0.14)
+          : Colors.transparent))
+      : (selected
+        ? VibrantColors.softBlue
+        : (completedHighlight
+          ? VibrantColors.pastelGreen.withOpacity(0.28)
+          : Colors.transparent));
+
+    final boxShadows = (visual.neumorphism && selected)
+        ? AppVisualStyle.neumorphicShadows(
+            context,
+            blurRadius: 18,
+            offset: const Offset(6, 6),
+          )
+        : null;
+
+    final border = completedHighlight
+      ? Border.all(color: VibrantColors.pastelGreen.withOpacity(0.85), width: 1)
+      : ((visual.neumorphism && selected)
+        ? Border.all(color: scheme.outlineVariant.withOpacity(0.55), width: 1)
+        : null);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(24),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: bg,
+            border: border,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: boxShadows,
+          ),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: selected
+                              ? (visual.neumorphism ? scheme.primary.withOpacity(0.75) : Colors.black54)
+                              : chrome.textColor.withOpacity(0.5),
+                          fontWeight: FontWeight.w700,
+                          height: 1.0,
+                        ),
                   ),
-                ] else if (hasSessions) ...[
-                  const SizedBox(height: 2),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? Colors.black87
-                          : VibrantColors.warmYellow,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: const SizedBox(height: 5, width: 5),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${date.day}',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: selected
+                              ? (visual.neumorphism ? scheme.primary : Colors.black)
+                              : chrome.textColor,
+                          fontWeight: FontWeight.w900,
+                          height: 1.0,
+                        ),
                   ),
+                  if (hasSessions && sessionCount > 0) ...[
+                    const SizedBox(height: 2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: allCompleted
+                            ? VibrantColors.pastelGreen
+                            : (selected
+                                ? (visual.neumorphism ? scheme.primary : Colors.black87)
+                                : VibrantColors.warmYellow),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '$sessionCount',
+                        style: TextStyle(
+                          color: selected
+                              ? (visual.neumorphism ? scheme.onPrimary : VibrantColors.softBlue)
+                              : chrome.surfaceColor,
+                          fontSize: 8,
+                          fontWeight: FontWeight.w800,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ] else if (hasSessions) ...[
+                    const SizedBox(height: 2),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? (visual.neumorphism ? scheme.primary : Colors.black87)
+                            : VibrantColors.warmYellow,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: const SizedBox(height: 5, width: 5),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -692,11 +731,8 @@ class _MonthlyTopContent extends StatelessWidget {
                 if (derived == 'Cancelled') continue;
                 dates.add(s.date);
                 sessionCounts[s.date] = (sessionCounts[s.date] ?? 0) + 1;
-                if (derived == 'Completed') {
-                  allCompletedMap[s.date] ??= true;
-                } else {
-                  allCompletedMap[s.date] = false;
-                }
+                allCompletedMap[s.date] =
+                    (allCompletedMap[s.date] ?? true) && (derived == 'Completed');
               }
               markerDates = dates;
             } else {
@@ -742,7 +778,7 @@ class _MonthlyTopContent extends StatelessWidget {
                     builder: (context, constraints) {
                       const spacing = 6.0;
                       final usableH = constraints.maxHeight - spacing * (rows - 1);
-                      final computedCellH = (usableH / rows).clamp(36.0, 56.0);
+                      final computedCellH = (usableH / rows).clamp(36.0, 52.0);
                       final cellH = computedCellH;
 
                       return GridView.builder(
@@ -844,68 +880,109 @@ class _MonthDayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-    
-    final bg = selected ? VibrantColors.softBlue : Colors.transparent;
-    final textColor = inMonth
-        ? (selected ? Colors.black : (chrome.textColor))
-        : (chrome.mutedColor).withOpacity(0.3);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
 
-    return InkWell(
-      onTap: inMonth ? onTap : null,
-      borderRadius: BorderRadius.circular(24),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: Center(
-          child: FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  inMonth ? '$day' : '',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        color: textColor,
-                        fontWeight: FontWeight.w900,
-                        height: 1.0,
-                      ),
-                ),
-                if (hasSessions && inMonth) ...[
-                  const SizedBox(height: 4),
-                  if (sessionCount > 1)
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: allCompleted
-                          ? VibrantColors.pastelGreen
-                            : (selected ? Colors.black87 : VibrantColors.warmYellow),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                        child: Text(
-                          '$sessionCount',
-                          style: TextStyle(
-                            color: selected ? VibrantColors.softBlue : chrome.surfaceColor,
-                            fontSize: 8,
-                            fontWeight: FontWeight.w800,
-                            height: 1.2,
+    final completedHighlight = inMonth && hasSessions && allCompleted && sessionCount > 0;
+
+    final bg = visual.neumorphism
+      ? (selected
+        ? scheme.surface
+        : (completedHighlight
+          ? VibrantColors.pastelGreen.withOpacity(0.14)
+          : Colors.transparent))
+      : (selected
+        ? VibrantColors.softBlue
+        : (completedHighlight
+          ? VibrantColors.pastelGreen.withOpacity(0.22)
+          : Colors.transparent));
+
+    final boxShadows = (visual.neumorphism && selected)
+        ? AppVisualStyle.neumorphicShadows(
+            context,
+            blurRadius: 18,
+            offset: const Offset(6, 6),
+          )
+        : null;
+
+    final border = completedHighlight
+      ? Border.all(color: VibrantColors.pastelGreen.withOpacity(0.85), width: 1)
+      : ((visual.neumorphism && selected)
+        ? Border.all(color: scheme.outlineVariant.withOpacity(0.55), width: 1)
+        : null);
+
+    final textColor = inMonth
+        ? (selected
+            ? (visual.neumorphism ? scheme.primary : Colors.black)
+        : scheme.onSurface)
+      : scheme.onSurfaceVariant.withOpacity(0.3);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: inMonth ? onTap : null,
+        borderRadius: BorderRadius.circular(24),
+        child: Ink(
+          decoration: BoxDecoration(
+            color: bg,
+            border: border,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: boxShadows,
+          ),
+          child: Center(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    inMonth ? '$day' : '',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: textColor,
+                          fontWeight: FontWeight.w900,
+                          height: 1.0,
+                        ),
+                  ),
+                  if (hasSessions && inMonth) ...[
+                    const SizedBox(height: 4),
+                    if (sessionCount > 1)
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: allCompleted
+                              ? VibrantColors.pastelGreen
+                              : (selected
+                                  ? (visual.neumorphism ? scheme.primary : Colors.black87)
+                                  : VibrantColors.warmYellow),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                          child: Text(
+                            '$sessionCount',
+                            style: TextStyle(
+                              color: selected
+                                  ? (visual.neumorphism ? scheme.onPrimary : VibrantColors.softBlue)
+                                  : scheme.surface,
+                              fontSize: 8,
+                              fontWeight: FontWeight.w800,
+                              height: 1.2,
+                            ),
                           ),
                         ),
+                      )
+                    else
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: selected
+                              ? (visual.neumorphism ? scheme.primary : Colors.black87)
+                              : VibrantColors.warmYellow,
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: const SizedBox(height: 5, width: 5),
                       ),
-                    )
-                  else
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: selected ? Colors.black87 : VibrantColors.warmYellow,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: const SizedBox(height: 5, width: 5),
-                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),
@@ -952,10 +1029,15 @@ class _CalendarBottomCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
+    final visual = AppVisualStyle.of(context);
+    final pageBg = Theme.of(context).scaffoldBackgroundColor;
 
-    final content = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+    final content = DecoratedBox(
+      decoration: BoxDecoration(color: pageBg),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
         child: BlocBuilder<CalendarCubit, CalendarState>(
           builder: (context, calendarState) {
             final selectedDate = calendarState.selectedDate;
@@ -1074,65 +1156,139 @@ class _CalendarBottomCard extends StatelessWidget {
                       ),
                     ),
                     if (scheduleType == _ScheduleCalendarType.classSchedule)
-                      OutlinedButton.icon(
-                        onPressed: openScheduleSheet,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: chrome.textColor,
-                          side: BorderSide(color: chrome.mutedColor.withOpacity(0.25)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
+                      (AppVisualStyle.of(context).neumorphism)
+                          ? AppNeumorphicPillButton(
+                              icon: Icons.add,
+                              label: 'Add',
+                              onPressed: openScheduleSheet,
+                            )
+                          : OutlinedButton.icon(
+                              onPressed: openScheduleSheet,
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: chrome.textColor,
+                                side: BorderSide(
+                                  color: chrome.mutedColor.withOpacity(0.25),
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
                     if (scheduleType == _ScheduleCalendarType.paymentSchedule)
-                      OutlinedButton.icon(
-                        onPressed: () async {
-                          final calendarCubit = context.read<CalendarCubit>();
-                          final sessionsCubit = context.read<SessionsCubit>();
-                          final clientBloc = context.read<ClientBloc>();
-                          await showModalBottomSheet<void>(
-                            context: context,
-                            isScrollControlled: true,
-                            backgroundColor: Colors.transparent,
-                            builder: (ctx) {
-                              return Padding(
-                                padding: EdgeInsets.only(
-                                  bottom: MediaQuery.of(ctx).viewInsets.bottom,
+                      (AppVisualStyle.of(context).neumorphism)
+                          ? AppNeumorphicPillButton(
+                              icon: Icons.add,
+                              label: 'Add',
+                              onPressed: () async {
+                                final calendarCubit =
+                                    context.read<CalendarCubit>();
+                                final sessionsCubit =
+                                    context.read<SessionsCubit>();
+                                final clientBloc = context.read<ClientBloc>();
+                                await showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (ctx) {
+                                    return Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: MediaQuery.of(ctx)
+                                            .viewInsets
+                                            .bottom,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(28),
+                                        ),
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(ctx).scaffoldBackgroundColor,
+                                          ),
+                                          child: BlocProvider.value(
+                                            value: calendarCubit,
+                                            child: BlocProvider.value(
+                                              value: sessionsCubit,
+                                              child: BlocProvider.value(
+                                                value: clientBloc,
+                                                child: _AddPaymentSheet(
+                                                  selectedDate: selectedDate,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                            )
+                          : OutlinedButton.icon(
+                              onPressed: () async {
+                                final calendarCubit =
+                                    context.read<CalendarCubit>();
+                                final sessionsCubit =
+                                    context.read<SessionsCubit>();
+                                final clientBloc = context.read<ClientBloc>();
+                                await showModalBottomSheet<void>(
+                                  context: context,
+                                  isScrollControlled: true,
+                                  backgroundColor: Colors.transparent,
+                                  builder: (ctx) {
+                                    return Padding(
+                                      padding: EdgeInsets.only(
+                                        bottom: MediaQuery.of(ctx)
+                                            .viewInsets
+                                            .bottom,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: const BorderRadius.vertical(
+                                          top: Radius.circular(28),
+                                        ),
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(ctx).scaffoldBackgroundColor,
+                                          ),
+                                          child: BlocProvider.value(
+                                            value: calendarCubit,
+                                            child: BlocProvider.value(
+                                              value: sessionsCubit,
+                                              child: BlocProvider.value(
+                                                value: clientBloc,
+                                                child: _AddPaymentSheet(
+                                                  selectedDate: selectedDate,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                );
+                              },
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Add'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: chrome.textColor,
+                                side: BorderSide(
+                                  color: chrome.mutedColor.withOpacity(0.25),
                                 ),
-                                child: BlocProvider.value(
-                                  value: calendarCubit,
-                                  child: BlocProvider.value(
-                                    value: sessionsCubit,
-                                    child: BlocProvider.value(
-                                      value: clientBloc,
-                                      child: _AddPaymentSheet(selectedDate: selectedDate),
-                                    ),
-                                  ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(999),
                                 ),
-                              );
-                            },
-                          );
-                        },
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('Add'),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: chrome.textColor,
-                          side: BorderSide(color: chrome.mutedColor.withOpacity(0.25)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                        ),
-                      ),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 10,
+                                ),
+                              ),
+                            ),
                   ],
                 ),
                 // Add Payment Sheet for scheduling a payment for a client
@@ -1218,25 +1374,36 @@ class _CalendarBottomCard extends StatelessWidget {
                                 final colorIndex = name.length % avatarColors.length;
                                 final avatarBg = avatarColors[colorIndex];
 
-                                return DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: chrome.surfaceColor,
+                                final rowShadows = visual.neumorphism
+                                    ? AppVisualStyle.neumorphicShadows(
+                                        context,
+                                        blurRadius: 18,
+                                        offset: const Offset(6, 6),
+                                      )
+                                    : <BoxShadow>[
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.08),
+                                          blurRadius: 18,
+                                          offset: const Offset(0, 8),
+                                        ),
+                                      ];
+
+                                return Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () => openRescheduleSheet(s),
                                     borderRadius: BorderRadius.circular(24),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.2),
-                                        blurRadius: 10,
-                                        offset: const Offset(0, 4),
+                                    child: Ink(
+                                      decoration: BoxDecoration(
+                                        color: scheme.surface,
+                                        borderRadius: BorderRadius.circular(24),
+                                        boxShadow: rowShadows,
                                       ),
-                                    ]
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () => openRescheduleSheet(s),
-                                      borderRadius: BorderRadius.circular(24),
                                       child: Padding(
-                                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 16,
+                                        ),
                                         child: Row(
                                           children: [
                                             Container(
@@ -1259,22 +1426,33 @@ class _CalendarBottomCard extends StatelessWidget {
                                             const SizedBox(width: 16),
                                             Expanded(
                                               child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
                                                 children: [
                                                   Text(
                                                     name,
-                                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                                          color: chrome.textColor,
-                                                          fontWeight: FontWeight.w800,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodyLarge
+                                                        ?.copyWith(
+                                                          color:
+                                                              chrome.textColor,
+                                                          fontWeight:
+                                                              FontWeight.w800,
                                                           fontSize: 16,
                                                         ),
                                                   ),
                                                   const SizedBox(height: 4),
                                                   Text(
                                                     '$dateLabel${s.time} • $derivedStatus',
-                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          color: chrome.mutedColor,
-                                                          fontWeight: FontWeight.w600,
+                                                    style: Theme.of(context)
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          color:
+                                                              chrome.mutedColor,
+                                                          fontWeight:
+                                                              FontWeight.w600,
                                                         ),
                                                   ),
                                                 ],
@@ -1285,7 +1463,7 @@ class _CalendarBottomCard extends StatelessWidget {
                                       ),
                                     ),
                                   ),
-                                  );
+                                );
                                },
                              );
 
@@ -1302,8 +1480,9 @@ class _CalendarBottomCard extends StatelessWidget {
                 ),
                ],
              );
-           },
-         ),
+          },
+        ),
+      ),
     );
 
     return content;
@@ -1353,7 +1532,8 @@ class _PaymentScheduleList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
     final clients = sl<GetClientsUseCase>().execute();
     final clientMap = {for (final c in clients) c.id: c};
 
@@ -1445,12 +1625,15 @@ class _PaymentScheduleList extends StatelessWidget {
               ? 'No payments this week.'
               : 'No payments for this day.',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: chrome.mutedColor,
+                color: scheme.onSurfaceVariant,
                 fontWeight: FontWeight.w700,
               ),
         ),
       );
     }
+
+    final defaultCurrency =
+        context.select((UserProfileCubit c) => c.state.currency);
     return ListView.separated(
       itemCount: rows.length,
       shrinkWrap: isSliverWrap,
@@ -1462,7 +1645,10 @@ class _PaymentScheduleList extends StatelessWidget {
         final p = row.item;
         final client = row.client;
         final status = row.status;
-        final amountLabel = p.amount == null ? 'No amount' : '₹${p.amount!.toStringAsFixed(0)}';
+        final rowCurrency = client.currency ?? defaultCurrency;
+        final amountLabel = p.amount == null
+          ? 'No amount'
+          : '${rowCurrency}${p.amount!.toStringAsFixed(0)}';
         final resetLabel = () {
           final now = DateTime.now();
           final today = DateTime(now.year, now.month, now.day);
@@ -1511,163 +1697,204 @@ class _PaymentScheduleList extends StatelessWidget {
         final colorIndex = p.clientName.length % avatarColors.length;
         final avatarBg = avatarColors[colorIndex];
 
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: chrome.surfaceColor,
+        final rowShadows = visual.neumorphism
+            ? AppVisualStyle.neumorphicShadows(
+                context,
+                blurRadius: 18,
+                offset: const Offset(6, 6),
+              )
+            : <BoxShadow>[
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ];
+
+        return Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: openReschedule,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.2),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+            child: Ink(
+              decoration: BoxDecoration(
+                color: scheme.surface,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: rowShadows,
               ),
-            ]
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-              child: Row(
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: avatarBg,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      p.clientName.isNotEmpty ? p.clientName[0].toUpperCase() : 'C',
-                      style: const TextStyle(
-                        color: Color(0xFF111827),
-                        fontSize: 24,
-                        fontWeight: FontWeight.w900,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: avatarBg,
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          p.clientName,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: chrome.textColor,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 16,
-                              ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        p.clientName.isNotEmpty
+                            ? p.clientName[0].toUpperCase()
+                            : 'C',
+                        style: const TextStyle(
+                          color: Color(0xFF111827),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          p.note != null && p.note!.trim().isNotEmpty
-                              ? '$amountLabel • ${p.note!.trim()}'
-                              : amountLabel,
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: chrome.mutedColor,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: status,
-                      icon: Icon(Icons.keyboard_arrow_down, color: chrome.mutedColor),
-                      dropdownColor: chrome.surfaceColor,
-                      style: TextStyle(
-                        color: isPaidOrPast ? VibrantColors.pastelGreen : VibrantColors.warmYellow,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 14,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            p.clientName,
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: scheme.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 16,
+                                ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            p.note != null && p.note!.trim().isNotEmpty
+                                ? '$amountLabel • ${p.note!.trim()}'
+                                : amountLabel,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: scheme.onSurfaceVariant,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
                       ),
-                      items: [
-                        DropdownMenuItem(value: resetLabel, child: Text(resetLabel)),
-                        const DropdownMenuItem(value: 'Paid', child: Text('Paid')),
-                        const DropdownMenuItem(value: 'Paid fully', child: Text('Paid fully')),
-                        const DropdownMenuItem(value: 'Will pay later', child: Text('Will pay later')),
-                      ],
-                      onChanged: (v) {
-                  if (v == null) return;
+                    ),
+                    const SizedBox(width: 12),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: status,
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        dropdownColor: scheme.surface,
+                        style: TextStyle(
+                          color: isPaidOrPast
+                              ? VibrantColors.pastelGreen
+                              : VibrantColors.warmYellow,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: resetLabel,
+                            child: Text(resetLabel),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Paid',
+                            child: Text('Paid'),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Paid fully',
+                            child: Text('Paid fully'),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Will pay later',
+                            child: Text('Will pay later'),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
 
-                  if (v == resetLabel) {
-                    try {
-                      context.read<ClientBloc>().add(ClearPaymentStatusForDate(
-                        entityId: client.id,
-                        date: p.date,
-                        paymentId: p.paymentEventId,
-                      ));
-                    } catch (_) {}
+                          if (v == resetLabel) {
+                            try {
+                              context.read<ClientBloc>().add(
+                                    ClearPaymentStatusForDate(
+                                      entityId: client.id,
+                                      date: p.date,
+                                      paymentId: p.paymentEventId,
+                                    ),
+                                  );
+                            } catch (_) {}
 
-                    try {
-                      context.read<CalendarCubit>().refresh();
-                    } catch (_) {}
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        duration: const Duration(seconds: 1),
-                        content: Text('Payment reset to $resetLabel for ${AppDateUtils.displayDate(p.date)}'),
+                            try {
+                              context.read<CalendarCubit>().refresh();
+                            } catch (_) {}
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                duration: const Duration(seconds: 1),
+                                content: Text(
+                                  'Payment reset to $resetLabel for ${AppDateUtils.displayDate(p.date)}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (v == 'Will pay later') {
+                            if (isPaidOrPast) {
+                              context.read<ClientBloc>().add(
+                                    ClearPaymentStatusForDate(
+                                      entityId: client.id,
+                                      date: p.date,
+                                      paymentId: p.paymentEventId,
+                                    ),
+                                  );
+                            }
+                            openReschedule();
+                            return;
+                          }
+
+                          if (v == 'Paid') {
+                            context.read<ClientBloc>().add(
+                                  UpdateClientStatus(
+                                    entityId: client.id,
+                                    status: 'Paid',
+                                    createdAt: p.date,
+                                    refId: p.paymentEventId,
+                                  ),
+                                );
+                            try {
+                              context.read<CalendarCubit>().refresh();
+                            } catch (_) {}
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                duration: const Duration(seconds: 1),
+                                content: Text(
+                                  'Payment marked Paid for ${AppDateUtils.displayDate(p.date)}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (v == 'Paid fully') {
+                            context.read<ClientBloc>().add(
+                                  MarkClientPaidFully(
+                                    entityId: client.id,
+                                    fromDate: p.date,
+                                  ),
+                                );
+                            try {
+                              context.read<CalendarCubit>().refresh();
+                            } catch (_) {}
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                duration: const Duration(seconds: 1),
+                                content: Text(
+                                  'Marked Paid for all payments on ${AppDateUtils.displayDate(p.date)}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                        },
                       ),
-                    );
-                    return;
-                  }
-
-                  if (v == 'Will pay later') {
-                    // If currently paid, clear the status first.
-                    if (isPaidOrPast) {
-                      context.read<ClientBloc>().add(ClearPaymentStatusForDate(
-                        entityId: client.id,
-                        date: p.date,
-                        paymentId: p.paymentEventId,
-                      ));
-                    }
-                    openReschedule();
-                    return;
-                  }
-
-                  if (v == 'Paid') {
-                    // Do not add another payment entry; the scheduled payment already exists.
-                    // Only mark this scheduled payment as paid.
-                    context.read<ClientBloc>().add(UpdateClientStatus(
-                      entityId: client.id,
-                      status: 'Paid',
-                      createdAt: p.date,
-                      refId: p.paymentEventId,
-                    ));
-                    try {
-                      context.read<CalendarCubit>().refresh();
-                    } catch (_) {}
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        duration: const Duration(seconds: 1),
-                        content: Text('Payment marked Paid for ${AppDateUtils.displayDate(p.date)}'),
-                      ),
-                    );
-                    return;
-                  }
-
-                  if (v == 'Paid fully') {
-                    // Mark all payments on this date as paid.
-                    context.read<ClientBloc>().add(MarkClientPaidFully(
-                      entityId: client.id,
-                      fromDate: p.date,
-                    ));
-                    try {
-                      context.read<CalendarCubit>().refresh();
-                    } catch (_) {}
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        duration: const Duration(seconds: 1),
-                        content: Text('Marked Paid for all payments on ${AppDateUtils.displayDate(p.date)}'),
-                      ),
-                    );
-                    return;
-                  }
-                },
-              ),
-            ),
-                ],
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1778,15 +2005,23 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xFF111214),
+            color: scheme.surface,
             borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+            boxShadow: visual.neumorphism
+                ? AppVisualStyle.neumorphicShadows(
+                    context,
+                    blurRadius: 22,
+                    offset: const Offset(10, 10),
+                    highlightOpacityLight: 0.55,
+                  )
+                : null,
           ),
           child: Padding(
             padding: const EdgeInsets.all(20.0),
@@ -1800,14 +2035,14 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
                       child: Text(
                         'Reschedule Payment',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: chrome.textColor,
+                              color: scheme.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close, color: chrome.mutedColor),
+                      icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -1817,7 +2052,7 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
                   child: OutlinedButton(
                     style: OutlinedButton.styleFrom(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      side: BorderSide(color: chrome.mutedColor.withOpacity(0.25)),
+                      side: BorderSide(color: scheme.outlineVariant.withOpacity(0.7)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     onPressed: () async {
@@ -1841,8 +2076,8 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
                   child: ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      backgroundColor: chrome.surfaceColor,
-                      foregroundColor: chrome.textColor,
+                      backgroundColor: scheme.surfaceContainerHighest,
+                      foregroundColor: scheme.onSurface,
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                     onPressed: _save,
@@ -1973,7 +2208,8 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
     final durationMinutes = _durationMinutesForSession();
     final startLabel = AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes);
     final timeRangeLabel = AppDateUtils.formatTimeRangeFromStartAndDuration(
@@ -1997,9 +2233,16 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         decoration: BoxDecoration(
-          color: const Color(0xFF111214),
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+          boxShadow: visual.neumorphism
+              ? AppVisualStyle.neumorphicShadows(
+                  context,
+                  blurRadius: 22,
+                  offset: const Offset(10, 10),
+                  highlightOpacityLight: 0.55,
+                )
+              : null,
         ),
         padding: const EdgeInsets.all(20.0),
         child: BlocBuilder<SessionsCubit, SessionsState>(
@@ -2017,14 +2260,14 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
                       child: Text(
                         'Reschedule class',
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: chrome.textColor,
+                              color: scheme.onSurface,
                               fontWeight: FontWeight.w800,
                             ),
                       ),
                     ),
                     IconButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: Icon(Icons.close, color: chrome.mutedColor),
+                      icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
                     ),
                   ],
                 ),
@@ -2034,8 +2277,8 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
                   icon: const Icon(Icons.calendar_month_outlined, size: 18),
                   label: Text('Date: ${AppDateUtils.displayDate(_date)}'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: chrome.textColor,
-                    side: BorderSide(color: chrome.mutedColor.withOpacity(0.35)),
+                    foregroundColor: scheme.onSurface,
+                    side: BorderSide(color: scheme.outlineVariant.withOpacity(0.7)),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
@@ -2063,7 +2306,7 @@ class _RescheduleSessionSheetState extends State<_RescheduleSessionSheet> {
                               style: Theme.of(context).textTheme.bodyLarge,
                             ),
                           ),
-                          Icon(Icons.access_time, color: chrome.mutedColor),
+                          Icon(Icons.access_time, color: scheme.onSurfaceVariant),
                         ],
                       ),
                     ),
@@ -2205,7 +2448,10 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
     };
     if (profile != null && mounted) {
       setState(() {
-        _currency = currencyMap[profile.nationality] ?? '₹';
+        final saved = profile.currency.trim();
+        _currency = saved.isNotEmpty
+            ? saved
+            : (currencyMap[profile.nationality] ?? '₹');
       });
     }
   }
@@ -2521,365 +2767,385 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
     return SafeArea(
       child: Container(
         margin: const EdgeInsets.fromLTRB(16, 16, 16, 20),
         decoration: BoxDecoration(
-          color: const Color(0xFF111214),
+          color: scheme.surface,
           borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
+          boxShadow: visual.neumorphism
+              ? AppVisualStyle.neumorphicShadows(
+                  context,
+                  blurRadius: 22,
+                  offset: const Offset(10, 10),
+                  highlightOpacityLight: 0.55,
+                )
+              : null,
         ),
         padding: const EdgeInsets.all(20.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Schedule Payment',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: chrome.textColor,
-                            fontWeight: FontWeight.w800,
-                          ),
-                    ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Schedule Payment',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: scheme.onSurface,
+                          fontWeight: FontWeight.w800,
+                        ),
                   ),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: Icon(Icons.close, color: chrome.mutedColor),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Builder(
-                builder: (ctx) {
-                  final availableClients = clients;
-                  final selectedClient = availableClients.cast<Client?>().firstWhere(
-                        (c) => c?.id == _clientId,
-                        orElse: () => null,
-                      );
-
-                  return _PaymentSearchableSelectField<String>(
-                    label: 'Client',
-                    value: _clientId,
-                    displayValue: selectedClient?.name ?? '',
-                    options: availableClients
-                        .map((c) => _PaymentOptionItem(value: c.id, label: c.name))
-                        .toList(growable: false),
-                    onChanged: _onClientChanged,
-                  );
-                },
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: DropdownButtonFormField<String>(
-                      value: _frequency,
-                      decoration: InputDecoration(
-                        labelText: 'Frequency',
-                        filled: true,
-                        fillColor: chrome.surfaceColor,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'Daily', child: Text('Daily')),
-                        DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
-                        DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
-                        DropdownMenuItem(value: 'Custom', child: Text('Custom')),
-                      ],
-                      onChanged: (v) {
-                        setState(() {
-                          _frequency = v ?? 'Monthly';
-                          _clearDraft();
-                        });
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 1,
-                    child: DropdownButtonFormField<String>(
-                      value: _currency,
-                      decoration: InputDecoration(
-                        labelText: 'Currency',
-                        filled: true,
-                        fillColor: chrome.surfaceColor,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: '₹', child: Text('₹ (INR)')),
-                        DropdownMenuItem(value: r'$', child: Text(r'$ (USD)')),
-                        DropdownMenuItem(value: '€', child: Text('€ (EUR)')),
-                        DropdownMenuItem(value: '£', child: Text('£ (GBP)')),
-                        DropdownMenuItem(value: 'د.إ', child: Text('د.إ (AED)')),
-                      ],
-                      onChanged: (v) {
-                        setState(() {
-                          _currency = v ?? '₹';
-                          _clearDraft();
-                        });
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              if (_frequency == 'Custom') ...[
-                const SizedBox(height: 12),
-                TextFormField(
-                  initialValue: _customDays.toString(),
-                  keyboardType: TextInputType.number,
-                  decoration: InputDecoration(
-                    labelText: 'Repeat every (days)',
-                    filled: true,
-                    fillColor: chrome.surfaceColor,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  onChanged: (v) {
-                    final val = int.tryParse(v);
-                    if (val != null && val > 0) {
-                      setState(() {
-                        _customDays = val;
-                        _clearDraft();
-                      });
-                    }
-                  },
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.close, color: scheme.onSurfaceVariant),
                 ),
               ],
-              const SizedBox(height: 12),
-              if (_frequency == 'Weekly')
-                DropdownButtonFormField<int>(
-                  value: _weeklyDay,
-                  decoration: InputDecoration(
-                    labelText: 'Day of the week',
-                    filled: true,
-                    fillColor: chrome.surfaceColor,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  items: const [
-                    DropdownMenuItem(value: DateTime.monday, child: Text('Monday')),
-                    DropdownMenuItem(value: DateTime.tuesday, child: Text('Tuesday')),
-                    DropdownMenuItem(value: DateTime.wednesday, child: Text('Wednesday')),
-                    DropdownMenuItem(value: DateTime.thursday, child: Text('Thursday')),
-                    DropdownMenuItem(value: DateTime.friday, child: Text('Friday')),
-                    DropdownMenuItem(value: DateTime.saturday, child: Text('Saturday')),
-                    DropdownMenuItem(value: DateTime.sunday, child: Text('Sunday')),
-                  ],
-                  onChanged: (v) {
-                    if (v == null) return;
-                    setState(() {
-                      _weeklyDay = v;
-                      _clearDraft();
-                    });
-                  },
-                )
-              else if (_frequency == 'Monthly')
-                _PaymentNumberField(
-                  label: 'Day of the month',
-                  value: _monthlyDate,
-                  min: 1,
-                  max: 31,
-                  onChanged: (v) => setState(() {
-                    _monthlyDate = v;
-                    _clearDraft();
-                  }),
-                )
-              else
-                const SizedBox.shrink(),
-              const SizedBox(height: 12),
-              Row(
+            ),
+            const SizedBox(height: 8),
+            Form(
+              key: _formKey,
+              child: Column(
                 children: [
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        TextFormField(
-                          controller: _fullAmountController,
-                          focusNode: _fullAmountFocus,
-                          enabled: !_hasFrequentText,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                          decoration: InputDecoration(
-                            labelText: 'Total amount',
-                            filled: true,
-                            fillColor: chrome.surfaceColor,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                        if (_hasFrequentText)
-                          Positioned.fill(
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(16),
-                                onTap: () async {
-                                  final ok = await _confirmOverride(
-                                    message: 'Amount per payment is already filled. Override it? This will clear Amount per payment.',
-                                  );
-                                  if (!ok) return;
-                                  setState(() {
-                                    _frequentAmountController.clear();
-                                    _clearDraft();
-                                  });
-                                  _fullAmountFocus.requestFocus();
-                                },
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Stack(
-                      children: [
-                        TextFormField(
-                          controller: _frequentAmountController,
-                          focusNode: _frequentAmountFocus,
-                          enabled: !_hasTotalText,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.]'))],
-                          decoration: InputDecoration(
-                            labelText: 'Amount per payment',
-                            filled: true,
-                            fillColor: chrome.surfaceColor,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-                          ),
-                        ),
-                        if (_hasTotalText)
-                          Positioned.fill(
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                borderRadius: BorderRadius.circular(16),
-                                onTap: () async {
-                                  final ok = await _confirmOverride(
-                                    message: 'Total amount is already filled. Override it? This will clear Total amount.',
-                                  );
-                                  if (!ok) return;
-                                  setState(() {
-                                    _fullAmountController.clear();
-                                    _clearDraft();
-                                  });
-                                  _frequentAmountFocus.requestFocus();
-                                },
-                              ),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _PaymentNumberField(
-                label: 'Number of payments',
-                value: _times,
-                min: 1,
-                max: 60,
-                enabled: _hasTotalText || _hasFrequentText,
-                onChanged: (v) => setState(() {
-                  _times = v;
-                  _clearDraft();
-                }),
-              ),
-              if (_draftDates.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text(
-                  'Preview',
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        color: chrome.textColor,
-                      ),
-                ),
-                const SizedBox(height: 8),
-                ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.separated(
-                    shrinkWrap: true,
-                    itemCount: _draftDates.length,
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (context, i) {
-                      final d = _draftDates[i];
-                      final key = AppDateUtils.dateToStr(_normalizeDay(d));
-                      final isClash = _draftClashKeys.contains(key);
-                      return DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: chrome.surfaceColor,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isClash ? VibrantColors.softPink.withOpacity(0.55) : chrome.mutedColor.withOpacity(0.12),
-                          ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  key,
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: isClash ? VibrantColors.softPink : chrome.textColor,
-                                        fontWeight: FontWeight.w800,
-                                      ),
-                                ),
-                              ),
-                              Text(
-                                '${_currency}${_draftAmount.toStringAsFixed(0)}',
-                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                      color: isClash ? VibrantColors.softPink : chrome.textColor,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
+                  Builder(
+                    builder: (ctx) {
+                      final availableClients = clients;
+                      final selectedClient = availableClients.cast<Client?>().firstWhere(
+                            (c) => c?.id == _clientId,
+                            orElse: () => null,
+                          );
+
+                      return _PaymentSearchableSelectField<String>(
+                        label: 'Client',
+                        value: _clientId,
+                        displayValue: selectedClient?.name ?? '',
+                        options: availableClients
+                            .map((c) => _PaymentOptionItem(value: c.id, label: c.name))
+                            .toList(growable: false),
+                        onChanged: _onClientChanged,
                       );
                     },
                   ),
-                ),
-              ],
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        side: BorderSide(color: chrome.mutedColor.withOpacity(0.35)),
-                        foregroundColor: chrome.textColor,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _frequency,
+                          decoration: InputDecoration(
+                            labelText: 'Frequency',
+                            filled: true,
+                            fillColor: scheme.surfaceContainerHighest,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'Daily', child: Text('Daily')),
+                            DropdownMenuItem(value: 'Weekly', child: Text('Weekly')),
+                            DropdownMenuItem(value: 'Monthly', child: Text('Monthly')),
+                            DropdownMenuItem(value: 'Custom', child: Text('Custom')),
+                          ],
+                          onChanged: (v) {
+                            setState(() {
+                              _frequency = v ?? 'Monthly';
+                              _clearDraft();
+                            });
+                          },
+                        ),
                       ),
-                      onPressed: _generateDraft,
-                      child: const Text('Generate'),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _currency,
+                          decoration: InputDecoration(
+                            labelText: 'Currency',
+                            filled: true,
+                            fillColor: scheme.surfaceContainerHighest,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: '₹', child: Text('₹ (INR)')),
+                            DropdownMenuItem(value: r'$', child: Text(r'$ (USD)')),
+                            DropdownMenuItem(value: '€', child: Text('€ (EUR)')),
+                            DropdownMenuItem(value: '£', child: Text('£ (GBP)')),
+                            DropdownMenuItem(value: 'د.إ', child: Text('د.إ (AED)')),
+                          ],
+                          onChanged: (v) {
+                            setState(() {
+                              _currency = v ?? '₹';
+                              _clearDraft();
+                            });
+                          },
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      style: FilledButton.styleFrom(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        backgroundColor: VibrantColors.warmYellow,
-                        foregroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
+                  if (_frequency == 'Custom') ...[
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      initialValue: _customDays.toString(),
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Repeat every (days)',
+                        filled: true,
+                        fillColor: scheme.surfaceContainerHighest,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                       ),
-                      onPressed:
-                          (_draftDates.isEmpty || _draftClashKeys.isNotEmpty) ? null : _saveDraft,
-                      child: const Text(
-                        'Save',
-                        style: TextStyle(fontWeight: FontWeight.w900),
-                      ),
+                      onChanged: (v) {
+                        final val = int.tryParse(v);
+                        if (val != null && val > 0) {
+                          setState(() {
+                            _customDays = val;
+                            _clearDraft();
+                          });
+                        }
+                      },
                     ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (_frequency == 'Weekly')
+                    DropdownButtonFormField<int>(
+                      value: _weeklyDay,
+                      decoration: InputDecoration(
+                        labelText: 'Day of the week',
+                        filled: true,
+                        fillColor: scheme.surfaceContainerHighest,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: DateTime.monday, child: Text('Monday')),
+                        DropdownMenuItem(value: DateTime.tuesday, child: Text('Tuesday')),
+                        DropdownMenuItem(value: DateTime.wednesday, child: Text('Wednesday')),
+                        DropdownMenuItem(value: DateTime.thursday, child: Text('Thursday')),
+                        DropdownMenuItem(value: DateTime.friday, child: Text('Friday')),
+                        DropdownMenuItem(value: DateTime.saturday, child: Text('Saturday')),
+                        DropdownMenuItem(value: DateTime.sunday, child: Text('Sunday')),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _weeklyDay = v;
+                          _clearDraft();
+                        });
+                      },
+                    )
+                  else if (_frequency == 'Monthly')
+                    _PaymentNumberField(
+                      label: 'Day of the month',
+                      value: _monthlyDate,
+                      min: 1,
+                      max: 31,
+                      onChanged: (v) => setState(() {
+                        _monthlyDate = v;
+                        _clearDraft();
+                      }),
+                    )
+                  else
+                    const SizedBox.shrink(),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            TextFormField(
+                              controller: _fullAmountController,
+                              focusNode: _fullAmountFocus,
+                              enabled: !_hasFrequentText,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                              ],
+                              decoration: InputDecoration(
+                                labelText: 'Total amount',
+                                filled: true,
+                                fillColor: scheme.surfaceContainerHighest,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                            if (_hasFrequentText)
+                              Positioned.fill(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () async {
+                                      final ok = await _confirmOverride(
+                                        message:
+                                            'Amount per payment is already filled. Override it? This will clear Amount per payment.',
+                                      );
+                                      if (!ok) return;
+                                      setState(() {
+                                        _frequentAmountController.clear();
+                                        _clearDraft();
+                                      });
+                                      _fullAmountFocus.requestFocus();
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            TextFormField(
+                              controller: _frequentAmountController,
+                              focusNode: _frequentAmountFocus,
+                              enabled: !_hasTotalText,
+                              keyboardType: TextInputType.number,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
+                              ],
+                              decoration: InputDecoration(
+                                labelText: 'Amount per payment',
+                                filled: true,
+                                fillColor: scheme.surfaceContainerHighest,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                              ),
+                            ),
+                            if (_hasTotalText)
+                              Positioned.fill(
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () async {
+                                      final ok = await _confirmOverride(
+                                        message:
+                                            'Total amount is already filled. Override it? This will clear Total amount.',
+                                      );
+                                      if (!ok) return;
+                                      setState(() {
+                                        _fullAmountController.clear();
+                                        _clearDraft();
+                                      });
+                                      _frequentAmountFocus.requestFocus();
+                                    },
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  _PaymentNumberField(
+                    label: 'Number of payments',
+                    value: _times,
+                    min: 1,
+                    max: 60,
+                    enabled: true,
+                    onChanged: (v) => setState(() {
+                      _times = v;
+                      _clearDraft();
+                    }),
+                  ),
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: scheme.onSurface,
+                            side: BorderSide(color: scheme.outlineVariant),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: _generateDraft,
+                          child: const Text('Generate'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: (_draftDates.isEmpty || _draftClashKeys.isNotEmpty)
+                              ? null
+                              : _saveDraft,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: VibrantColors.pastelGreen,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          child: const Text(
+                            'Save',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
+            ),
+            if (_draftDates.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(
+                'Preview',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: scheme.onSurface,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 240,
+                child: ListView.separated(
+                  itemCount: _draftDates.length,
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, i) {
+                    final d = _draftDates[i];
+                    final key = AppDateUtils.dateToStr(_normalizeDay(d));
+                    final isClash = _draftClashKeys.contains(key);
+                    return DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: scheme.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isClash
+                              ? VibrantColors.softPink.withOpacity(0.55)
+                              : scheme.outlineVariant.withOpacity(0.12),
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                key,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      color: isClash ? VibrantColors.softPink : scheme.onSurface,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                              ),
+                            ),
+                            Text(
+                              '${_currency}${_draftAmount.toStringAsFixed(0)}',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: isClash ? VibrantColors.softPink : scheme.onSurface,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
     );
@@ -2976,14 +3242,14 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
 
     return FormField<T>(
       initialValue: widget.value,
       validator: widget.validator,
       builder: (state) {
         final textStyle = Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: widget.enabled ? chrome.textColor : chrome.mutedColor,
+              color: widget.enabled ? scheme.onSurface : scheme.onSurfaceVariant,
             );
 
         final query = _searchController.text.toLowerCase();
@@ -3002,7 +3268,7 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                   labelText: widget.label,
                   filled: true,
                   enabled: widget.enabled,
-                  fillColor: chrome.surfaceColor,
+                  fillColor: scheme.surfaceContainerHighest,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                   errorText: state.errorText,
                 ),
@@ -3015,7 +3281,7 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Icon(Icons.filter_list, color: chrome.mutedColor),
+                    Icon(Icons.filter_list, color: scheme.onSurfaceVariant),
                   ],
                 ),
               ),
@@ -3029,8 +3295,9 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
             children: [
               DecoratedBox(
                 decoration: BoxDecoration(
-                  color: chrome.mutedColor.withOpacity(0.18),
+                  color: scheme.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: scheme.outlineVariant.withOpacity(0.7)),
                 ),
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
@@ -3043,11 +3310,11 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                         decoration: InputDecoration(
                           hintText: 'Search for ${widget.label}',
                           filled: true,
-                          fillColor: chrome.surfaceColor,
+                          fillColor: scheme.surface,
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
-                          suffixIcon: Icon(Icons.filter_list, color: chrome.mutedColor),
+                          suffixIcon: Icon(Icons.filter_list, color: scheme.onSurfaceVariant),
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -3061,7 +3328,7 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                                   child: Text(
                                     'No matches found',
                                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          color: chrome.mutedColor,
+                                          color: scheme.onSurfaceVariant,
                                           fontWeight: FontWeight.w700,
                                         ),
                                   ),
@@ -3076,7 +3343,7 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                                   return Padding(
                                     padding: const EdgeInsets.symmetric(vertical: 5),
                                     child: Material(
-                                      color: chrome.surfaceColor,
+                                      color: scheme.surface,
                                       borderRadius: BorderRadius.circular(14),
                                       child: InkWell(
                                         borderRadius: BorderRadius.circular(14),
@@ -3090,7 +3357,7 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                                             borderRadius: BorderRadius.circular(14),
                                             border: Border.all(
                                               color: isSelected
-                                                  ? chrome.textColor.withOpacity(0.55)
+                                                  ? scheme.primary.withOpacity(0.35)
                                                   : Colors.transparent,
                                             ),
                                           ),
@@ -3101,11 +3368,11 @@ class _PaymentSearchableSelectFieldState<T> extends State<_PaymentSearchableSele
                                                   option.label,
                                                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                                                         fontWeight: FontWeight.w700,
-                                                        color: chrome.textColor,
+                                                        color: scheme.onSurface,
                                                       ),
                                                 ),
                                               ),
-                                              if (isSelected) Icon(Icons.check, color: chrome.textColor),
+                                              if (isSelected) Icon(Icons.check, color: scheme.primary),
                                             ],
                                           ),
                                         ),
@@ -3163,7 +3430,7 @@ class _PaymentNumberField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
 
     final canDec = enabled && value > min;
     final canInc = enabled && value < max;
@@ -3174,7 +3441,7 @@ class _PaymentNumberField extends StatelessWidget {
         decoration: InputDecoration(
           labelText: label,
           filled: true,
-          fillColor: chrome.surfaceColor,
+          fillColor: scheme.surfaceContainerHighest,
           border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
         ),
         child: Row(
@@ -3190,7 +3457,7 @@ class _PaymentNumberField extends StatelessWidget {
                   '$value',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w800,
-                        color: chrome.textColor,
+                        color: scheme.onSurface,
                       ),
                 ),
               ),

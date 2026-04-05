@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../design_system/theme/app_chrome_theme.dart';
+import '../../../design_system/theme/app_visual_style.dart';
 import '../../calendar/bloc/calendar_cubit.dart';
 import '../../calendar/bloc/sessions_cubit.dart';
 import '../../calendar/ui/widgets/calendar_page_body.dart';
@@ -16,6 +17,8 @@ import '../../navigation/bloc/nav_modules_cubit.dart';
 import '../../navigation/bloc/nav_modules_state.dart';
 import '../../navigation/ui/module_customization_screen.dart';
 import '../../payment/presentation/pages/payments_page.dart';
+import '../../theme_customization/bloc/app_theme_cubit.dart';
+import '../../theme_customization/bloc/app_theme_state.dart';
 import '../../theme_customization/ui/theme_customization_screen.dart';
 import 'program_management_screen.dart';
 import 'profile/profile_details_screen.dart';
@@ -28,8 +31,13 @@ class SettingsPageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const bgColor = Color(0xFF0F0F0F); // Near-black background
-    const cardColor = Color(0xFF1C1C1E); // iOS-style dark surface
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
+    final bgColor = scheme.surface;
+    final cardColor = scheme.surface;
+    final onSurface = scheme.onSurface;
+    final headerColor = onSurface.withOpacity(0.55);
+    final chevronColor = onSurface.withOpacity(0.35);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -48,14 +56,14 @@ class SettingsPageBody extends StatelessWidget {
             title: Text(
               'Settings',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: Colors.white,
+                    color: onSurface,
                     fontWeight: FontWeight.w900,
                     letterSpacing: -0.5,
                   ),
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
             sliver: SliverToBoxAdapter(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -67,13 +75,14 @@ class SettingsPageBody extends StatelessWidget {
                     child: Text(
                       'Modules',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withOpacity(0.5),
+                            color: headerColor,
                             fontWeight: FontWeight.w600,
                           ),
                     ),
                   ),
                   _SectionCardDark(
                     color: cardColor,
+                    neumorphism: visual.neumorphism,
                     children: [
                       BlocBuilder<NavModulesCubit, NavModulesState>(
                         builder: (context, state) {
@@ -90,6 +99,7 @@ class SettingsPageBody extends StatelessWidget {
                                           tab == DashboardTab.home
                                       ? null
                                       : 'Hidden from nav bar',
+                                  chevronColor: chevronColor,
                                   onTap: () {
                                     if (state.visibleTabs.contains(tab)) {
                                       // Settings is a dashboard tab (not a pushed route),
@@ -139,17 +149,32 @@ class SettingsPageBody extends StatelessWidget {
                     child: Text(
                       'Customization',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withOpacity(0.5),
+                            color: headerColor,
                             fontWeight: FontWeight.w600,
                           ),
                     ),
                   ),
                   _SectionCardDark(
                     color: cardColor,
+                    neumorphism: visual.neumorphism,
                     children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                        child: BlocBuilder<AppThemeCubit, AppThemeState>(
+                          builder: (context, state) {
+                            return _ThemeModePills(
+                              mode: state.themeMode,
+                              neumorphism: visual.neumorphism,
+                              onChanged: (m) =>
+                                  context.read<AppThemeCubit>().setThemeMode(m),
+                            );
+                          },
+                        ),
+                      ),
                       _SectionTileDark(
                         leading: Icons.palette_outlined,
                         title: 'Theme & Style',
+                        chevronColor: chevronColor,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -161,6 +186,7 @@ class SettingsPageBody extends StatelessWidget {
                       _SectionTileDark(
                         leading: Icons.tune_outlined,
                         title: 'Module customization',
+                        chevronColor: chevronColor,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -172,6 +198,7 @@ class SettingsPageBody extends StatelessWidget {
                       _SectionTileDark(
                         leading: Icons.menu_book_outlined,
                         title: 'Program management',
+                        chevronColor: chevronColor,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -188,17 +215,19 @@ class SettingsPageBody extends StatelessWidget {
                     child: Text(
                       'Notifications',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.white.withOpacity(0.5),
+                            color: headerColor,
                             fontWeight: FontWeight.w600,
                           ),
                     ),
                   ),
                   _SectionCardDark(
                     color: cardColor,
+                    neumorphism: visual.neumorphism,
                     children: [
                       _SectionTileDark(
                         leading: Icons.notifications_none_outlined,
                         title: 'Notifications',
+                        chevronColor: chevronColor,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -213,6 +242,7 @@ class SettingsPageBody extends StatelessWidget {
                       _SectionTileDark(
                         leading: Icons.tune_outlined,
                         title: 'Notification Settings',
+                        chevronColor: chevronColor,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -229,15 +259,18 @@ class SettingsPageBody extends StatelessWidget {
                   const SizedBox(height: 24),
                   _SectionCardDark(
                     color: cardColor,
+                    neumorphism: visual.neumorphism,
                     children: [
                       _SectionTileDark(
                         leading: Icons.info_outline,
                         title: 'About application',
+                        chevronColor: chevronColor,
                         onTap: () {},
                       ),
                       _SectionTileDark(
                         leading: Icons.chat_bubble_outline,
                         title: 'Help/FAQ',
+                        chevronColor: chevronColor,
                         onTap: () {},
                       ),
                     ],
@@ -245,11 +278,13 @@ class SettingsPageBody extends StatelessWidget {
                   const SizedBox(height: 32),
                   _SectionCardDark(
                     color: cardColor,
+                    neumorphism: visual.neumorphism,
                     children: [
                       _SectionTileDark(
                         leading: Icons.logout,
                         title: 'Log out',
                         titleColor: VibrantColors.softPink,
+                        chevronColor: chevronColor,
                         onTap: () => FirebaseAuth.instance.signOut(),
                       ),
                     ],
@@ -306,7 +341,8 @@ class _StandaloneModuleScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const bgColor = Color(0xFF0F0F0F);
+    final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final onSurface = Theme.of(context).colorScheme.onSurface;
 
     Widget body;
     switch (tab) {
@@ -333,7 +369,7 @@ class _StandaloneModuleScreen extends StatelessWidget {
       backgroundColor: bgColor,
       appBar: AppBar(
         backgroundColor: bgColor,
-        foregroundColor: Colors.white,
+        foregroundColor: onSurface,
         elevation: 0,
         title: Text(SettingsPageBody._labelFor(tab)),
       ),
@@ -346,17 +382,29 @@ class _StandaloneModuleScreen extends StatelessWidget {
 }
 
 class _SectionCardDark extends StatelessWidget {
-  const _SectionCardDark({required this.children, required this.color});
+  const _SectionCardDark({
+    required this.children,
+    required this.color,
+    required this.neumorphism,
+  });
 
   final List<Widget> children;
   final Color color;
+  final bool neumorphism;
 
   @override
   Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    final shadows = neumorphism
+        ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+        : const <BoxShadow>[];
+
     return Container(
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+        boxShadow: shadows,
       ),
       child: Column(
         children: children,
@@ -372,6 +420,7 @@ class _SectionTileDark extends StatelessWidget {
     required this.onTap,
     this.subtitle,
     this.titleColor,
+    this.chevronColor,
   });
 
   final IconData leading;
@@ -379,16 +428,19 @@ class _SectionTileDark extends StatelessWidget {
   final String? subtitle;
   final VoidCallback onTap;
   final Color? titleColor;
+  final Color? chevronColor;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final titleFg = titleColor ?? scheme.onSurface;
     final titleStyle = Theme.of(context).textTheme.bodyMedium?.copyWith(
-          color: titleColor ?? Colors.white,
+          color: titleFg,
           fontWeight: FontWeight.w600,
         );
 
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.white.withOpacity(0.55),
+          color: scheme.onSurface.withOpacity(0.55),
           fontWeight: FontWeight.w600,
         );
 
@@ -397,12 +449,127 @@ class _SectionTileDark extends StatelessWidget {
       borderRadius: BorderRadius.circular(22),
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-        leading: Icon(leading, color: titleColor ?? Colors.white, size: 22),
+        leading: Icon(leading, color: titleFg, size: 22),
         title: Text(title, style: titleStyle),
         subtitle:
             subtitle == null ? null : Text(subtitle!, style: subtitleStyle),
-        trailing: Icon(Icons.chevron_right,
-            color: Colors.white.withOpacity(0.3), size: 20),
+        trailing: Icon(
+          Icons.chevron_right,
+          color: chevronColor ?? scheme.onSurface.withOpacity(0.30),
+          size: 20,
+        ),
+      ),
+    );
+  }
+}
+
+class _ThemeModePills extends StatelessWidget {
+  const _ThemeModePills({
+    required this.mode,
+    required this.neumorphism,
+    required this.onChanged,
+  });
+
+  final ThemeMode mode;
+  final bool neumorphism;
+  final ValueChanged<ThemeMode> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final chrome = AppChromeTheme.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    final bg = scheme.surface;
+    final sel = chrome.accentBlue;
+
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
+        boxShadow: neumorphism
+            ? AppVisualStyle.neumorphicShadows(context, blurRadius: 18, offset: const Offset(6, 6))
+            : const <BoxShadow>[],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _ThemeModePill(
+              label: 'System',
+              icon: Icons.brightness_auto,
+              selected: mode == ThemeMode.system,
+              selectedColor: sel,
+              onTap: () => onChanged(ThemeMode.system),
+            ),
+          ),
+          Expanded(
+            child: _ThemeModePill(
+              label: 'Light',
+              icon: Icons.light_mode_outlined,
+              selected: mode == ThemeMode.light,
+              selectedColor: sel,
+              onTap: () => onChanged(ThemeMode.light),
+            ),
+          ),
+          Expanded(
+            child: _ThemeModePill(
+              label: 'Dark',
+              icon: Icons.dark_mode_outlined,
+              selected: mode == ThemeMode.dark,
+              selectedColor: sel,
+              onTap: () => onChanged(ThemeMode.dark),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ThemeModePill extends StatelessWidget {
+  const _ThemeModePill({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final Color selectedColor;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final fg = scheme.onSurface.withOpacity(selected ? 1 : 0.78);
+    return Padding(
+      padding: const EdgeInsets.all(5),
+      child: Material(
+        color: selected ? selectedColor.withOpacity(0.18) : Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Center(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, size: 16, color: fg),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -415,6 +582,7 @@ class _AvatarCircleSmall extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return BlocSelector<DashboardCubit, DashboardState, Uint8List?>(
       selector: (state) => state.userAvatarBytes,
       builder: (context, avatarBytes) {
@@ -423,15 +591,13 @@ class _AvatarCircleSmall extends StatelessWidget {
           height: _size,
           child: ClipOval(
             child: DecoratedBox(
-              decoration: const BoxDecoration(
-                color: Color(0xFF2C2C2E),
-              ),
+              decoration: BoxDecoration(color: scheme.surfaceContainerHighest),
               child: avatarBytes == null
                   ? Center(
                       child: Icon(
                         Icons.person,
                         size: 24,
-                        color: Colors.white.withOpacity(0.6),
+                        color: scheme.onSurface.withOpacity(0.55),
                       ),
                     )
                   : Image.memory(
@@ -451,13 +617,20 @@ class _ProfileCardCompact extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const cardColor = Color(0xFF1C1C1E);
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
+    final chrome = AppChromeTheme.of(context);
+    final cardColor = scheme.surface;
+    final shadows = visual.neumorphism
+        ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+        : const <BoxShadow>[];
+
     final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: Colors.white,
+          color: scheme.onSurface,
           fontWeight: FontWeight.w700,
         );
     final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
-          color: Colors.white.withOpacity(0.5),
+          color: scheme.onSurface.withOpacity(0.55),
           fontWeight: FontWeight.w500,
         );
 
@@ -478,6 +651,8 @@ class _ProfileCardCompact extends StatelessWidget {
         decoration: BoxDecoration(
           color: cardColor,
           borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+          boxShadow: shadows,
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -500,7 +675,10 @@ class _ProfileCardCompact extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: Colors.white.withOpacity(0.3)),
+              Icon(
+                Icons.chevron_right,
+                color: scheme.onSurface.withOpacity(0.35),
+              ),
             ],
           ),
         ),
