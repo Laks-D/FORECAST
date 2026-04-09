@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 
+import '../../../core/app/app_mode.dart';
 import '../domain/entities/schedule_session.dart';
 import '../domain/repositories/schedule_repository.dart';
 
@@ -53,30 +54,37 @@ class SessionsCubit extends Cubit<SessionsState> {
   }
 
   Future<void> addSessions(List<ScheduleSession> sessions) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.addSessions(sessions);
   }
 
   Future<void> addSession(ScheduleSession session) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.addSession(session);
   }
 
   Future<void> updateSession(ScheduleSession session) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.updateSession(session);
   }
 
   Future<void> updateSessions(List<ScheduleSession> sessions) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.updateSessions(sessions);
   }
 
   Future<void> deleteSession(int id) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.deleteSession(id);
   }
 
   Future<void> deleteUpcomingSessionsForClient(String clientId) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.deleteUpcomingSessionsForClient(clientId);
   }
 
   Future<void> restoreDeletedUpcomingSessionsForClient(String clientId) {
+    if (AppModeConfig.isClient) return Future.value();
     return repository.restoreDeletedUpcomingSessionsForClient(clientId);
   }
 

@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 
 import '../../dashboard/bloc/dashboard_state.dart';
+import '../../../core/app/app_mode.dart';
 
 final class NavModulesState extends Equatable {
   const NavModulesState({
@@ -11,21 +12,23 @@ final class NavModulesState extends Equatable {
   });
 
   factory NavModulesState.defaults() {
-    const order = <DashboardTab>[
-      DashboardTab.people,
-      DashboardTab.calendar,
-      DashboardTab.home,
-      DashboardTab.phone,
-      DashboardTab.settings,
-    ];
+    final order = AppModeConfig.isClient
+        ? const <DashboardTab>[
+            DashboardTab.people,
+            DashboardTab.calendar,
+            DashboardTab.home,
+            DashboardTab.phone,
+            DashboardTab.settings,
+          ]
+        : const <DashboardTab>[
+            DashboardTab.people,
+            DashboardTab.calendar,
+            DashboardTab.home,
+            DashboardTab.phone,
+            DashboardTab.settings,
+          ];
 
-    const enabled = <DashboardTab>[
-      DashboardTab.people,
-      DashboardTab.calendar,
-      DashboardTab.home,
-      DashboardTab.phone,
-      DashboardTab.settings,
-    ];
+    final enabled = order;
 
     return NavModulesState(
       order: order,

@@ -5,6 +5,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import 'core/di/service_locator.dart';
+import 'core/app/app_mode.dart';
+import 'core/app/app_mode_cubit.dart';
 import 'core/firebase/firestore_db.dart';
 import 'core/platform/web_online_status.dart';
 import 'core/services/notification_service.dart';
@@ -14,12 +16,16 @@ import 'design_system/theme/app_chrome_theme.dart';
 import 'firebase_options_dev.dart';
 import 'features/landing/ui/landing_screen.dart';
 import 'features/calendar/bloc/sessions_cubit.dart';
-import 'features/navigation/bloc/nav_modules_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_state.dart';
 
 Future<void> main() async {
+  await runConfiguredApp();
+}
+
+Future<void> runConfiguredApp({AppMode? forcedMode}) async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (forcedMode != null) AppModeConfig.mode = forcedMode;
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -50,20 +56,22 @@ Future<void> main() async {
 
   await setupServiceLocator();
   await NotificationService.instance.init();
-  runApp(const App());
+  runApp(App(forcedMode: forcedMode));
 }
 
 class App extends StatelessWidget {
-  const App({super.key});
+  const App({super.key, this.forcedMode});
+
+  final AppMode? forcedMode;
 
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => AppThemeCubit()),
+        BlocProvider(create: (_) => AppModeCubit(forcedMode: forcedMode)),
         BlocProvider(create: (_) => UserProfileCubit()),
         BlocProvider(create: (_) => sl<SessionsCubit>()),
-        BlocProvider(create: (_) => sl<NavModulesCubit>()),
       ],
       child: BlocBuilder<AppThemeCubit, AppThemeState>(
         builder: (context, state) {

@@ -8,11 +8,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:gendral_app/main.dart';
+import 'package:gendral_app/core/app/app_mode.dart';
 import 'package:gendral_app/features/auth/login/ui/login_screen.dart';
 
 void main() {
   testWidgets('App shows login screen', (WidgetTester tester) async {
-    await tester.pumpWidget(const App());
+    await tester.pumpWidget(const App(forcedMode: AppMode.admin));
     await tester.pumpAndSettle();
 
     expect(find.byType(LoginScreen), findsOneWidget);

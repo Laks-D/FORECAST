@@ -6,10 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/auth/username_key.dart';
+import '../../../../core/auth/google_auth.dart';
 import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
+import '../../../../core/app/widgets/app_mode_selector.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 
@@ -25,7 +26,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final _fullNameController = TextEditingController();
   final _professionController = TextEditingController();
-  final _userNameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -122,7 +122,6 @@ class _SignupScreenState extends State<SignupScreen> {
   void dispose() {
     _fullNameController.dispose();
     _professionController.dispose();
-    _userNameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -136,16 +135,6 @@ class _SignupScreenState extends State<SignupScreen> {
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) return;
 
-    final usernameRaw = _userNameController.text.trim();
-    final usernameKey = usernameKeyFromInput(usernameRaw);
-    if (usernameKey.isEmpty || usernameKey.length < 3) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Username must be at least 3 characters')),
-      );
-      return;
-    }
-
     // Create Firebase user first (source of truth for identity).
     // If the email already exists, fall back to sign-in so the user isn't blocked.
     try {
@@ -157,52 +146,20 @@ class _SignupScreenState extends State<SignupScreen> {
 
       final uid = credential.user?.uid;
       if (uid != null) {
-        // Reserve username key -> uid/email mapping for username-based login.
         try {
-          await firestoreDb.runTransaction((tx) async {
-            final usernameRef =
-                firestoreDb.collection('usernames').doc(usernameKey);
-            final existing = await tx.get(usernameRef);
-            if (existing.exists) {
-              throw StateError('USERNAME_TAKEN');
-            }
-            tx.set(usernameRef, {
-              'uid': uid,
+          final userRef = firestoreDb.collection('users').doc(uid);
+          await userRef.set(
+            {
+              'fullName': _fullNameController.text.trim(),
+              'profession': _professionController.text.trim(),
+              'nationality': _nationality,
+              'currency': _currency,
               'email': email,
-              'username': usernameRaw,
               'createdAt': FieldValue.serverTimestamp(),
-            });
-
-            final userRef = firestoreDb.collection('users').doc(uid);
-            tx.set(
-              userRef,
-              {
-                'fullName': _fullNameController.text.trim(),
-                'profession': _professionController.text.trim(),
-                'nationality': _nationality,
-                'userName': usernameRaw,
-                'userNameKey': usernameKey,
-                'email': email,
-                'createdAt': FieldValue.serverTimestamp(),
-              },
-              SetOptions(merge: true),
-            );
-          });
-        } on StateError catch (e) {
-          if (e.message == 'USERNAME_TAKEN') {
-            // Clean up newly-created auth user if we couldn't reserve the username.
-            try {
-              await credential.user?.delete();
-              await FirebaseAuth.instance.signOut();
-            } catch (_) {
-              // Ignore cleanup failures.
-            }
-            throw FirebaseAuthException(
-              code: 'USERNAME_TAKEN',
-              message: 'Username already taken. Please choose another one.',
-            );
-          }
-          rethrow;
+              'updatedAt': FieldValue.serverTimestamp(),
+            },
+            SetOptions(merge: true),
+          );
         } on FirebaseException catch (e) {
           // Convert Firestore failures into a user-facing message.
           try {
@@ -222,7 +179,7 @@ class _SignupScreenState extends State<SignupScreen> {
           throw FirebaseAuthException(
               code: 'FIRESTORE_ERROR', message: message);
         } catch (_) {
-          // Unknown failure reserving username/profile; avoid orphaned auth users.
+          // Unknown failure saving profile; avoid orphaned auth users.
           try {
             await credential.user?.delete();
             await FirebaseAuth.instance.signOut();
@@ -279,7 +236,6 @@ class _SignupScreenState extends State<SignupScreen> {
       profession: _professionController.text.trim(),
       nationality: _nationality,
       currency: _currency,
-      userName: _userNameController.text.trim(),
       email: email,
     );
 
@@ -312,7 +268,26 @@ class _SignupScreenState extends State<SignupScreen> {
       return SizedBox(
         height: 46,
         child: OutlinedButton(
-          onPressed: null,
+          onPressed: () async {
+            final navigator = Navigator.of(context);
+            final messenger = ScaffoldMessenger.of(context);
+
+            try {
+              await GoogleAuth.signIn();
+              if (!mounted) return;
+              navigator.popUntil((route) => route.isFirst);
+            } on FirebaseAuthException catch (e) {
+              if (!mounted) return;
+              messenger.showSnackBar(
+                SnackBar(content: Text(e.message ?? 'Google sign-in failed (${e.code})')),
+              );
+            } catch (_) {
+              if (!mounted) return;
+              messenger.showSnackBar(
+                const SnackBar(content: Text('Google sign-in failed')),
+              );
+            }
+          },
           style: OutlinedButton.styleFrom(
             backgroundColor: scheme.surface,
             shape:
@@ -419,7 +394,10 @@ class _SignupScreenState extends State<SignupScreen> {
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 22),
+                          const SizedBox(height: 14),
+                          const AppModeSelector(
+                            padding: EdgeInsets.only(bottom: 12),
+                          ),
                           GestureDetector(
                             onTap: () async {
                               if (_profileImageBytes == null) {
@@ -500,12 +478,6 @@ class _SignupScreenState extends State<SignupScreen> {
                             labelText: 'Profession',
                             hintText: 'Your profession',
                             controller: _professionController,
-                          ),
-                          const SizedBox(height: 14),
-                          _SignupField(
-                            labelText: 'Username',
-                            hintText: 'Choose a username',
-                            controller: _userNameController,
                           ),
                           const SizedBox(height: 14),
                           _SignupField(

@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../../core/auth/username_key.dart';
+import '../../../../core/auth/google_auth.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../../../core/firebase/firestore_db.dart';
 
 import 'login_event.dart';
@@ -21,7 +21,15 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     on<LoginWithGoogleSubmitted>(_onGoogleSubmitted);
   }
 
-  bool _googleInitialized = false;
+  // Client-mode login policy (overrideable via --dart-define if needed).
+  static const String _clientLoginUser = String.fromEnvironment(
+    'CLIENT_LOGIN_USER',
+    defaultValue: 'client_test',
+  );
+  static const String _clientLoginPassword = String.fromEnvironment(
+    'CLIENT_LOGIN_PASS',
+    defaultValue: 'client@123',
+  );
 
   FutureOr<void> _onEmailChanged(LoginEmailChanged event, Emitter<LoginState> emit) {
     emit(state.copyWith(email: event.email, status: LoginStatus.idle, errorMessage: null));
@@ -44,6 +52,22 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     emit(state.copyWith(status: LoginStatus.submitting, errorMessage: null));
 
     try {
+      if (AppModeConfig.isClient) {
+        final identifier = state.email.trim().toLowerCase();
+        if (identifier != _clientLoginUser.trim().toLowerCase()) {
+          throw FirebaseAuthException(
+            code: 'CLIENT_LOGIN_USER_REQUIRED',
+            message: 'Client login: use $_clientLoginUser',
+          );
+        }
+        if (state.password != _clientLoginPassword) {
+          throw FirebaseAuthException(
+            code: 'CLIENT_LOGIN_WRONG_PASSWORD',
+            message: 'Client login: wrong password',
+          );
+        }
+      }
+
       final resolvedEmail = await _resolveEmailFromIdentifier(state.email);
       final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: resolvedEmail,
@@ -81,7 +105,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     emit(state.copyWith(status: LoginStatus.submitting, errorMessage: null));
 
     try {
-      final userCredential = await _signInWithGoogle();
+      final userCredential = await GoogleAuth.signIn();
       final email = userCredential.user?.email;
 
       await _upsertUserProfile(userCredential.user);
@@ -103,30 +127,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     } catch (_) {
       emit(state.copyWith(status: LoginStatus.failure, errorMessage: 'Google sign-in failed'));
     }
-  }
-
-  Future<UserCredential> _signInWithGoogle() async {
-    if (kIsWeb) {
-      final provider = GoogleAuthProvider();
-      return FirebaseAuth.instance.signInWithPopup(provider);
-    }
-
-    if (!_googleInitialized) {
-      await GoogleSignIn.instance.initialize();
-      _googleInitialized = true;
-    }
-
-    final googleAccount = await GoogleSignIn.instance.authenticate();
-    final idToken = googleAccount.authentication.idToken;
-    if (idToken == null || idToken.trim().isEmpty) {
-      throw FirebaseAuthException(
-        code: 'GOOGLE_ID_TOKEN_MISSING',
-        message: 'Google sign-in failed: missing ID token',
-      );
-    }
-
-    final credential = GoogleAuthProvider.credential(idToken: idToken);
-    return FirebaseAuth.instance.signInWithCredential(credential);
   }
 
   Future<String> _resolveEmailFromIdentifier(String identifierRaw) async {

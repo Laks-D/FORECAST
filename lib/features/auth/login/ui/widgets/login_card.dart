@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../../design_system/theme/app_visual_style.dart';
+import '../../../../../core/app/app_mode.dart';
+import '../../../../../core/app/app_mode_cubit.dart';
+import '../../../../../core/app/widgets/app_mode_selector.dart';
 import 'login_fields.dart';
 import 'login_footer_links.dart';
 import 'login_google_button.dart';
@@ -22,6 +26,9 @@ class LoginCard extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
     final visual = AppVisualStyle.of(context);
+    final isClientApp = context.select(
+      (AppModeCubit c) => (c.state.mode ?? AppMode.admin) == AppMode.client,
+    );
 
     final shadows = visual.neumorphism
         ? AppVisualStyle.neumorphicShadows(
@@ -53,6 +60,8 @@ class LoginCard extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            const AppModeSelector(),
+            const SizedBox(height: 18),
             Container(
               width: 56,
               height: 56,
@@ -67,13 +76,13 @@ class LoginCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              'Log in',
+              isClientApp ? 'Client log in' : 'Tutor log in',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
             ),
             const SizedBox(height: 22),
-            const LoginFields(),
+            LoginFields(isClient: isClientApp),
             const SizedBox(height: 18),
             const LoginSubmitButton(),
             const SizedBox(height: 18),

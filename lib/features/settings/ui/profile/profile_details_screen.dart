@@ -181,6 +181,7 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
                         ),
                       ),
                       GestureDetector(
+                        key: const Key('profile_avatar_tap'),
                         onTap: () => _openProfilePhoto(context),
                         child: Container(
                           width: 120,

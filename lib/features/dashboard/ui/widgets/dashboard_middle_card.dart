@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
@@ -153,6 +154,16 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
   Future<void> _pickStatus(BuildContext context, ScheduleSession session) async {
     final chrome = AppChromeTheme.of(context);
     final sessionsCubit = context.read<SessionsCubit>();
+
+    if (AppModeScope.isClient(context)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 1),
+          content: Text('Client mode: view-only.'),
+        ),
+      );
+      return;
+    }
 
     final derived = AppDateUtils.determineSessionStatus(
       session.status,

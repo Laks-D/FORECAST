@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../../core/app/app_mode.dart';
 import '../../domain/entities/client.dart';
 import '../../domain/repositories/client_repository.dart';
 import '../../domain/usecases/get_clients_usecase.dart';
@@ -78,7 +80,37 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   ) async {
     await repository.loadFromStorage();
     _allEntities = getClientsUseCase.execute();
+
+    // Client app: show only the signed-in client's own record.
+    if (AppModeConfig.isClient) {
+      final email = _currentUserEmailSafe();
+      if (email != null && email.isNotEmpty) {
+        final filtered = _allEntities
+            .where((c) => _normalizeEmail(c.email) == email)
+            .toList(growable: false);
+        _allEntities = filtered;
+      } else {
+        // If auth isn't available (e.g., tests) or no email is set,
+        // keep the list empty rather than exposing all clients.
+        _allEntities = const <Client>[];
+      }
+    }
+
     emit(ClientLoaded(_allEntities));
+  }
+
+  String? _currentUserEmailSafe() {
+    try {
+      final raw = FirebaseAuth.instance.currentUser?.email;
+      return _normalizeEmail(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static String? _normalizeEmail(String? raw) {
+    final s = (raw ?? '').trim().toLowerCase();
+    return s.isEmpty ? null : s;
   }
 
   /* ================= SEARCH ================= */
@@ -121,6 +153,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     AddNoteToClient event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     addClientNoteUseCase.execute(
       entityId: event.entityId,
       note: event.note,
@@ -136,6 +169,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     AddPaymentToClient event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     addClientPaymentUseCase.execute(
       entityId: event.entityId,
       amount: event.amount,
@@ -152,6 +186,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     UpdateClientStatus event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     addClientStatusUseCase.execute(
       entityId: event.entityId,
       status: event.status,
@@ -168,6 +203,12 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     UpdateClientDetails event,
     Emitter<ClientState> emit,
   ) {
+    final isClientSelfEdit = AppModeConfig.isClient &&
+        _allEntities.isNotEmpty &&
+        _allEntities.first.id == event.entityId;
+
+    if (AppModeConfig.isClient && !isClientSelfEdit) return;
+
     final client = _allEntities.cast<Client?>().firstWhere(
           (e) => e?.id == event.entityId,
           orElse: () => null,
@@ -180,7 +221,9 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
         primaryContact: event.primaryContact ?? client.primaryContact,
         middleName: event.middleName ?? client.middleName,
         countryCode: event.countryCode ?? client.countryCode,
-        email: event.email ?? client.email,
+        // Client app uses email to link the signed-in user to a client record.
+        // Keep email stable in client mode to avoid losing the link.
+        email: AppModeConfig.isClient ? client.email : (event.email ?? client.email),
         gender: event.gender ?? client.gender,
         dateOfBirth: event.dateOfBirth ?? client.dateOfBirth,
         address: event.address ?? client.address,
@@ -197,6 +240,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     CreateClient event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     createClientUseCase.execute(
       name: event.name,
       primaryContact: event.primaryContact,
@@ -217,6 +261,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     ClearPaymentStatusForDate event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     clearPaymentStatusUseCase.execute(
       entityId: event.entityId,
       date: event.date,
@@ -232,6 +277,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     RescheduleClientPayment event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     reschedulePaymentUseCase.execute(
       entityId: event.entityId,
       paymentId: event.paymentId,
@@ -248,6 +294,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     MarkClientPaidFully event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     markPaidFullyUseCase.execute(
       entityId: event.entityId,
       fromDate: event.fromDate,
@@ -262,6 +309,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     RevertClientPaidFully event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     revertPaidFullyUseCase.execute(entityId: event.entityId);
     _reload(emit);
   }
@@ -272,6 +320,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     DeleteClient event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     repository.deleteClient(entityId: event.entityId);
     _reload(emit);
   }
@@ -280,6 +329,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     RestoreClient event,
     Emitter<ClientState> emit,
   ) {
+    if (AppModeConfig.isClient) return;
     repository.restoreClient(entityId: event.entityId);
     _reload(emit);
   }

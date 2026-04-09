@@ -46,9 +46,18 @@ const _commonCodes = <String>[
 class ClientPersonalDetailsPage extends StatefulWidget {
   final Client entity;
 
+  /// When false, the status field is hidden and status updates are not emitted.
+  final bool allowStatusEdit;
+
+  /// When false, the email field is read-only (still displayed).
+  /// Useful for client self-edit while keeping email-based linking stable.
+  final bool allowEmailEdit;
+
   const ClientPersonalDetailsPage({
     super.key,
     required this.entity,
+    this.allowStatusEdit = true,
+    this.allowEmailEdit = true,
   });
 
   @override
@@ -162,7 +171,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
             if (c.isEmpty) return '+91';
             return '+$c';
           }(),
-          email: email,
+          email: widget.allowEmailEdit ? email : widget.entity.email,
           gender: _gender,
           dateOfBirth: _dateOfBirth,
           address: address.isEmpty ? null : address,
@@ -170,7 +179,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
       );
     }
 
-    if (statusChanged) {
+    if (widget.allowStatusEdit && statusChanged) {
       bloc.add(UpdateClientStatus(entityId: widget.entity.id, status: _status));
     }
 
@@ -326,6 +335,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                       labelText: 'Email *',
                     ),
                     keyboardType: TextInputType.emailAddress,
+                    enabled: widget.allowEmailEdit,
                     validator: (v) {
                       final val = (v ?? '').trim();
                       if (val.isEmpty) return 'Required';
@@ -369,22 +379,24 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                   ),
                   const SizedBox(height: 12),
 
-                  // ── Status ──
-                  DropdownButtonFormField<String>(
-                    value: _status,
-                    decoration: const InputDecoration(labelText: 'Status'),
-                    items: const [
-                      DropdownMenuItem(value: 'Active', child: Text('Active')),
-                      DropdownMenuItem(
-                          value: 'Pending', child: Text('Pending')),
-                      DropdownMenuItem(
-                          value: 'Inactive', child: Text('Inactive')),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() => _status = v);
-                    },
-                  ),
+                  if (widget.allowStatusEdit) ...[
+                    // ── Status ──
+                    DropdownButtonFormField<String>(
+                      value: _status,
+                      decoration: const InputDecoration(labelText: 'Status'),
+                      items: const [
+                        DropdownMenuItem(value: 'Active', child: Text('Active')),
+                        DropdownMenuItem(
+                            value: 'Pending', child: Text('Pending')),
+                        DropdownMenuItem(
+                            value: 'Inactive', child: Text('Inactive')),
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() => _status = v);
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),

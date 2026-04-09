@@ -11,6 +11,7 @@ import '../../calendar/bloc/sessions_cubit.dart';
 import '../../calendar/ui/widgets/calendar_page_body.dart';
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/pages/client_page.dart';
+import '../../course/presentation/pages/courses_page.dart';
 import '../../dashboard/bloc/dashboard_cubit.dart';
 import '../../dashboard/bloc/dashboard_state.dart';
 import '../../navigation/bloc/nav_modules_cubit.dart';
@@ -25,12 +26,21 @@ import 'profile/profile_details_screen.dart';
 import '../../../core/services/notification_cubit.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
+import '../../../core/app/app_mode.dart';
+import '../../client/presentation/bloc/client_state.dart';
+import '../../client/presentation/pages/my_profile_page.dart';
+import '../../client/presentation/pages/profile_not_linked_page.dart';
+import '../../client/domain/entities/client.dart';
 
 class SettingsPageBody extends StatelessWidget {
   const SettingsPageBody({super.key});
 
   @override
   Widget build(BuildContext context) {
+    if (AppModeScope.isClient(context)) {
+      return const _ClientSettingsPageBody();
+    }
+
     final scheme = Theme.of(context).colorScheme;
     final visual = AppVisualStyle.of(context);
     final bgColor = scheme.surface;
@@ -321,7 +331,7 @@ class SettingsPageBody extends StatelessWidget {
       case DashboardTab.calendar:
         return 'Calendar';
       case DashboardTab.people:
-        return 'Clients';
+        return AppModeConfig.isClient ? 'Courses' : 'Clients';
       case DashboardTab.cards:
         return 'Cards';
       case DashboardTab.home:
@@ -329,7 +339,7 @@ class SettingsPageBody extends StatelessWidget {
       case DashboardTab.phone:
         return 'Payment';
       case DashboardTab.settings:
-        return 'Profile';
+        return 'Settings';
     }
   }
 }
@@ -353,7 +363,9 @@ class _StandaloneModuleScreen extends StatelessWidget {
         );
         break;
       case DashboardTab.people:
-        body = const ClientPage();
+        body = AppModeScope.isClient(context)
+            ? const CoursesPage(embedInDashboard: false)
+            : const ClientPage();
         break;
       case DashboardTab.phone:
         body = const PaymentsPage();
@@ -377,6 +389,259 @@ class _StandaloneModuleScreen extends StatelessWidget {
         top: false,
         child: body,
       ),
+    );
+  }
+}
+
+class _ClientSettingsPageBody extends StatelessWidget {
+  const _ClientSettingsPageBody();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
+    final bgColor = scheme.surface;
+    final cardColor = scheme.surface;
+    final onSurface = scheme.onSurface;
+    final headerColor = onSurface.withOpacity(0.55);
+    final chevronColor = onSurface.withOpacity(0.35);
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: CustomScrollView(
+        slivers: [
+          SliverAppBar(
+            backgroundColor: bgColor,
+            elevation: 0,
+            centerTitle: false,
+            automaticallyImplyLeading: false,
+            pinned: false,
+            floating: false,
+            snap: false,
+            primary: false,
+            titleSpacing: 16,
+            title: Text(
+                  'Settings',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: onSurface,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: -0.5,
+                  ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+            sliver: SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _ClientProfileCardCompact(),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Customization',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: headerColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  _SectionCardDark(
+                    color: cardColor,
+                    neumorphism: visual.neumorphism,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+                        child: BlocBuilder<AppThemeCubit, AppThemeState>(
+                          builder: (context, state) {
+                            return _ThemeModePills(
+                              mode: state.themeMode,
+                              neumorphism: visual.neumorphism,
+                              onChanged: (m) =>
+                                  context.read<AppThemeCubit>().setThemeMode(m),
+                            );
+                          },
+                        ),
+                      ),
+                      _SectionTileDark(
+                        leading: Icons.palette_outlined,
+                        title: 'Theme & Style',
+                        chevronColor: chevronColor,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const ThemeCustomizationScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Notifications',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: headerColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                  ),
+                  _SectionCardDark(
+                    color: cardColor,
+                    neumorphism: visual.neumorphism,
+                    children: [
+                      _SectionTileDark(
+                        leading: Icons.notifications_none_outlined,
+                        title: 'Notifications',
+                        chevronColor: chevronColor,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BlocProvider.value(
+                                value: context.read<NotificationCubit>(),
+                                child: const NotificationsPage(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      _SectionTileDark(
+                        leading: Icons.tune_outlined,
+                        title: 'Notification Settings',
+                        chevronColor: chevronColor,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BlocProvider.value(
+                                value: context.read<NotificationCubit>(),
+                                child: const NotificationSettingsPage(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  _SectionCardDark(
+                    color: cardColor,
+                    neumorphism: visual.neumorphism,
+                    children: [
+                      _SectionTileDark(
+                        leading: Icons.info_outline,
+                        title: 'About application',
+                        chevronColor: chevronColor,
+                        onTap: () {},
+                      ),
+                      _SectionTileDark(
+                        leading: Icons.chat_bubble_outline,
+                        title: 'Help/FAQ',
+                        chevronColor: chevronColor,
+                        onTap: () {},
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  _SectionCardDark(
+                    color: cardColor,
+                    neumorphism: visual.neumorphism,
+                    children: [
+                      _SectionTileDark(
+                        leading: Icons.logout,
+                        title: 'Log out',
+                        titleColor: VibrantColors.softPink,
+                        chevronColor: chevronColor,
+                        onTap: () => FirebaseAuth.instance.signOut(),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ClientProfileCardCompact extends StatelessWidget {
+  const _ClientProfileCardCompact();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final visual = AppVisualStyle.of(context);
+    final chrome = AppChromeTheme.of(context);
+    final cardColor = scheme.surface;
+    final shadows = visual.neumorphism
+        ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+        : const <BoxShadow>[];
+
+    final titleStyle = Theme.of(context).textTheme.titleSmall?.copyWith(
+          color: scheme.onSurface,
+          fontWeight: FontWeight.w700,
+        );
+    final subtitleStyle = Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: scheme.onSurface.withOpacity(0.55),
+          fontWeight: FontWeight.w500,
+        );
+
+    return BlocBuilder<ClientBloc, ClientState>(
+      builder: (context, state) {
+        Client? me;
+        if (state is ClientLoaded && state.entities.isNotEmpty) {
+          me = state.entities.first;
+        }
+
+        return InkWell(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => me == null
+                    ? const ProfileNotLinkedPage()
+                    : MyProfilePage(client: me),
+              ),
+            );
+          },
+          borderRadius: BorderRadius.circular(22),
+          child: Ink(
+            decoration: BoxDecoration(
+              color: cardColor,
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+              boxShadow: shadows,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const _AvatarCircleSmall(),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(me?.displayName ?? 'My profile', style: titleStyle),
+                        const SizedBox(height: 4),
+                        Text(me?.email ?? 'View your details', style: subtitleStyle),
+                      ],
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    color: scheme.onSurface.withOpacity(0.35),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

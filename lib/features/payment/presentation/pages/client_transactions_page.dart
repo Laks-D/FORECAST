@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../core/app/app_mode.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 
@@ -43,6 +44,10 @@ class ClientTransactionsPage extends StatelessWidget {
           BlocBuilder<ClientBloc, ClientState>(
             buildWhen: (p, n) => p.runtimeType != n.runtimeType,
             builder: (context, state) {
+              if (AppModeScope.isClient(context)) {
+                return const SizedBox.shrink();
+              }
+
               final client = _findClient(state);
               return Padding(
                 padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),

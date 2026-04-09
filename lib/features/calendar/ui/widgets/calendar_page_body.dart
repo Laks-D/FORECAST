@@ -8,10 +8,12 @@ import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../../design_system/widgets/app_neumorphic_buttons.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../../client/domain/entities/client.dart';
 import '../../../client/domain/usecases/get_clients_usecase.dart';
 import '../../../client/domain/entities/client_timeline_event.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
+import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/presentation/bloc/client_event.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../bloc/calendar_cubit.dart';
@@ -463,6 +465,21 @@ class _WeeklyTopContent extends StatelessWidget {
       builder: (context, sessionsState) {
         return BlocBuilder<CalendarCubit, CalendarState>(
           builder: (context, calendarState) {
+            String? clientId;
+            List<Client>? clientEntities;
+            if (AppModeScope.isClient(context)) {
+              ClientState? clientState;
+              try {
+                clientState = context.read<ClientBloc>().state;
+              } catch (_) {
+                clientState = null;
+              }
+              if (clientState is ClientLoaded && clientState.entities.isNotEmpty) {
+                clientEntities = clientState.entities;
+                clientId = clientState.entities.first.id;
+              }
+            }
+
             final Set<String> markerDates;
             final Map<String, int> sessionCounts = {};
             final Map<String, bool> allCompletedMap = {};
@@ -470,6 +487,7 @@ class _WeeklyTopContent extends StatelessWidget {
               final dates = <String>{};
               // Group sessions by date for counts & completed status
               for (final s in sessionsState.sessions) {
+                if (clientId != null && s.clientId != clientId) continue;
                 final derived = AppDateUtils.determineSessionStatus(
                   s.status,
                   s.date,
@@ -483,7 +501,7 @@ class _WeeklyTopContent extends StatelessWidget {
               }
               markerDates = dates;
             } else {
-              final allClients = sl<GetClientsUseCase>().execute();
+              final allClients = clientEntities ?? sl<GetClientsUseCase>().execute();
               final dates = <String>{};
               for (final c in allClients) {
                 for (final e in c.timeline) {
@@ -717,12 +735,28 @@ class _MonthlyTopContent extends StatelessWidget {
       builder: (context, sessionsState) {
         return BlocBuilder<CalendarCubit, CalendarState>(
           builder: (context, calendarState) {
+            String? clientId;
+            List<Client>? clientEntities;
+            if (AppModeScope.isClient(context)) {
+              ClientState? clientState;
+              try {
+                clientState = context.read<ClientBloc>().state;
+              } catch (_) {
+                clientState = null;
+              }
+              if (clientState is ClientLoaded && clientState.entities.isNotEmpty) {
+                clientEntities = clientState.entities;
+                clientId = clientState.entities.first.id;
+              }
+            }
+
             final Set<String> markerDates;
             final Map<String, int> sessionCounts = {};
             final Map<String, bool> allCompletedMap = {};
             if (scheduleType == _ScheduleCalendarType.classSchedule) {
               final dates = <String>{};
               for (final s in sessionsState.sessions) {
+                if (clientId != null && s.clientId != clientId) continue;
                 final derived = AppDateUtils.determineSessionStatus(
                   s.status,
                   s.date,
@@ -736,7 +770,7 @@ class _MonthlyTopContent extends StatelessWidget {
               }
               markerDates = dates;
             } else {
-              final allClients = sl<GetClientsUseCase>().execute();
+              final allClients = clientEntities ?? sl<GetClientsUseCase>().execute();
               final dates = <String>{};
               for (final c in allClients) {
                 for (final e in c.timeline) {
@@ -1082,6 +1116,15 @@ class _CalendarBottomCard extends StatelessWidget {
               ..sort((a, b) => a.date.compareTo(b.date));
 
             Future<void> openScheduleSheet() async {
+              if (AppModeScope.isClient(context)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    duration: Duration(seconds: 1),
+                    content: Text('Client app: view-only.'),
+                  ),
+                );
+                return;
+              }
               final sessionsCubit = context.read<SessionsCubit>();
               await showModalBottomSheet<void>(
                 context: context,
@@ -1111,6 +1154,15 @@ class _CalendarBottomCard extends StatelessWidget {
             }
 
             Future<void> openRescheduleSheet(ScheduleSession session) async {
+              if (AppModeScope.isClient(context)) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    duration: Duration(seconds: 1),
+                    content: Text('Client app: view-only.'),
+                  ),
+                );
+                return;
+              }
               final sessionsCubit = context.read<SessionsCubit>();
               await showModalBottomSheet<void>(
                 context: context,
@@ -1155,7 +1207,8 @@ class _CalendarBottomCard extends StatelessWidget {
                             ),
                       ),
                     ),
-                    if (scheduleType == _ScheduleCalendarType.classSchedule)
+                    if (!AppModeScope.isClient(context) &&
+                        scheduleType == _ScheduleCalendarType.classSchedule)
                       (AppVisualStyle.of(context).neumorphism)
                           ? AppNeumorphicPillButton(
                               icon: Icons.add,
@@ -1180,7 +1233,8 @@ class _CalendarBottomCard extends StatelessWidget {
                                 ),
                               ),
                             ),
-                    if (scheduleType == _ScheduleCalendarType.paymentSchedule)
+                    if (!AppModeScope.isClient(context) &&
+                        scheduleType == _ScheduleCalendarType.paymentSchedule)
                       (AppVisualStyle.of(context).neumorphism)
                           ? AppNeumorphicPillButton(
                               icon: Icons.add,
@@ -1231,6 +1285,15 @@ class _CalendarBottomCard extends StatelessWidget {
                             )
                           : OutlinedButton.icon(
                               onPressed: () async {
+                                if (AppModeScope.isClient(context)) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      duration: Duration(seconds: 1),
+                                      content: Text('Client app: view-only.'),
+                                    ),
+                                  );
+                                  return;
+                                }
                                 final calendarCubit =
                                     context.read<CalendarCubit>();
                                 final sessionsCubit =
@@ -1391,7 +1454,9 @@ class _CalendarBottomCard extends StatelessWidget {
                                 return Material(
                                   color: Colors.transparent,
                                   child: InkWell(
-                                    onTap: () => openRescheduleSheet(s),
+                                    onTap: AppModeScope.isClient(context)
+                                        ? null
+                                        : () => openRescheduleSheet(s),
                                     borderRadius: BorderRadius.circular(24),
                                     child: Ink(
                                       decoration: BoxDecoration(
@@ -1657,6 +1722,15 @@ class _PaymentScheduleList extends StatelessWidget {
         }();
 
         Future<void> openReschedule() async {
+          if (AppModeScope.isClient(context)) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                duration: Duration(seconds: 1),
+                content: Text('Client app: view-only.'),
+              ),
+            );
+            return;
+          }
           final clientBloc = context.read<ClientBloc>();
           await showModalBottomSheet<void>(
             context: context,
@@ -1714,7 +1788,7 @@ class _PaymentScheduleList extends StatelessWidget {
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: openReschedule,
+            onTap: AppModeScope.isClient(context) ? null : openReschedule,
             borderRadius: BorderRadius.circular(24),
             child: Ink(
               decoration: BoxDecoration(

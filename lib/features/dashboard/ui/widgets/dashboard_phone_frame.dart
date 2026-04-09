@@ -6,10 +6,12 @@ import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../calendar/ui/widgets/calendar_page_body.dart';
 import '../../../client/presentation/pages/client_page.dart';
+import '../../../course/presentation/pages/courses_page.dart';
 import '../../../navigation/bloc/nav_modules_cubit.dart';
 import '../../../navigation/bloc/nav_modules_state.dart';
 import '../../../payment/presentation/pages/payments_page.dart';
 import '../../../settings/ui/settings_page_body.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../bloc/dashboard_cubit.dart';
 import '../../bloc/dashboard_state.dart';
 import 'dashboard_bottom_nav.dart';
@@ -93,6 +95,9 @@ class DashboardPhoneFrame extends StatelessWidget {
                             }
 
                             if (tab == DashboardTab.people) {
+                              if (AppModeScope.isClient(context)) {
+                                return const CoursesPage(embedInDashboard: true);
+                              }
                               return const ClientPage(embedInDashboard: true);
                             }
 

@@ -1,0 +1,4 @@
+enum AppRole {
+  tutor,
+  client,
+}

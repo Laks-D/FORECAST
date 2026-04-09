@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
+import '../../../../core/app/app_mode.dart';
 
 import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
 import 'package:gendral_app/design_system/widgets/app_loading.dart';
@@ -37,6 +38,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     final defaultCurrency = context.select((UserProfileCubit c) => c.state.currency);
     final bgColor = scheme.surface;
     final onSurface = scheme.onSurface;
+    final isClient = AppModeScope.isClient(context);
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -52,7 +54,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
-                      'Payment',
+                      isClient ? 'My payments' : 'Payment',
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 color: onSurface,
@@ -64,7 +66,8 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: AppSearchField(
-                      hintText: 'Search customer / phone',
+                      hintText:
+                          isClient ? 'Search note / date / amount' : 'Search customer / phone',
                       onChanged: (value) {
                         setState(() => _query = value.toLowerCase().trim());
                       },
@@ -78,15 +81,40 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                           return AppLoading(color: onSurface);
                         }
 
+                        if (state.entities.isEmpty) {
+                          return Center(
+                            child: AppEmptyState(
+                              message: isClient
+                                  ? 'No profile linked to this account'
+                                  : 'No payments found',
+                              icon: isClient
+                                  ? Icons.person_outline
+                                  : Icons.payments_outlined,
+                            ),
+                          );
+                        }
+
+                        bool matchesQuery(_PaymentVM p) {
+                          if (_query.isEmpty) return true;
+
+                          if (!isClient) {
+                          return p.customerName
+                              .toLowerCase()
+                              .contains(_query) ||
+                            p.contact.contains(_query);
+                          }
+
+                          final note = (p.note ?? '').toLowerCase();
+                          final date = _formatDate(p.paidAt).toLowerCase();
+                          final amount = p.amount.toStringAsFixed(0);
+                          return note.contains(_query) ||
+                            date.contains(_query) ||
+                            amount.contains(_query);
+                        }
+
                         final payments = _extractPaidPayments(state.entities)
-                            .where(
-                              (p) =>
-                                  p.customerName
-                                      .toLowerCase()
-                                      .contains(_query) ||
-                                  p.contact.contains(_query),
-                            )
-                            .toList();
+                          .where(matchesQuery)
+                          .toList();
 
                         if (payments.isEmpty) {
                           return const Center(

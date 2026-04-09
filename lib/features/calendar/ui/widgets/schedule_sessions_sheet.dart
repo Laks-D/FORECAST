@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../../../core/storage/program_catalog_storage.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
@@ -216,6 +217,8 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     final chrome = AppChromeTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final visual = AppVisualStyle.of(context);
+
+    final isClientMode = AppModeScope.isClient(context);
 
     final selectedProgram = _registeredPrograms.any((p) => p.name == _programName) ? _programName : null;
     final startLabel = AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes);
@@ -535,7 +538,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                         children: [
                           Expanded(
                             child: OutlinedButton(
-                              onPressed: state.isLoading
+                              onPressed: (isClientMode || state.isLoading)
                                   ? null
                                   : () => _generateDraft(state.sessions),
                               style: OutlinedButton.styleFrom(
@@ -552,7 +555,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                           const SizedBox(width: 12),
                           Expanded(
                             child: FilledButton(
-                              onPressed: (_draft.isEmpty || _clashIds.isNotEmpty)
+                              onPressed: (isClientMode || _draft.isEmpty || _clashIds.isNotEmpty)
                                   ? null
                                   : _saveDraft,
                               style: FilledButton.styleFrom(
@@ -571,6 +574,19 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                           ),
                         ],
                       ),
+                      if (isClientMode) ...[
+                        const SizedBox(height: 10),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Client mode: view-only.',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: chrome.mutedColor,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

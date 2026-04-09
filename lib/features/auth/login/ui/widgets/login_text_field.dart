@@ -8,6 +8,7 @@ class LoginTextField extends StatelessWidget {
   const LoginTextField({
     super.key,
     required this.onChanged,
+    this.controller,
     this.labelText,
     this.hintText,
     this.obscureText = false,
@@ -15,6 +16,7 @@ class LoginTextField extends StatelessWidget {
   });
 
   final ValueChanged<String> onChanged;
+  final TextEditingController? controller;
   final String? labelText;
   final String? hintText;
   final bool obscureText;
@@ -48,6 +50,7 @@ class LoginTextField extends StatelessWidget {
               ? AppNeumorphicFieldContainer(
                   borderRadius: BorderRadius.circular(14),
                   child: TextField(
+                    controller: controller,
                     obscureText: obscureText,
                     onChanged: onChanged,
                     decoration: InputDecoration(
@@ -76,6 +79,7 @@ class LoginTextField extends StatelessWidget {
                   ),
                 )
               : TextField(
+                  controller: controller,
                   obscureText: obscureText,
                   onChanged: onChanged,
                   decoration: InputDecoration(

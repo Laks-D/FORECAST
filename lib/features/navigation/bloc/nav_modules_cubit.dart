@@ -4,6 +4,7 @@ import 'package:bloc/bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../dashboard/bloc/dashboard_state.dart';
+import '../../../core/app/app_mode.dart';
 import '../../../core/services/user_firestore_sync.dart';
 import 'nav_modules_state.dart';
 
@@ -12,18 +13,29 @@ class NavModulesCubit extends Cubit<NavModulesState> {
     _load();
   }
 
-  static const _prefsKey = 'nav_modules_v1';
-  static const _supportedTabs = <DashboardTab>[
-    DashboardTab.calendar,
-    DashboardTab.people,
-    DashboardTab.home,
-    DashboardTab.phone,
-    DashboardTab.settings,
-  ];
+  static String get _prefsKey => AppModeConfig.isClient ? 'nav_modules_client_v1' : 'nav_modules_admin_v1';
+
+  static List<DashboardTab> get _supportedTabs => AppModeConfig.isClient
+      ? const <DashboardTab>[
+          DashboardTab.people,
+          DashboardTab.calendar,
+          DashboardTab.home,
+          DashboardTab.phone,
+          DashboardTab.settings,
+        ]
+      : const <DashboardTab>[
+          DashboardTab.calendar,
+          DashboardTab.people,
+          DashboardTab.home,
+          DashboardTab.phone,
+          DashboardTab.settings,
+        ];
 
   Future<void> toggleEnabled(DashboardTab tab, bool enabled) async {
-    // Safety: keep Dashboard and Profile always available.
-    if (tab == DashboardTab.home || tab == DashboardTab.settings) return;
+    // Safety: keep Dashboard always available.
+    if (tab == DashboardTab.home) return;
+    // Safety: keep Profile/Settings always available.
+    if (tab == DashboardTab.settings) return;
 
     final currentEnabled = state.enabled.toSet();
     if (enabled) {
@@ -31,8 +43,9 @@ class NavModulesCubit extends Cubit<NavModulesState> {
     } else {
       currentEnabled.remove(tab);
     }
-    // Ensure Dashboard + Profile are always enabled.
+    // Ensure Dashboard is always enabled.
     currentEnabled.add(DashboardTab.home);
+    // Ensure Profile is always enabled.
     currentEnabled.add(DashboardTab.settings);
 
     // Ensure we never end up with 0 visible tabs.
@@ -156,7 +169,9 @@ class NavModulesCubit extends Cubit<NavModulesState> {
       state.copyWith(
         order: normalizedOrder,
         enabled: enabledSet.toList(growable: false),
-        visibleTabs: visibleTabs.isEmpty ? const [DashboardTab.home, DashboardTab.settings] : visibleTabs,
+        visibleTabs: visibleTabs.isEmpty
+            ? const [DashboardTab.home, DashboardTab.settings]
+            : visibleTabs,
         isLoaded: isLoaded,
       ),
     );
@@ -173,7 +188,7 @@ class NavModulesCubit extends Cubit<NavModulesState> {
   }
 
   List<DashboardTab> _ensureAllTabs(List<DashboardTab> order) {
-    const all = _supportedTabs;
+    final all = _supportedTabs;
 
     final set = order.toSet();
     final out = [...order];
