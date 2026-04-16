@@ -18,6 +18,25 @@ import '../../../client/presentation/bloc/client_state.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import 'client_transactions_page.dart';
 
+// Helper VM for single payment extraction
+class _PaymentSingleVM {
+  final String entityId;
+  final String customerName;
+  final String contact;
+  final double amount;
+  final String? note;
+  final DateTime paidAt;
+
+  _PaymentSingleVM({
+    required this.entityId,
+    required this.customerName,
+    required this.contact,
+    required this.amount,
+    required this.note,
+    required this.paidAt,
+  });
+}
+
 class PaymentsQueuePage extends StatefulWidget {
   const PaymentsQueuePage({super.key, this.embedInDashboard = false});
 
@@ -27,7 +46,64 @@ class PaymentsQueuePage extends StatefulWidget {
   State<PaymentsQueuePage> createState() => _PaymentsQueuePageState();
 }
 
+// ================= INTERNAL VIEW MODEL & LIST ITEMS =================
+
+class _PaymentVM {
+  final String entityId;
+  final String customerName;
+  final String contact;
+  final double amount;
+  final String? note;
+  final DateTime paidAt;
+  final int paymentCount;
+
+  _PaymentVM({
+    required this.entityId,
+    required this.customerName,
+    required this.contact,
+    required this.amount,
+    required this.note,
+    required this.paidAt,
+    required this.paymentCount,
+  });
+
+  _PaymentVM copyWith({
+    double? amount,
+    String? note,
+    DateTime? paidAt,
+    int? paymentCount,
+  }) {
+    return _PaymentVM(
+      entityId: entityId,
+      customerName: customerName,
+      contact: contact,
+      amount: amount ?? this.amount,
+      note: note ?? this.note,
+      paidAt: paidAt ?? this.paidAt,
+      paymentCount: paymentCount ?? this.paymentCount,
+    );
+  }
+}
+
+abstract class _PaymentsListItem {
+  const _PaymentsListItem();
+}
+
+class _MonthHeaderItem extends _PaymentsListItem {
+  const _MonthHeaderItem({required this.label, required this.total});
+  final String label;
+  final double total;
+}
+
+class _PaymentItem extends _PaymentsListItem {
+  const _PaymentItem(this.payment);
+  final _PaymentVM payment;
+}
+
 class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
+    String _formatDate(DateTime dt) {
+      return AppDateUtils.displayDate(dt);
+    }
   String _query = '';
 
   @override
@@ -206,13 +282,22 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                                   color: Colors.transparent,
                                   child: InkWell(
                                     onTap: () {
+                                      // If this payment is 'Paid fully', update all for this client+date to 'Paid'
+                                      if ((payment.note?.toLowerCase().contains('paid fully') ?? false)) {
+                                        // TODO: Dispatch a Bloc event or call your repository/service here to update
+                                        // all payments for this client and date to status 'Paid'.
+                                        // Example:
+                                        // context.read<ClientBloc>().add(UpdatePaymentsStatus(
+                                        //   clientId: payment.entityId,
+                                        //   date: payment.paidAt,
+                                        //   status: 'Paid',
+                                        // ));
+                                      }
                                       final entity = state.entities.firstWhere(
                                         (e) => e.id == payment.entityId,
                                       );
-
                                       final clientBloc = context.read<ClientBloc>();
                                       final sessionsCubit = context.read<SessionsCubit>();
-
                                       Navigator.push(
                                         context,
                                         MaterialPageRoute(
@@ -370,7 +455,8 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
           ),
         );
       }
-      items.add(_PaymentItem(p));
+          // Do NOT merge payments for 'Paid fully' (show each payment as a separate row)
+          items.add(_PaymentItem(p));
     }
     return items;
   }
@@ -437,35 +523,16 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
       }
     }
 
-    final grouped = <String, _PaymentVM>{};
-    for (final p in singles) {
-      final dayKey = AppDateUtils.dateToStr(p.paidAt);
-      final key = '${p.entityId}::$dayKey';
-
-      final existing = grouped[key];
-      if (existing == null) {
-        grouped[key] = _PaymentVM(
-          entityId: p.entityId,
-          customerName: p.customerName,
-          contact: p.contact,
-          amount: p.amount,
-          paidAt: p.paidAt,
-          note: p.note,
-          paymentCount: 1,
-        );
-        continue;
-      }
-
-      grouped[key] = existing.copyWith(
-        amount: existing.amount + p.amount,
-        paymentCount: existing.paymentCount + 1,
-        note: _mergeNote(existing.note, p.note),
-        // keep the date stable; but ensure we sort properly if times differ
-        paidAt: existing.paidAt.isAfter(p.paidAt) ? existing.paidAt : p.paidAt,
-      );
-    }
-
-    final out = grouped.values.toList();
+    // Absolutely no merging: every payment is a separate entry, with its own status and amount
+    final out = singles.map((p) => _PaymentVM(
+      entityId: p.entityId,
+      customerName: p.customerName,
+      contact: p.contact,
+      amount: p.amount,
+      paidAt: p.paidAt,
+      note: p.note,
+      paymentCount: 1,
+    )).toList();
     out.sort((a, b) => b.paidAt.compareTo(a.paidAt));
     return out;
   }
@@ -479,84 +546,5 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     if (aa == bb) return aa;
     return 'Multiple payments';
   }
-
-  String _formatDate(DateTime dt) {
-    return AppDateUtils.displayDate(dt);
-  }
 }
 
-/* ================= INTERNAL VIEW MODEL ================= */
-
-class _PaymentVM {
-  final String entityId;
-  final String customerName;
-  final String contact;
-  final double amount;
-  final String? note;
-  final DateTime paidAt;
-  final int paymentCount;
-
-  _PaymentVM({
-    required this.entityId,
-    required this.customerName,
-    required this.contact,
-    required this.amount,
-    required this.note,
-    required this.paidAt,
-    required this.paymentCount,
-  });
-
-  _PaymentVM copyWith({
-    double? amount,
-    String? note,
-    DateTime? paidAt,
-    int? paymentCount,
-  }) {
-    return _PaymentVM(
-      entityId: entityId,
-      customerName: customerName,
-      contact: contact,
-      amount: amount ?? this.amount,
-      note: note ?? this.note,
-      paidAt: paidAt ?? this.paidAt,
-      paymentCount: paymentCount ?? this.paymentCount,
-    );
-  }
-}
-
-class _PaymentSingleVM {
-  final String entityId;
-  final String customerName;
-  final String contact;
-  final double amount;
-  final String? note;
-  final DateTime paidAt;
-
-  _PaymentSingleVM({
-    required this.entityId,
-    required this.customerName,
-    required this.contact,
-    required this.amount,
-    required this.note,
-    required this.paidAt,
-  });
-}
-
-/* ================= LIST ITEMS ================= */
-
-abstract class _PaymentsListItem {
-  const _PaymentsListItem();
-}
-
-class _MonthHeaderItem extends _PaymentsListItem {
-  const _MonthHeaderItem({required this.label, required this.total});
-
-  final String label;
-  final double total;
-}
-
-class _PaymentItem extends _PaymentsListItem {
-  const _PaymentItem(this.payment);
-
-  final _PaymentVM payment;
-}
