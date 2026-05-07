@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
 import 'package:gendral_app/design_system/theme/app_visual_style.dart';
@@ -13,6 +14,8 @@ import 'package:gendral_app/design_system/widgets/app_search_field.dart';
 import 'package:gendral_app/design_system/widgets/app_neumorphic_buttons.dart';
 
 import '../../../calendar/bloc/sessions_cubit.dart';
+import '../../../../utils/app_links.dart';
+import '../../../../services/supabase_service.dart';
 import '../../domain/entities/client.dart';
 import '../bloc/client_bloc.dart';
 import '../bloc/client_event.dart';
@@ -55,9 +58,14 @@ const _quickAddCodes = <String>[
 ];
 
 class ClientPage extends StatefulWidget {
-  const ClientPage({super.key, this.embedInDashboard = false});
+  const ClientPage({
+    super.key,
+    this.embedInDashboard = false,
+    this.orgId,
+  });
 
   final bool embedInDashboard;
+  final String? orgId;
 
   @override
   State<ClientPage> createState() => _ClientPageState();
@@ -66,11 +74,45 @@ class ClientPage extends StatefulWidget {
 class _ClientPageState extends State<ClientPage> {
   static const _pinnedPrefsKey = 'pinned_clients_v1';
   Set<String> _pinnedClientIds = <String>{};
+  String? _resolvedOrgId;
 
   @override
   void initState() {
     super.initState();
     _loadPinnedClients();
+    _resolveOrgIdIfNeeded();
+  }
+
+  void _shareJoinLink(String? orgId) {
+    final messenger = ScaffoldMessenger.of(context);
+    if (orgId == null) {
+      messenger.showSnackBar(
+        const SnackBar(content: Text('No organization selected to generate link.')),
+      );
+      return;
+    }
+
+    final link = OnboardingLink.generateLink(orgId);
+    Share.share(
+      'Join my class! 🎓\n\n$link',
+      subject: 'Class Invitation',
+    );
+  }
+
+  Future<void> _resolveOrgIdIfNeeded() async {
+    if (widget.orgId != null) return;
+
+    try {
+      final orgs = await SupabaseService.instance.fetchOrganizations();
+      if (orgs.isNotEmpty) {
+        final id = orgs.first['id'] as String?;
+        if (id != null && mounted) {
+          setState(() => _resolvedOrgId = id);
+        }
+      }
+    } catch (_) {
+      // ignore errors - leave _resolvedOrgId null
+    }
   }
 
   Future<void> _loadPinnedClients() async {
@@ -368,6 +410,7 @@ class _ClientPageState extends State<ClientPage> {
     final visual = AppVisualStyle.of(context);
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final onSurface = scheme.onSurface;
+    final currentOrgId = widget.orgId ?? _resolvedOrgId;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -395,14 +438,80 @@ class _ClientPageState extends State<ClientPage> {
                             ),
                       ),
                     ),
-                    if (visual.neumorphism)
-                      AppNeumorphicIconButton(
-                        tooltip: 'Add Client',
-                        icon: Icons.add,
-                        iconSize: 24,
-                        onPressed: _showAddClientOptions,
-                      )
-                    else
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (visual.neumorphism)
+                          AppNeumorphicIconButton(
+                            tooltip: 'Share Join Link',
+                            icon: Icons.qr_code,
+                            iconSize: 22,
+                            onPressed: () => _shareJoinLink(currentOrgId),
+                          )
+                        else
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: scheme.outlineVariant.withOpacity(0.55),
+                              ),
+                            ),
+                            child: IconButton(
+                              tooltip: 'Share Join Link',
+                              onPressed: () => _shareJoinLink(currentOrgId),
+                              icon: Icon(Icons.qr_code, size: 22),
+                              color: onSurface,
+                            ),
+                          ),
+                        const SizedBox(width: 8),
+                        if (visual.neumorphism)
+                          AppNeumorphicIconButton(
+                            tooltip: 'Add Client',
+                            icon: Icons.add,
+                            iconSize: 24,
+                            onPressed: _showAddClientOptions,
+                          )
+                        else
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: scheme.outlineVariant.withOpacity(0.55),
+                              ),
+                            ),
+                            child: IconButton(
+                              tooltip: 'Add Client',
+                              onPressed: _showAddClientOptions,
+                              icon: const Icon(Icons.add, size: 24),
+                              color: onSurface,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SearchPill(
+                        hintText: 'Search customer / phone / program',
+                        onChanged: (value) {
+                          final sessions =
+                              context.read<SessionsCubit>().state.sessions;
+                          context
+                              .read<ClientBloc>()
+                              .add(SearchClients(value, sessions: sessions));
+                        },
+                      ),
+                    ),
+                    if (currentOrgId != null) ...[
+                      const SizedBox(width: 8),
                       DecoratedBox(
                         decoration: BoxDecoration(
                           color: scheme.surface,
@@ -412,27 +521,24 @@ class _ClientPageState extends State<ClientPage> {
                           ),
                         ),
                         child: IconButton(
-                          tooltip: 'Add Client',
-                          onPressed: _showAddClientOptions,
-                          icon: const Icon(Icons.add, size: 24),
-                          color: onSurface,
+                          tooltip: 'Share Join Link',
+                          onPressed: () {
+                            final link =
+                                OnboardingLink.generateLink(currentOrgId);
+                            Share.share(
+                              'Join my class! 🎓\n\n$link',
+                              subject: 'Class Invitation',
+                            );
+                          },
+                          icon: Icon(
+                            Icons.qr_code_2,
+                            size: 24,
+                            color: onSurface,
+                          ),
                         ),
                       ),
+                    ],
                   ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _SearchPill(
-                  hintText: 'Search customer / phone / program',
-                  onChanged: (value) {
-                    final sessions =
-                        context.read<SessionsCubit>().state.sessions;
-                    context
-                        .read<ClientBloc>()
-                        .add(SearchClients(value, sessions: sessions));
-                  },
                 ),
               ),
               const SizedBox(height: 14),
