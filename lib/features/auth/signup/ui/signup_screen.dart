@@ -13,6 +13,7 @@ import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../core/app/widgets/app_mode_selector.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
+import '../../../../services/supabase_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -128,6 +129,22 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  Future<void> _syncFirebaseUserWithSupabase(User? user) async {
+    final uid = user?.uid;
+    if (uid == null || uid.isEmpty) return;
+
+    try {
+      await SupabaseService.instance.syncFirebaseUserWithSupabase(
+        uid: uid,
+        email: user?.email,
+        displayName: user?.displayName,
+        photoUrl: user?.photoURL,
+      );
+    } catch (_) {
+      // Supabase mirrors Firebase auth; signup should still complete if mirroring fails.
+    }
+  }
+
   Future<void> _onFinishRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -143,6 +160,8 @@ class _SignupScreenState extends State<SignupScreen> {
         email: email,
         password: password,
       );
+
+      await _syncFirebaseUserWithSupabase(credential.user);
 
       final uid = credential.user?.uid;
       if (uid != null) {
@@ -161,14 +180,6 @@ class _SignupScreenState extends State<SignupScreen> {
             SetOptions(merge: true),
           );
         } on FirebaseException catch (e) {
-          // Convert Firestore failures into a user-facing message.
-          try {
-            await credential.user?.delete();
-            await FirebaseAuth.instance.signOut();
-          } catch (_) {
-            // Ignore cleanup failures.
-          }
-
           final message = switch (e.code) {
             'permission-denied' =>
               'Database permission denied. Update Firestore rules.',
@@ -176,20 +187,19 @@ class _SignupScreenState extends State<SignupScreen> {
               'No internet connection (Firestore client is offline).',
             _ => (e.message ?? 'Database error (${e.code})'),
           };
-          throw FirebaseAuthException(
-              code: 'FIRESTORE_ERROR', message: message);
-        } catch (_) {
-          // Unknown failure saving profile; avoid orphaned auth users.
-          try {
-            await credential.user?.delete();
-            await FirebaseAuth.instance.signOut();
-          } catch (_) {
-            // Ignore cleanup failures.
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(message)),
+            );
           }
-          throw FirebaseAuthException(
-            code: 'SIGNUP_INCOMPLETE',
-            message: 'Signup failed while saving profile. Please try again.',
-          );
+        } catch (_) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Saved your account, but profile sync needs a retry.'),
+              ),
+            );
+          }
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -199,6 +209,7 @@ class _SignupScreenState extends State<SignupScreen> {
             email: email,
             password: password,
           );
+          await _syncFirebaseUserWithSupabase(FirebaseAuth.instance.currentUser);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -274,6 +285,9 @@ class _SignupScreenState extends State<SignupScreen> {
 
             try {
               await GoogleAuth.signIn();
+              await _syncFirebaseUserWithSupabase(
+                FirebaseAuth.instance.currentUser,
+              );
               if (!mounted) return;
               navigator.popUntil((route) => route.isFirst);
             } on FirebaseAuthException catch (e) {
