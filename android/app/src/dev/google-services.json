@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "456644090772",
+    "project_id": "genericapp-dev",
+    "storage_bucket": "genericapp-dev.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:456644090772:android:7f8ec6aa3ced7869010d81",
+        "android_client_info": {
+          "package_name": "com.snow.app.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDp7z0Mi-_EZykIKs_l3gFZ56qpEPVOHRI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

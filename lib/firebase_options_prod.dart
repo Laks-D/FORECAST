@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart'
 ///
 /// Example:
 /// ```dart
-/// import 'firebase_options_dev.dart';
+/// import 'firebase_options_prod.dart';
 /// // ...
 /// await Firebase.initializeApp(
 ///   options: DefaultFirebaseOptions.currentPlatform,
@@ -47,29 +47,30 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyDMDn2dsYCUz3xZ-Efa9YNLSyglS57w2Ec',
-    appId: '1:456644090772:web:c551ac5be07daa62010d81',
-    messagingSenderId: '456644090772',
-    projectId: 'genericapp-dev',
-    authDomain: 'genericapp-dev.firebaseapp.com',
-    storageBucket: 'genericapp-dev.firebasestorage.app',
-    measurementId: 'G-98F89LBSNN',
+    apiKey: 'AIzaSyBg2ts_e1SDsP4c4VHhFchV8t2dWXcp7JE',
+    appId: '1:936056592369:web:425c1ddea0460004861650',
+    messagingSenderId: '936056592369',
+    projectId: 'genericapp-prod',
+    authDomain: 'genericapp-prod.firebaseapp.com',
+    storageBucket: 'genericapp-prod.firebasestorage.app',
+    measurementId: 'G-HC53YDG4WF',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyDp7z0Mi-_EZykIKs_l3gFZ56qpEPVOHRI',
-    appId: '1:456644090772:android:7f8ec6aa3ced7869010d81',
-    messagingSenderId: '456644090772',
-    projectId: 'genericapp-dev',
-    storageBucket: 'genericapp-dev.firebasestorage.app',
+    apiKey: 'AIzaSyD1Fh0dAbxs8Lj_asG0Ui2aM937ZfshBhM',
+    appId: '1:936056592369:android:6ec8d1e1e298fde6861650',
+    messagingSenderId: '936056592369',
+    projectId: 'genericapp-prod',
+    storageBucket: 'genericapp-prod.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyDJZhdTUVVGGqUQFKLZxbnQiRZs9hwnZpk',
-    appId: '1:456644090772:ios:d98e1da61ce0d251010d81',
-    messagingSenderId: '456644090772',
-    projectId: 'genericapp-dev',
-    storageBucket: 'genericapp-dev.firebasestorage.app',
+    apiKey: 'AIzaSyAXj884grWTR_esXYrBXTTO3EqNY0fc4nE',
+    appId: '1:936056592369:ios:9eef809a9cd1b669861650',
+    messagingSenderId: '936056592369',
+    projectId: 'genericapp-prod',
+    storageBucket: 'genericapp-prod.firebasestorage.app',
+    iosClientId: '936056592369-7aau6ckpp7sf9t052cuubasusgglp12p.apps.googleusercontent.com',
     iosBundleId: 'com.snow.app',
   );
 

@@ -5,9 +5,9 @@ import '../../../../core/app/app_mode.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 
-import 'package:gendral_app/design_system/widgets/app_card.dart';
-import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
-import 'package:gendral_app/design_system/widgets/app_loading.dart';
+import 'package:snow/design_system/widgets/app_card.dart';
+import 'package:snow/design_system/widgets/app_empty_state.dart';
+import 'package:snow/design_system/widgets/app_loading.dart';
 
 import '../../../client/domain/entities/client.dart';
 import '../../../client/domain/entities/client_timeline_event.dart';

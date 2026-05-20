@@ -8,7 +8,6 @@ import '../../../../core/auth/username_key.dart';
 import '../../../../core/auth/google_auth.dart';
 import '../../../../core/app/app_mode.dart';
 import '../../../../core/firebase/firestore_db.dart';
-import '../../../../services/supabase_service.dart';
 
 import 'login_event.dart';
 import 'login_state.dart';
@@ -75,7 +74,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
         password: state.password,
       );
 
-      await _syncFirebaseUserWithSupabase(credential.user);
       await _upsertUserProfile(credential.user);
       emit(state.copyWith(status: LoginStatus.success, email: resolvedEmail));
     } on FirebaseAuthException catch (e) {
@@ -110,7 +108,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       final userCredential = await GoogleAuth.signIn();
       final email = userCredential.user?.email;
 
-      await _syncFirebaseUserWithSupabase(userCredential.user);
       await _upsertUserProfile(userCredential.user);
 
       emit(
@@ -179,19 +176,4 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     }
   }
 
-  Future<void> _syncFirebaseUserWithSupabase(User? user) async {
-    final uid = user?.uid;
-    if (uid == null || uid.isEmpty) return;
-
-    try {
-      await SupabaseService.instance.syncFirebaseUserWithSupabase(
-        uid: uid,
-        email: user?.email,
-        displayName: user?.displayName,
-        photoUrl: user?.photoURL,
-      );
-    } catch (_) {
-      // Supabase is a mirror for profile data; auth should still complete.
-    }
-  }
 }

@@ -1,5 +1,4 @@
 
-import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -11,7 +10,6 @@ import '../../../core/di/service_locator.dart';
 import '../../../core/app/app_mode_cubit.dart';
 import '../../../core/app/app_mode.dart';
 import '../../../core/services/notification_cubit.dart';
-import '../../../services/supabase_service.dart';
 import '../../auth/login/ui/login_screen.dart';
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/bloc/client_event.dart';
@@ -31,32 +29,16 @@ class LandingScreen extends StatefulWidget {
 
 class _LandingScreenState extends State<LandingScreen> {
 	late final Future<void> _bootstrap;
-	StreamSubscription<User?>? _authSubscription;
 
 	@override
 	void initState() {
 		super.initState();
 		// Best-effort: enables dev-mode anonymous sign-in when SKIP_AUTH=true.
 		_bootstrap = runDevBootstrap();
-		_authSubscription = FirebaseAuth.instance.authStateChanges().listen((user) {
-			if (user == null) {
-				return;
-			}
-
-			unawaited(
-				SupabaseService.instance.syncFirebaseUserWithSupabase(
-					uid: user.uid,
-					email: user.email,
-					displayName: user.displayName,
-					photoUrl: user.photoURL,
-				),
-			);
-		});
 	}
 
 	@override
 	void dispose() {
-		_authSubscription?.cancel();
 		super.dispose();
 	}
 

@@ -13,7 +13,6 @@ import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../core/app/widgets/app_mode_selector.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
-import '../../../../services/supabase_service.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -129,21 +128,6 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  Future<void> _syncFirebaseUserWithSupabase(User? user) async {
-    final uid = user?.uid;
-    if (uid == null || uid.isEmpty) return;
-
-    try {
-      await SupabaseService.instance.syncFirebaseUserWithSupabase(
-        uid: uid,
-        email: user?.email,
-        displayName: user?.displayName,
-        photoUrl: user?.photoURL,
-      );
-    } catch (_) {
-      // Supabase mirrors Firebase auth; signup should still complete if mirroring fails.
-    }
-  }
 
   Future<void> _onFinishRegistration() async {
     if (!_formKey.currentState!.validate()) return;
@@ -160,8 +144,6 @@ class _SignupScreenState extends State<SignupScreen> {
         email: email,
         password: password,
       );
-
-      await _syncFirebaseUserWithSupabase(credential.user);
 
       final uid = credential.user?.uid;
       if (uid != null) {
@@ -209,7 +191,6 @@ class _SignupScreenState extends State<SignupScreen> {
             email: email,
             password: password,
           );
-          await _syncFirebaseUserWithSupabase(FirebaseAuth.instance.currentUser);
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -285,9 +266,6 @@ class _SignupScreenState extends State<SignupScreen> {
 
             try {
               await GoogleAuth.signIn();
-              await _syncFirebaseUserWithSupabase(
-                FirebaseAuth.instance.currentUser,
-              );
               if (!mounted) return;
               navigator.popUntil((route) => route.isFirst);
             } on FirebaseAuthException catch (e) {

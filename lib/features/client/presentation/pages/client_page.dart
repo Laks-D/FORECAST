@@ -3,19 +3,20 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
-import 'package:gendral_app/design_system/theme/app_visual_style.dart';
-import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
-import 'package:gendral_app/design_system/widgets/app_loading.dart';
-import 'package:gendral_app/design_system/widgets/app_search_field.dart';
-import 'package:gendral_app/design_system/widgets/app_neumorphic_buttons.dart';
+import 'package:snow/design_system/theme/app_chrome_theme.dart';
+import 'package:snow/design_system/theme/app_visual_style.dart';
+import 'package:snow/design_system/widgets/app_empty_state.dart';
+import 'package:snow/design_system/widgets/app_loading.dart';
+import 'package:snow/design_system/widgets/app_search_field.dart';
+import 'package:snow/design_system/widgets/app_neumorphic_buttons.dart';
 
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../../utils/app_links.dart';
-import '../../../../services/supabase_service.dart';
+import '../../../../core/firebase/firestore_db.dart';
 import '../../domain/entities/client.dart';
 import '../bloc/client_bloc.dart';
 import '../bloc/client_event.dart';
@@ -103,12 +104,17 @@ class _ClientPageState extends State<ClientPage> {
     if (widget.orgId != null) return;
 
     try {
-      final orgs = await SupabaseService.instance.fetchOrganizations();
-      if (orgs.isNotEmpty) {
-        final id = orgs.first['id'] as String?;
-        if (id != null && mounted) {
-          setState(() => _resolvedOrgId = id);
-        }
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null || uid.isEmpty) return;
+
+      final snap = await firestoreDb
+          .collection('organizations')
+          .where('ownerId', isEqualTo: uid)
+          .get();
+
+      if (snap.docs.isNotEmpty) {
+        final id = snap.docs.first.id;
+        if (mounted) setState(() => _resolvedOrgId = id);
       }
     } catch (_) {
       // ignore errors - leave _resolvedOrgId null

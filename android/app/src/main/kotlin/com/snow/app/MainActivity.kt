@@ -1,4 +1,4 @@
-package com.example.gendral_app
+package com.snow.app
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -57,3 +57,17 @@ android/local.properties
 # Env files
 .env
 .env.*
+
+# Firebase generated options (contains API keys — never commit)
+lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+
+# Firebase config files — contain API keys, never commit
+lib/firebase_options_dev.dart
+lib/firebase_options_prod.dart
+android/app/src/dev/google-services.json
+android/app/src/prod/google-services.json
+ios/Runner/GoogleService-Info.plist
+ios/Runner/GoogleService-Info-dev.plist
+ios/Runner/GoogleService-Info-prod.plist

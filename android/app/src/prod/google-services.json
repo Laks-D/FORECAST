@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "936056592369",
+    "project_id": "genericapp-prod",
+    "storage_bucket": "genericapp-prod.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:936056592369:android:6ec8d1e1e298fde6861650",
+        "android_client_info": {
+          "package_name": "com.snow.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "936056592369-af455m4p2bkqmpco80s2r8qc7631d3hd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1Fh0dAbxs8Lj_asG0Ui2aM937ZfshBhM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "936056592369-af455m4p2bkqmpco80s2r8qc7631d3hd.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "936056592369-7aau6ckpp7sf9t052cuubasusgglp12p.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.snow.app"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

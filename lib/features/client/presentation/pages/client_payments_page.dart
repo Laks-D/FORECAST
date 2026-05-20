@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
+import 'package:snow/design_system/theme/app_chrome_theme.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../domain/entities/client.dart';
