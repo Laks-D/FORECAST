@@ -244,6 +244,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     createClientUseCase.execute(
       name: event.name,
       primaryContact: event.primaryContact,
+      referredBy: event.referredBy,
       middleName: event.middleName,
       countryCode: event.countryCode,
       email: event.email,

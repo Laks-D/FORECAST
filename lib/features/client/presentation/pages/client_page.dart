@@ -23,6 +23,8 @@ import '../bloc/client_event.dart';
 import '../bloc/client_state.dart';
 import 'client_profile_page.dart';
 import 'client_registration_page.dart';
+import '../ui/invite_qr_page.dart';
+import '../ui/scan_invite_page.dart';
 
 /// Common country-code suggestions for the autocomplete (without +, prefix shown in field).
 const _quickAddCodes = <String>[
@@ -401,6 +403,18 @@ class _ClientPageState extends State<ClientPage> {
                   );
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.qr_code_scanner),
+                title: const Text('Scan invite QR'),
+                subtitle: const Text('Scan a tutor invite to prefill registration'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ScanInvitePage()),
+                  );
+                },
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -449,10 +463,17 @@ class _ClientPageState extends State<ClientPage> {
                       children: [
                         if (visual.neumorphism)
                           AppNeumorphicIconButton(
-                            tooltip: 'Share Join Link',
+                            tooltip: 'Invite — QR',
                             icon: Icons.qr_code,
                             iconSize: 22,
-                            onPressed: () => _shareJoinLink(currentOrgId),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => InviteQrPage(orgId: currentOrgId),
+                                ),
+                              );
+                            },
                           )
                         else
                           DecoratedBox(
@@ -464,8 +485,15 @@ class _ClientPageState extends State<ClientPage> {
                               ),
                             ),
                             child: IconButton(
-                              tooltip: 'Share Join Link',
-                              onPressed: () => _shareJoinLink(currentOrgId),
+                              tooltip: 'Invite — QR',
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => InviteQrPage(orgId: currentOrgId),
+                                  ),
+                                );
+                              },
                               icon: Icon(Icons.qr_code, size: 22),
                               color: onSurface,
                             ),

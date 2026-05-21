@@ -37,6 +37,7 @@ class AddPaymentToClient extends ClientEvent {
 class CreateClient extends ClientEvent {
   final String name;
   final String primaryContact;
+  final String? referredBy;
   final String? middleName;
   final String? countryCode;
   final String? email;
@@ -47,6 +48,7 @@ class CreateClient extends ClientEvent {
   CreateClient({
     required this.name,
     required this.primaryContact,
+    this.referredBy,
     this.middleName,
     this.countryCode,
     this.email,

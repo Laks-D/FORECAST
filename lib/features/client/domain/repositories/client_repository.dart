@@ -70,6 +70,7 @@ abstract class ClientRepository {
   void createClient({
     required String name,
     required String primaryContact,
+    String? referredBy,
     String? middleName,
     String? countryCode,
     String? email,

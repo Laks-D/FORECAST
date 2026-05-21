@@ -16,6 +16,18 @@ class OnboardingLink {
     return uri.toString();
   }
 
+  /// Generate an onboarding link that includes a tutor id and timestamp.
+  static String generateLinkWithTutor(String? orgId, String tutorId, String ts) {
+    final uri = Uri.parse(_baseUrl).replace(
+      queryParameters: {
+        if (orgId != null) 'orgId': orgId,
+        'tutorId': tutorId,
+        'ts': ts,
+      },
+    );
+    return uri.toString();
+  }
+
   /// Parse the orgId from an onboarding URL
   ///
   /// Returns null if the URL is invalid or does not contain an orgId parameter.
@@ -31,6 +43,16 @@ class OnboardingLink {
     try {
       final uri = Uri.parse(url);
       return uri.queryParameters['orgId'];
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Parse tutor id from an onboarding URL or QR payload.
+  static String? parseTutorId(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.queryParameters['tutorId'];
     } catch (e) {
       return null;
     }

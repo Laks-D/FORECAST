@@ -41,7 +41,9 @@ const _commonCodes = <String>[
 ];
 
 class ClientRegistrationPage extends StatefulWidget {
-  const ClientRegistrationPage({super.key});
+  const ClientRegistrationPage({super.key, this.referredBy});
+
+  final String? referredBy;
 
   @override
   State<ClientRegistrationPage> createState() => _ClientRegistrationPageState();
@@ -96,6 +98,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
           CreateClient(
             name: name,
             primaryContact: phone,
+            referredBy: widget.referredBy,
             middleName: middle.isEmpty ? null : middle,
             countryCode: () {
               var c = _countryCode.text.trim().replaceAll('+', '');

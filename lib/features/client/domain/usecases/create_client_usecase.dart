@@ -8,6 +8,7 @@ class CreateClientUseCase {
   void execute({
     required String name,
     required String primaryContact,
+    String? referredBy,
     String? middleName,
     String? countryCode,
     String? email,
@@ -18,6 +19,7 @@ class CreateClientUseCase {
     repository.createClient(
       name: name,
       primaryContact: primaryContact,
+      referredBy: referredBy,
       middleName: middleName,
       countryCode: countryCode,
       email: email,

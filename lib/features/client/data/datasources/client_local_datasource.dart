@@ -428,6 +428,7 @@ class ClientLocalDataSource {
   void addClient({
     required String name,
     required String primaryContact,
+    String? referredBy,
     String? middleName,
     String? countryCode,
     String? email,
@@ -453,6 +454,12 @@ class ClientLocalDataSource {
             id: _nextId(),
             createdAt: DateTime.now(),
           ),
+          if (referredBy != null)
+            ClientTimelineEvent.note(
+              id: _nextId(),
+              note: 'Referred by: $referredBy',
+              createdAt: DateTime.now(),
+            ),
         ],
       ),
     );

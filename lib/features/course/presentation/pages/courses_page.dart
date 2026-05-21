@@ -15,6 +15,7 @@ import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/domain/entities/client.dart';
 import 'course_profile_page.dart';
+import '../../../client/presentation/ui/scan_invite_page.dart';
 
 class CoursesPage extends StatefulWidget {
   const CoursesPage({
@@ -137,6 +138,16 @@ class _CoursesPageState extends State<CoursesPage> {
                             ),
                       ),
                     ),
+                    if (AppModeConfig.isClient)
+                      IconButton(
+                        tooltip: 'Join via Invite',
+                        icon: const Icon(Icons.qr_code_scanner),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ScanInvitePage()),
+                          );
+                        },
+                      ),
                   ],
                 ),
               ),

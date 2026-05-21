@@ -16,6 +16,7 @@ import '../bloc/client_event.dart';
 import '../bloc/client_state.dart';
 import 'client_payments_page.dart';
 import 'client_personal_details_page.dart';
+import '../ui/scan_invite_page.dart';
 
 class ClientProfilePage extends StatelessWidget {
   final Client entity;
@@ -244,7 +245,20 @@ class ClientProfilePage extends StatelessWidget {
         final current = updated ?? entity;
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Profile')),
+          appBar: AppBar(
+            title: const Text('Profile'),
+            actions: [
+              IconButton(
+                tooltip: 'Scan to join class',
+                icon: const Icon(Icons.qr_code_scanner),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ScanInvitePage()),
+                  );
+                },
+              ),
+            ],
+          ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [

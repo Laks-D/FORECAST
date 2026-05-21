@@ -61,6 +61,7 @@ class _LoginView extends StatelessWidget {
               );
             },
           ),
+          // Join via Invite moved to Courses (client view) per UX requirement.
           if (error != null && error.trim().isNotEmpty)
             Positioned(
               left: 18,

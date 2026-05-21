@@ -146,6 +146,7 @@ class ClientRepositoryImpl implements ClientRepository {
   void createClient({
     required String name,
     required String primaryContact,
+    String? referredBy,
     String? middleName,
     String? countryCode,
     String? email,
@@ -156,6 +157,7 @@ class ClientRepositoryImpl implements ClientRepository {
     localDataSource.addClient(
       name: name,
       primaryContact: primaryContact,
+      referredBy: referredBy,
       middleName: middleName,
       countryCode: countryCode,
       email: email,
