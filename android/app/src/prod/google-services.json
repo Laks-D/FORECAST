@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "936056592369-sl601a25jid54pn2u4edquujpibctv5c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.snow.app",
+            "certificate_hash": "0a8aeaf25dda9c3d1123410bd3f16833a315093d"
+          }
+        },
+        {
           "client_id": "936056592369-af455m4p2bkqmpco80s2r8qc7631d3hd.apps.googleusercontent.com",
           "client_type": 3
         }

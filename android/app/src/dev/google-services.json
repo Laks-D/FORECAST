@@ -12,7 +12,20 @@
           "package_name": "com.snow.app.dev"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "456644090772-o4ebdmtlpr3ehrm0k5v4sfjmaan8l0bq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.snow.app.dev",
+            "certificate_hash": "0a8aeaf25dda9c3d1123410bd3f16833a315093d"
+          }
+        },
+        {
+          "client_id": "456644090772-bafp2k821d4lmmd4m4r3su1d03a9514i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDp7z0Mi-_EZykIKs_l3gFZ56qpEPVOHRI"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "456644090772-bafp2k821d4lmmd4m4r3su1d03a9514i.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "456644090772-9vk146j2r013folu0qsmq6cf3ljm5ta0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.snow.app"
+              }
+            }
+          ]
         }
       }
     }

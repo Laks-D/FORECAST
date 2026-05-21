@@ -8,7 +8,6 @@ import 'core/di/service_locator.dart';
 import 'core/app/app_mode.dart';
 import 'core/app/app_mode_cubit.dart';
 import 'core/firebase/firestore_db.dart';
-import 'core/platform/web_online_status.dart';
 import 'core/services/notification_service.dart';
 import 'core/profile/user_profile_cubit.dart';
 import 'design_system/theme/app_theme.dart';
@@ -51,17 +50,7 @@ Future<void> runConfiguredApp({AppMode? forcedMode}) async {
   }
 
   if (kDebugMode) {
-    final online = isBrowserOnline;
-    debugPrint('Startup: platform=${kIsWeb ? 'web' : defaultTargetPlatform.name}, browserOnline=$online');
-    try {
-      // Firestore connectivity probe (no PII, no writes).
-      await firestoreDb.collection('__health').doc('ping').get();
-      debugPrint('Startup: Firestore health probe OK');
-    } on FirebaseException catch (e) {
-      debugPrint('Startup: Firestore health probe failed: code=${e.code} message=${e.message}');
-    } catch (e) {
-      debugPrint('Startup: Firestore health probe failed: $e');
-    }
+    debugPrint('Startup: platform=${kIsWeb ? 'web' : defaultTargetPlatform.name}');
   }
 
   await setupServiceLocator();
