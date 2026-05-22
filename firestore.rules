@@ -48,11 +48,17 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId} {
-      allow read: if withinDevWindow() && signedIn();
+      // Allow anyone to read org info — needed for QR invite flow
+      // where the student resolves tutorId→orgId before signing in.
+      allow read: if withinDevWindow();
+
+      // Only authenticated users can write (create org, add students, etc.)
       allow write: if withinDevWindow() && signedIn();
-      
+
       match /{document=**} {
-        allow read, write: if withinDevWindow() && signedIn();
+        // Sub-collections (e.g. students): read open, write requires auth
+        allow read: if withinDevWindow();
+        allow write: if withinDevWindow() && signedIn();
       }
     }
   }
