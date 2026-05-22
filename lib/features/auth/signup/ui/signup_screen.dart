@@ -35,6 +35,9 @@ class _SignupScreenState extends State<SignupScreen> {
   double _profileAlignY = 0;
 
   bool _acceptTerms = true;
+  bool _isGoogleSignup = false;
+  User? _googleUser;
+  String? _googlePhotoUrl;
 
   Alignment get _profileImageAlignment =>
       Alignment(_profileAlignX, _profileAlignY);
@@ -129,98 +132,105 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
 
+  Future<void> _saveUserToFirestore(String? uid) async {
+    if (uid == null) return;
+    try {
+      final userRef = firestoreDb.collection('users').doc(uid);
+      await userRef.set(
+        {
+          'fullName': _fullNameController.text.trim(),
+          'profession': _professionController.text.trim(),
+          'nationality': _nationality,
+          'currency': _currency,
+          'email': _emailController.text.trim(),
+          if (_googlePhotoUrl != null) 'photoURL': _googlePhotoUrl,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+    } on FirebaseException catch (e) {
+      final message = switch (e.code) {
+        'permission-denied' =>
+          'Database permission denied. Update Firestore rules.',
+        'unavailable' =>
+          'No internet connection (Firestore client is offline).',
+        _ => (e.message ?? 'Database error (${e.code})'),
+      };
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message)),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Saved your account, but profile sync needs a retry.'),
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _onFinishRegistration() async {
     if (!_formKey.currentState!.validate()) return;
 
     final email = _emailController.text.trim();
-    final password = _passwordController.text;
-    if (email.isEmpty || password.isEmpty) return;
+    if (email.isEmpty) return;
 
-    // Create Firebase user first (source of truth for identity).
-    // If the email already exists, fall back to sign-in so the user isn't blocked.
-    try {
-      final credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+    if (!_isGoogleSignup) {
+      final password = _passwordController.text;
+      if (password.isEmpty) return;
 
-      final uid = credential.user?.uid;
-      if (uid != null) {
-        try {
-          final userRef = firestoreDb.collection('users').doc(uid);
-          await userRef.set(
-            {
-              'fullName': _fullNameController.text.trim(),
-              'profession': _professionController.text.trim(),
-              'nationality': _nationality,
-              'currency': _currency,
-              'email': email,
-              'createdAt': FieldValue.serverTimestamp(),
-              'updatedAt': FieldValue.serverTimestamp(),
-            },
-            SetOptions(merge: true),
-          );
-        } on FirebaseException catch (e) {
-          final message = switch (e.code) {
-            'permission-denied' =>
-              'Database permission denied. Update Firestore rules.',
-            'unavailable' =>
-              'No internet connection (Firestore client is offline).',
-            _ => (e.message ?? 'Database error (${e.code})'),
-          };
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(message)),
+      try {
+        final credential =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+        await _saveUserToFirestore(credential.user?.uid);
+      } on FirebaseAuthException catch (e) {
+        if (e.code == 'email-already-in-use') {
+          try {
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
+              email: email,
+              password: password,
             );
-          }
-        } catch (_) {
-          if (mounted) {
+            if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Saved your account, but profile sync needs a retry.'),
+                  content: Text('Account already exists — signed you in.')),
+            );
+            Navigator.of(context).popUntil((route) => route.isFirst);
+            return;
+          } on FirebaseAuthException {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                    'Email already registered. Please log in or reset your password.'),
               ),
             );
+            return;
           }
         }
-      }
-    } on FirebaseAuthException catch (e) {
-      if (e.code == 'email-already-in-use') {
-        try {
-          await FirebaseAuth.instance.signInWithEmailAndPassword(
-            email: email,
-            password: password,
-          );
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Account already exists — signed you in.')),
-          );
-          Navigator.of(context).popUntil((route) => route.isFirst);
-          return;
-        } on FirebaseAuthException {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                  'Email already registered. Please log in or reset your password.'),
-            ),
-          );
-          return;
-        }
-      }
 
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Signup failed (${e.code})')),
-      );
-      return;
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Signup failed')),
-      );
-      return;
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Signup failed (${e.code})')),
+        );
+        return;
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Signup failed')),
+        );
+        return;
+      }
+    } else {
+      // It's a Google signup, user is already authenticated
+      await _saveUserToFirestore(_googleUser?.uid);
     }
 
     final profile = SignupProfileData(
@@ -261,13 +271,50 @@ class _SignupScreenState extends State<SignupScreen> {
         height: 46,
         child: OutlinedButton(
           onPressed: () async {
-            final navigator = Navigator.of(context);
             final messenger = ScaffoldMessenger.of(context);
 
             try {
-              await GoogleAuth.signIn();
-              if (!mounted) return;
-              navigator.popUntil((route) => route.isFirst);
+              final userCredential = await GoogleAuth.signIn();
+              final user = userCredential.user;
+              
+              if (user != null) {
+                // Check if account is ALREADY registered
+                final userDoc = await firestoreDb.collection('users').doc(user.uid).get();
+                bool exists = userDoc.exists;
+                
+                final email = user.email;
+                if (!exists && email != null && email.isNotEmpty) {
+                  final emailQuery = await firestoreDb.collection('users').where('email', isEqualTo: email).limit(1).get();
+                  if (emailQuery.docs.isNotEmpty) {
+                    exists = true;
+                  }
+                }
+
+                if (exists) {
+                  await FirebaseAuth.instance.signOut();
+                  throw FirebaseAuthException(
+                    code: 'ACCOUNT_EXISTS',
+                    message: 'Google account is already registered. Please log in.',
+                  );
+                }
+
+                if (!mounted) return;
+                setState(() {
+                  _isGoogleSignup = true;
+                  _googleUser = user;
+                  if (user.displayName != null) {
+                    _fullNameController.text = user.displayName!;
+                  }
+                  if (user.email != null) {
+                    _emailController.text = user.email!;
+                  }
+                  _googlePhotoUrl = user.photoURL;
+                });
+                
+                messenger.showSnackBar(
+                  const SnackBar(content: Text('Please confirm your details to complete sign up.')),
+                );
+              }
             } on FirebaseAuthException catch (e) {
               if (!mounted) return;
               messenger.showSnackBar(
@@ -415,12 +462,17 @@ class _SignupScreenState extends State<SignupScreen> {
                                   ),
                                   child: ClipOval(
                                     child: _profileImageBytes == null
-                                        ? Icon(
-                                            Icons.person_outline,
-                                            color: scheme.onSurface
-                                                .withOpacity(0.65),
-                                            size: 40,
-                                          )
+                                        ? (_googlePhotoUrl != null 
+                                            ? Image.network(
+                                                _googlePhotoUrl!,
+                                                fit: BoxFit.cover,
+                                              )
+                                            : Icon(
+                                                Icons.person_outline,
+                                                color: scheme.onSurface
+                                                    .withOpacity(0.65),
+                                                size: 40,
+                                              ))
                                         : Image.memory(
                                             _profileImageBytes!,
                                             fit: BoxFit.cover,
@@ -476,6 +528,7 @@ class _SignupScreenState extends State<SignupScreen> {
                             labelText: 'Email',
                             hintText: 'Your email',
                             controller: _emailController,
+                            readOnly: _isGoogleSignup,
                             validator: (value) {
                               final v = (value ?? '').trim();
                               if (v.isEmpty) return 'Required';
@@ -487,28 +540,30 @@ class _SignupScreenState extends State<SignupScreen> {
                             },
                           ),
                           const SizedBox(height: 14),
-                          _SignupField(
-                            labelText: 'Password',
-                            hintText: 'Enter your password',
-                            controller: _passwordController,
-                            obscureText: true,
-                          ),
-                          const SizedBox(height: 14),
-                          _SignupField(
-                            labelText: 'Confirm password',
-                            hintText: 'Re-enter your password',
-                            controller: _confirmPasswordController,
-                            obscureText: true,
-                            validator: (value) {
-                              final v = value ?? '';
-                              if (v.isEmpty) return 'Required';
-                              if (v != _passwordController.text) {
-                                return 'Passwords do not match';
-                              }
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
+                          if (!_isGoogleSignup) ...[
+                            _SignupField(
+                              labelText: 'Password',
+                              hintText: 'Enter your password',
+                              controller: _passwordController,
+                              obscureText: true,
+                            ),
+                            const SizedBox(height: 14),
+                            _SignupField(
+                              labelText: 'Confirm password',
+                              hintText: 'Re-enter your password',
+                              controller: _confirmPasswordController,
+                              obscureText: true,
+                              validator: (value) {
+                                final v = value ?? '';
+                                if (v.isEmpty) return 'Required';
+                                if (v != _passwordController.text) {
+                                  return 'Passwords do not match';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           Row(
                             children: [
                               Checkbox(
@@ -557,19 +612,21 @@ class _SignupScreenState extends State<SignupScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-                          Text(
-                            'Or register with',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: scheme.onSurface.withOpacity(0.55),
-                              fontWeight: FontWeight.w600,
+                          if (!_isGoogleSignup) ...[
+                            Text(
+                              'Or register with',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: scheme.onSurface.withOpacity(0.55),
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 10),
-                          SizedBox(
-                            width: double.infinity,
-                            child: googleWideButton(),
-                          ),
-                          const SizedBox(height: 14),
+                            const SizedBox(height: 10),
+                            SizedBox(
+                              width: double.infinity,
+                              child: googleWideButton(),
+                            ),
+                            const SizedBox(height: 14),
+                          ],
                           Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
@@ -761,6 +818,7 @@ class _SignupField extends StatelessWidget {
     required this.hintText,
     required this.controller,
     this.obscureText = false,
+    this.readOnly = false,
     this.validator,
   });
 
@@ -768,6 +826,7 @@ class _SignupField extends StatelessWidget {
   final String hintText;
   final TextEditingController controller;
   final bool obscureText;
+  final bool readOnly;
   final String? Function(String?)? validator;
 
   @override
@@ -794,6 +853,7 @@ class _SignupField extends StatelessWidget {
           child: TextFormField(
             controller: controller,
             obscureText: obscureText,
+            readOnly: readOnly,
             validator: validator ??
                 (value) {
                   if ((value ?? '').trim().isEmpty) return 'Required';

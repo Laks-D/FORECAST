@@ -106,9 +106,32 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
 
     try {
       final userCredential = await GoogleAuth.signIn();
-      final email = userCredential.user?.email;
+      final user = userCredential.user;
+      final email = user?.email;
 
-      await _upsertUserProfile(userCredential.user);
+      if (user != null) {
+        // Check if this account is already registered in our backend
+        final userDoc = await firestoreDb.collection('users').doc(user.uid).get();
+        bool exists = userDoc.exists;
+        
+        if (!exists && email != null && email.isNotEmpty) {
+          final emailQuery = await firestoreDb.collection('users').where('email', isEqualTo: email).limit(1).get();
+          if (emailQuery.docs.isNotEmpty) {
+            exists = true;
+          }
+        }
+
+        if (!exists) {
+          // Sign out immediately so we don't leave an orphaned session
+          await FirebaseAuth.instance.signOut();
+          throw FirebaseAuthException(
+            code: 'ACCOUNT_NOT_FOUND',
+            message: 'Account not registered. Please sign up instead.',
+          );
+        }
+      }
+
+      await _upsertUserProfile(user);
 
       emit(
         state.copyWith(

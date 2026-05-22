@@ -198,9 +198,13 @@ class SettingsPageBody extends StatelessWidget {
                         title: 'Module customization',
                         chevronColor: chevronColor,
                         onTap: () {
+                          final navCubit = context.read<NavModulesCubit>();
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => const ModuleCustomizationScreen(),
+                              builder: (_) => BlocProvider.value(
+                                value: navCubit,
+                                child: const ModuleCustomizationScreen(),
+                              ),
                             ),
                           );
                         },

@@ -46,5 +46,14 @@ service cloud.firestore {
         allow read, write: if withinDevWindow() && isUser(uid);
       }
     }
+
+    match /organizations/{orgId} {
+      allow read: if withinDevWindow() && signedIn();
+      allow write: if withinDevWindow() && signedIn();
+      
+      match /{document=**} {
+        allow read, write: if withinDevWindow() && signedIn();
+      }
+    }
   }
 }
