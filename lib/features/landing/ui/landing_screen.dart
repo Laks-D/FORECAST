@@ -17,6 +17,7 @@ import '../../client/presentation/pages/client_profile_page.dart';
 import '../../client/domain/usecases/get_clients_usecase.dart';
 import '../../client/domain/repositories/client_repository.dart';
 import '../../dashboard/ui/dashboard_screen.dart';
+import '../../join_request/bloc/join_request_listener_cubit.dart';
 import '../../navigation/bloc/nav_modules_cubit.dart';
 
 /// App root that decides whether to show auth screens or the signed-in app.
@@ -130,6 +131,9 @@ class _LandingScreenState extends State<LandingScreen> {
 																					create: (_) => sl<ClientBloc>()..add(LoadClients()),
 																				),
 																				BlocProvider(create: (_) => sl<NavModulesCubit>()),
+																											BlocProvider(
+																												create: (_) => JoinRequestListenerCubit()..startForAdmin(user.uid),
+																											),
 																			],
 																			child: AppModeScope(
 																				mode: modeState.mode ?? AppMode.admin,

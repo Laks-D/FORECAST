@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../../calendar/bloc/calendar_cubit.dart';
 import '../bloc/dashboard_cubit.dart';
 import 'widgets/dashboard_phone_frame.dart';
+import '../../join_request/ui/join_request_banner.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
@@ -61,7 +62,9 @@ class _DashboardView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: const DashboardPhoneFrame(),
+      body: JoinRequestBanner(
+        child: const DashboardPhoneFrame(),
+      ),
     );
   }
 }

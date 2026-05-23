@@ -16,6 +16,11 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function isOrgOwner(orgId) {
+      return signedIn()
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
+    }
+
     // Used by the app startup probe in lib/main.dart.
     match /__health/{docId} {
       allow read: if withinDevWindow();
@@ -60,6 +65,28 @@ service cloud.firestore {
         allow read: if withinDevWindow();
         allow write: if withinDevWindow() && signedIn();
       }
+    }
+
+    match /join_requests/{requestId} {
+      // Client submits request for self.
+      allow create: if withinDevWindow()
+        && signedIn()
+        && request.resource.data.clientFirebaseUid == request.auth.uid
+        && request.resource.data.status == 'pending';
+
+      // Client can read their own request; tutor can read org requests.
+      allow read: if withinDevWindow()
+        && signedIn()
+        && (
+          resource.data.clientFirebaseUid == request.auth.uid
+          || isOrgOwner(resource.data.orgId)
+        );
+
+      // Tutor owner can resolve request (accepted/rejected).
+      allow update: if withinDevWindow()
+        && isOrgOwner(resource.data.orgId);
+
+      allow delete: if false;
     }
   }
 }

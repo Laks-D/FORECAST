@@ -2,20 +2,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../../core/firebase/firestore_db.dart';
-import '../../../../core/di/service_locator.dart';
-import '../../domain/usecases/get_clients_usecase.dart';
-import '../../domain/entities/client.dart';
-import '../pages/client_registration_page.dart';
-import '../../../student_onboarding/ui/student_onboarding_screen.dart';
-import '../../domain/repositories/client_repository.dart';
-import '../../../student_onboarding/bloc/student_onboarding_bloc.dart';
-import '../../../student_onboarding/bloc/student_onboarding_event.dart';
+import '../../../join_request/join_request_service.dart';
+import '../../../join_request/ui/join_request_waiting_page.dart';
 
 class InviteLandingPage extends StatefulWidget {
   final String? tutorId;
   final String? orgId;
+  final String? qrTimestampMs;
 
-  const InviteLandingPage({super.key, this.tutorId, this.orgId});
+  const InviteLandingPage({
+    super.key,
+    this.tutorId,
+    this.orgId,
+    this.qrTimestampMs,
+  });
 
   @override
   State<InviteLandingPage> createState() => _InviteLandingPageState();
@@ -23,8 +23,11 @@ class InviteLandingPage extends StatefulWidget {
 
 class _InviteLandingPageState extends State<InviteLandingPage> {
   String? _resolvedOrgId;
-  Client? _matchedClient;
+  String _requestName = 'Client';
+  String _requestPhone = '';
+  String _adminName = 'Tutor';
   bool _loading = true;
+  bool _sending = false;
   String? _error;
 
   @override
@@ -46,18 +49,32 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
         if (snap.docs.isNotEmpty) orgId = snap.docs.first.id;
       }
 
-      // Load local clients to see if current Firebase user maps to a client
-      await sl<ClientRepository>().loadFromStorage();
-      final clients = sl<GetClientsUseCase>().execute();
-      final userEmail = (FirebaseAuth.instance.currentUser?.email ?? '').trim().toLowerCase();
-      final matched = clients.cast<dynamic>().firstWhere(
-        (c) => c != null && ((c as dynamic).email as String?)?.trim().toLowerCase() == userEmail,
-        orElse: () => null,
-      );
+      final user = FirebaseAuth.instance.currentUser;
+      final nameFromAuth = (user?.displayName ?? '').trim();
+      final emailFromAuth = (user?.email ?? '').trim();
+      final userDoc = user == null
+          ? null
+          : await firestoreDb.collection('users').doc(user.uid).get();
+
+      String adminName = 'Tutor';
+      if (orgId != null) {
+        final orgDoc = await firestoreDb.collection('organizations').doc(orgId).get();
+        final data = orgDoc.data();
+        final nameCandidate = (data?['name'] as String?)?.trim();
+        if (nameCandidate != null && nameCandidate.isNotEmpty) {
+          adminName = nameCandidate;
+        }
+      }
+
+      final phoneFromUserDoc = ((userDoc?.data()?['phone'] as String?) ?? '').trim();
 
       setState(() {
         _resolvedOrgId = orgId;
-        _matchedClient = matched as Client?;
+        _requestName = nameFromAuth.isNotEmpty
+            ? nameFromAuth
+            : (emailFromAuth.isNotEmpty ? emailFromAuth.split('@').first : 'Client');
+        _requestPhone = phoneFromUserDoc;
+        _adminName = adminName;
         _loading = false;
       });
     } catch (e) {
@@ -76,7 +93,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
     final hasOrg = _resolvedOrgId != null;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Invite')),
+      appBar: AppBar(title: const Text('Join Request')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -86,71 +103,68 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
             const SizedBox(height: 8),
             Text('Organization: ${hasOrg ? _resolvedOrgId : 'Not available'}'),
             const SizedBox(height: 20),
-            if (_matchedClient != null) ...[
-              Text('Signed-in as ${_matchedClient!.displayName}'),
-              const SizedBox(height: 12),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: hasOrg ? _joinAsClient : null,
-                  child: const Text('Join Class'),
-                ),
+            Text('Signed-in as $_requestName'),
+            const SizedBox(height: 8),
+            const Text(
+              'Request access to this class. Your tutor will accept or reject your request.',
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: hasOrg && !_sending ? _sendJoinRequest : null,
+                child: _sending
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Request to Join'),
               ),
-            ] else ...[
-              const Text('You are not registered as a client.'),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: () {
-                        // Register as full client (pre-fills referredBy)
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => ClientRegistrationPage(referredBy: widget.tutorId)),
-                        );
-                      },
-                      child: const Text('Register as Client'),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              if (hasOrg)
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () {
-                      // Allow joining without registering (student onboarding)
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => StudentOnboardingScreen(orgId: _resolvedOrgId!)),
-                      );
-                    },
-                    child: const Text('Join Without Registering'),
-                  ),
-                ),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  void _joinAsClient() async {
-    if (_resolvedOrgId == null || _matchedClient == null) return;
+  Future<void> _sendJoinRequest() async {
+    final orgId = _resolvedOrgId;
+    final user = FirebaseAuth.instance.currentUser;
+    if (orgId == null || user == null) return;
 
-    final bloc = StudentOnboardingBloc();
-    // Submit using client details
-    bloc.add(SubmitStudentFormEvent(
-      orgId: _resolvedOrgId!,
-      fullName: _matchedClient!.displayName,
-      phoneNumber: _matchedClient!.formattedPhone,
-      profession: '',
-    ));
+    if (!JoinRequestService.isQrValid(widget.qrTimestampMs)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This invite QR has expired. Please scan a new one.')),
+      );
+      return;
+    }
 
-    // Show temporary feedback and pop after small delay to allow write
-    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Joining class...')));
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    Navigator.of(context).popUntil((r) => r.isFirst);
+    setState(() => _sending = true);
+    try {
+      final docId = await JoinRequestService.sendRequest(
+        orgId: orgId,
+        clientFirebaseUid: user.uid,
+        clientName: _requestName,
+        clientPhone: _requestPhone,
+      );
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => JoinRequestWaitingPage(
+            docId: docId,
+            adminName: _adminName,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send request: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 }

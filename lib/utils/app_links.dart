@@ -57,4 +57,14 @@ class OnboardingLink {
       return null;
     }
   }
+
+  /// Parse timestamp from an onboarding URL or QR payload.
+  static String? parseTimestamp(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.queryParameters['ts'];
+    } catch (e) {
+      return null;
+    }
+  }
 }
