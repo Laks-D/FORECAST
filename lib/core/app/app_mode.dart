@@ -12,8 +12,16 @@ enum AppMode {
 class AppModeConfig {
   static AppMode mode = AppMode.admin;
 
+  /// True when the current user is enrolled as a student AND has tutor access.
+  /// Set by LandingScreen after the role check completes.
+  static bool isDualRole = false;
+
   static bool get isClient => mode == AppMode.client;
   static bool get isAdmin => mode == AppMode.admin;
+
+  /// Toggle between admin and client mode (only valid for dual-role users).
+  static AppMode get oppositeMode =>
+      mode == AppMode.admin ? AppMode.client : AppMode.admin;
 }
 
 class AppModeScope extends InheritedWidget {

@@ -147,6 +147,9 @@ class _SignupScreenState extends State<SignupScreen> {
           if (_googlePhotoUrl != null) 'photoURL': _googlePhotoUrl,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
+          // Default role is tutor — the user signed up to manage students.
+          // 'student' is added automatically when they enroll via a QR invite.
+          'roles': ['tutor'],
         },
         SetOptions(merge: true),
       );

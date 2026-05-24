@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -19,10 +20,10 @@ import '../../navigation/bloc/nav_modules_cubit.dart';
 
 /// Role detection result returned by [_checkRoles].
 class _Roles {
-  const _Roles({required this.isStudent, required this.isTutor});
-  final bool isStudent;
-  final bool isTutor;
-  bool get isDualRole => isStudent && isTutor;
+	const _Roles({required this.isStudent, required this.isTutor});
+	final bool isStudent;
+	final bool isTutor;
+	bool get isDualRole => isStudent && isTutor;
 }
 
 /// App root that decides whether to show auth screens or the signed-in app.
@@ -41,10 +42,33 @@ class _LandingScreenState extends State<LandingScreen> {
 	String? _lastCheckedUid;
 	Future<_Roles>? _rolesFuture;
 
+	/// The user's preferred app mode — loaded from Firestore on init and
+	/// updated whenever they pick a mode in the chooser or switch in Settings.
+	AppMode? _savedMode;
+	bool _modeLoaded = false;
+
 	@override
 	void initState() {
 		super.initState();
-		_bootstrap = runDevBootstrap();
+		_bootstrap = _init();
+	}
+
+	/// Runs dev bootstrap AND loads the saved mode preference in parallel so
+	/// the FutureBuilder waits for both before rendering any signed-in content.
+	Future<void> _init() async {
+		await Future.wait([
+			runDevBootstrap(),
+			_loadSavedMode(),
+		]);
+	}
+
+	Future<void> _loadSavedMode() async {
+		try {
+			_savedMode = await AppModeStorage.load();
+		} catch (_) {
+			// Non-fatal — we'll fall back to the mode chooser.
+		}
+		_modeLoaded = true;
 	}
 
 	Future<_Roles> _getRolesFuture(String uid) {
@@ -56,9 +80,26 @@ class _LandingScreenState extends State<LandingScreen> {
 		return _rolesFuture!;
 	}
 
-	/// Returns whether the signed-in user is a student (has enrollment docs)
-	/// and/or a tutor (has at least one client in their clients sub-collection).
+	/// Returns whether the signed-in user is a student and/or a tutor.
+	///
+	/// Reads the explicit `roles` array from `users/{uid}` first (written at
+	/// signup and on QR enrollment).  Falls back to collection-count inference
+	/// for legacy accounts that predate the roles field.
 	Future<_Roles> _checkRoles(String uid) async {
+		// ── 1. Try the explicit roles array ──────────────────────────────────
+		try {
+			final userSnap = await firestoreDb.collection('users').doc(uid).get();
+			final rawRoles = userSnap.data()?['roles'];
+			if (rawRoles is List && rawRoles.isNotEmpty) {
+				final roles = rawRoles.cast<String>();
+				return _Roles(
+					isStudent: roles.contains('student'),
+					isTutor: roles.contains('tutor'),
+				);
+			}
+		} catch (_) {}
+
+		// ── 2. Legacy fallback: infer from sub-collections ───────────────────
 		bool isStudent = false;
 		bool isTutor = false;
 
@@ -82,7 +123,6 @@ class _LandingScreenState extends State<LandingScreen> {
 			isTutor = snap.docs.isNotEmpty;
 		} catch (_) {}
 
-		// Also consider them a tutor if they own an organisation.
 		if (!isTutor) {
 			try {
 				final snap = await firestoreDb
@@ -92,6 +132,19 @@ class _LandingScreenState extends State<LandingScreen> {
 						.get();
 				isTutor = snap.docs.isNotEmpty;
 			} catch (_) {}
+		}
+
+		// Backfill the roles field so next login is faster.
+		if (isStudent || isTutor) {
+			final roles = <String>[
+				if (isTutor) 'tutor',
+				if (isStudent) 'student',
+			];
+			firestoreDb
+					.collection('users')
+					.doc(uid)
+					.set({'roles': roles}, SetOptions(merge: true))
+					.ignore();
 		}
 
 		return _Roles(isStudent: isStudent, isTutor: isTutor);
@@ -137,28 +190,47 @@ class _LandingScreenState extends State<LandingScreen> {
 											);
 										}
 
-										final roles = rolesSnap.data ?? const _Roles(isStudent: false, isTutor: false);
+										final roles = rolesSnap.data ??
+												const _Roles(isStudent: false, isTutor: false);
 
-										// Dual-role: let the user choose (or restore saved choice).
 										if (roles.isDualRole) {
+											AppModeConfig.isDualRole = true;
+
+											// If a mode preference is already saved, go directly to
+											// the dashboard without showing the chooser again.
+											final preferred = _savedMode;
+											if (preferred != null) {
+												AppModeConfig.mode = preferred;
+												return _buildApp(
+													user: user,
+													appMode: preferred,
+													isDualRole: true,
+												);
+											}
+
+											// No saved preference → let the user pick.
 											return _ModeChooser(
 												user: user,
 												onModeSelected: (mode) {
 													AppModeConfig.mode = mode;
 													AppModeStorage.save(mode);
-													setState(() {
-														// Rebuild with chosen mode.
-													});
+													setState(() => _savedMode = mode);
 												},
 											);
 										}
 
-										// Single-role: auto-assign, ignore saved pref.
-										final appMode = roles.isStudent ? AppMode.client : AppMode.admin;
+										// Single-role: auto-assign.
+										AppModeConfig.isDualRole = false;
+										final appMode =
+												roles.isStudent ? AppMode.client : AppMode.admin;
 										AppModeConfig.mode = appMode;
 										AppModeStorage.save(appMode);
 
-										return _buildApp(user: user, appMode: appMode, isDualRole: false);
+										return _buildApp(
+											user: user,
+											appMode: appMode,
+											isDualRole: false,
+										);
 									},
 								);
 							},
@@ -184,8 +256,8 @@ class _LandingScreenState extends State<LandingScreen> {
 				BlocProvider(create: (_) => sl<NavModulesCubit>()),
 				if (!isStudent)
 					BlocProvider(
-						create: (_) => JoinRequestListenerCubit()
-							..startForAdmin(user.uid),
+						create: (_) =>
+								JoinRequestListenerCubit()..startForAdmin(user.uid),
 					),
 			],
 			child: AppModeScope(
@@ -202,8 +274,7 @@ class _LandingScreenState extends State<LandingScreen> {
 
 // ── MODE CHOOSER ─────────────────────────────────────────────────────────────
 
-/// Shown only to dual-role users (enrolled as student AND have tutor clients).
-/// Lets them pick which mode to enter. Choice is persisted for next session.
+/// Shown only to dual-role users (enrolled as student AND have tutor access).
 class _ModeChooser extends StatelessWidget {
 	const _ModeChooser({required this.user, required this.onModeSelected});
 
@@ -222,14 +293,13 @@ class _ModeChooser extends StatelessWidget {
 					child: Column(
 						mainAxisAlignment: MainAxisAlignment.center,
 						children: [
-							// Avatar
 							CircleAvatar(
 								radius: 40,
 								backgroundColor: scheme.primaryContainer,
 								child: Text(
 									(user.displayName?.isNotEmpty == true
-											? user.displayName![0]
-											: user.email?[0] ?? 'U')
+													? user.displayName![0]
+													: user.email?[0] ?? 'U')
 											.toUpperCase(),
 									style: TextStyle(
 										fontSize: 32,
@@ -255,8 +325,6 @@ class _ModeChooser extends StatelessWidget {
 								textAlign: TextAlign.center,
 							),
 							const SizedBox(height: 40),
-
-							// Tutor card
 							_RoleCard(
 								icon: Icons.school_rounded,
 								title: 'Continue as Tutor',
@@ -265,8 +333,6 @@ class _ModeChooser extends StatelessWidget {
 								onTap: () => onModeSelected(AppMode.admin),
 							),
 							const SizedBox(height: 16),
-
-							// Student card
 							_RoleCard(
 								icon: Icons.person_rounded,
 								title: 'Continue as Student',
@@ -327,9 +393,10 @@ class _RoleCard extends StatelessWidget {
 									children: [
 										Text(
 											title,
-											style: Theme.of(context).textTheme.titleMedium?.copyWith(
-														fontWeight: FontWeight.w700,
-													),
+											style:
+													Theme.of(context).textTheme.titleMedium?.copyWith(
+																fontWeight: FontWeight.w700,
+															),
 										),
 										const SizedBox(height: 2),
 										Text(

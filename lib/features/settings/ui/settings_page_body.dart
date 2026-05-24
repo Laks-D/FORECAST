@@ -27,6 +27,7 @@ import '../../../core/services/notification_cubit.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
 import '../../../core/app/app_mode.dart';
+import '../../../core/app/app_mode_storage.dart';
 import '../../client/presentation/bloc/client_state.dart';
 import '../../client/presentation/pages/my_profile_page.dart';
 import '../../client/presentation/pages/profile_not_linked_page.dart';
@@ -289,6 +290,25 @@ class SettingsPageBody extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (AppModeConfig.isDualRole) ...[
+                    _SectionCardDark(
+                      color: cardColor,
+                      neumorphism: visual.neumorphism,
+                      children: [
+                        _SectionTileDark(
+                          leading: Icons.swap_horiz_rounded,
+                          title: 'Switch to Student Mode',
+                          subtitle: 'Re-logs you in as student',
+                          chevronColor: chevronColor,
+                          onTap: () async {
+                            await AppModeStorage.save(AppMode.client);
+                            FirebaseAuth.instance.signOut();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   const SizedBox(height: 32),
                   _SectionCardDark(
                     color: cardColor,
@@ -548,6 +568,25 @@ class _ClientSettingsPageBody extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (AppModeConfig.isDualRole) ...[
+                    _SectionCardDark(
+                      color: cardColor,
+                      neumorphism: visual.neumorphism,
+                      children: [
+                        _SectionTileDark(
+                          leading: Icons.swap_horiz_rounded,
+                          title: 'Switch to Tutor Mode',
+                          subtitle: 'Re-logs you in as tutor',
+                          chevronColor: chevronColor,
+                          onTap: () async {
+                            await AppModeStorage.save(AppMode.admin);
+                            FirebaseAuth.instance.signOut();
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   const SizedBox(height: 32),
                   _SectionCardDark(
                     color: cardColor,
