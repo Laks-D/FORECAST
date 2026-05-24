@@ -13,9 +13,6 @@ import '../../../core/services/notification_cubit.dart';
 import '../../auth/login/ui/login_screen.dart';
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/bloc/client_event.dart';
-import '../../client/presentation/pages/client_profile_page.dart';
-import '../../client/domain/usecases/get_clients_usecase.dart';
-import '../../client/domain/repositories/client_repository.dart';
 import '../../dashboard/ui/dashboard_screen.dart';
 import '../../join_request/bloc/join_request_listener_cubit.dart';
 import '../../navigation/bloc/nav_modules_cubit.dart';
@@ -76,72 +73,31 @@ class _LandingScreenState extends State<LandingScreen> {
 									);
 								}
 
-																final user = authSnap.data;
+								final user = authSnap.data;
 
-																// If there's no authenticated user, show the login UI.
-																if (user == null) {
-																	return const LoginScreen();
-																}
+								// Not signed in — show login.
+								if (user == null) {
+									return const LoginScreen();
+								}
 
-																// Determine whether this authenticated user maps to a client record.
-																// We load local clients from storage and check for an email match.
-																return FutureBuilder<void>(
-																	future: sl<ClientRepository>().loadFromStorage(),
-																	builder: (context, snapClients) {
-																		if (snapClients.connectionState == ConnectionState.waiting) {
-																			return const Scaffold(
-																				body: Center(child: CircularProgressIndicator()),
-																			);
-																		}
-
-																		final clients = sl<GetClientsUseCase>().execute();
-																		final userEmail = (user.email ?? '').trim().toLowerCase();
-																		final matched = clients.cast<dynamic?>().firstWhere(
-																			(c) => c != null && ((c as dynamic).email as String?)?.trim().toLowerCase() == userEmail,
-																			orElse: () => null,
-																		);
-
-																		if (matched != null) {
-																			// Signed-in user is a client — switch to client mode and show profile.
-																			try {
-																				context.read<AppModeCubit>().setMode(AppMode.client);
-																			} catch (_) {}
-
-																			final clientEntity = matched as dynamic;
-																			return MultiBlocProvider(
-																				providers: [
-																					BlocProvider(create: (_) => NotificationCubit()),
-																					BlocProvider(
-																						create: (_) => sl<ClientBloc>()..add(LoadClients()),
-																					),
-																					BlocProvider(create: (_) => sl<NavModulesCubit>()),
-																				],
-																				child: AppModeScope(
-																					mode: AppMode.client,
-																					child: ClientProfilePage(entity: clientEntity),
-																				),
-																			);
-																		}
-
-																		// Default: show tutor/dashboard view.
-																		return MultiBlocProvider(
-																			providers: [
-																				BlocProvider(create: (_) => NotificationCubit()),
-																				BlocProvider(
-																					create: (_) => sl<ClientBloc>()..add(LoadClients()),
-																				),
-																				BlocProvider(create: (_) => sl<NavModulesCubit>()),
-																											BlocProvider(
-																												create: (_) => JoinRequestListenerCubit()..startForAdmin(user.uid),
-																											),
-																			],
-																			child: AppModeScope(
-																				mode: modeState.mode ?? AppMode.admin,
-																				child: const DashboardScreen(),
-																			),
-																		);
-																	},
-																);
+								// Signed in — always show the tutor dashboard.
+								// Organization lookup is removed; routing is purely by Firebase UID.
+								return MultiBlocProvider(
+									providers: [
+										BlocProvider(create: (_) => NotificationCubit()),
+										BlocProvider(
+											create: (_) => sl<ClientBloc>()..add(LoadClients()),
+										),
+										BlocProvider(create: (_) => sl<NavModulesCubit>()),
+										BlocProvider(
+											create: (_) => JoinRequestListenerCubit()..startForAdmin(user.uid),
+										),
+									],
+								child: AppModeScope(
+									mode: modeState.mode ?? AppMode.admin,
+									child: const DashboardScreen(),
+								),
+								);
 							},
 						);
 					},

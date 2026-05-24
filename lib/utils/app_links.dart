@@ -2,13 +2,8 @@
 class OnboardingLink {
   static const String _baseUrl = 'https://my-admin-app.web.app/join';
 
-  /// Generate an onboarding link with the given orgId
-  ///
-  /// Example:
-  /// ```dart
-  /// final link = OnboardingLink.generateLink('org-123');
-  /// // Returns: https://my-admin-app.web.app/join?orgId=org-123
-  /// ```
+  /// @deprecated Organizations are removed. Use [generateLinkWithTutor] instead.
+  /// Kept temporarily for any lingering call-sites that haven't been updated.
   static String generateLink(String orgId) {
     final uri = Uri.parse(_baseUrl).replace(
       queryParameters: {'orgId': orgId},

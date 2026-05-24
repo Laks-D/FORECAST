@@ -77,51 +77,13 @@ class ClientPage extends StatefulWidget {
 class _ClientPageState extends State<ClientPage> {
   static const _pinnedPrefsKey = 'pinned_clients_v1';
   Set<String> _pinnedClientIds = <String>{};
-  String? _resolvedOrgId;
 
   @override
   void initState() {
     super.initState();
     _loadPinnedClients();
-    _resolveOrgIdIfNeeded();
   }
 
-  void _shareJoinLink(String? orgId) {
-    final messenger = ScaffoldMessenger.of(context);
-    if (orgId == null) {
-      messenger.showSnackBar(
-        const SnackBar(content: Text('No organization selected to generate link.')),
-      );
-      return;
-    }
-
-    final link = OnboardingLink.generateLink(orgId);
-    Share.share(
-      'Join my class! 🎓\n\n$link',
-      subject: 'Class Invitation',
-    );
-  }
-
-  Future<void> _resolveOrgIdIfNeeded() async {
-    if (widget.orgId != null) return;
-
-    try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null || uid.isEmpty) return;
-
-      final snap = await firestoreDb
-          .collection('organizations')
-          .where('ownerId', isEqualTo: uid)
-          .get();
-
-      if (snap.docs.isNotEmpty) {
-        final id = snap.docs.first.id;
-        if (mounted) setState(() => _resolvedOrgId = id);
-      }
-    } catch (_) {
-      // ignore errors - leave _resolvedOrgId null
-    }
-  }
 
   Future<void> _loadPinnedClients() async {
     try {
@@ -430,7 +392,7 @@ class _ClientPageState extends State<ClientPage> {
     final visual = AppVisualStyle.of(context);
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final onSurface = scheme.onSurface;
-    final currentOrgId = widget.orgId ?? _resolvedOrgId;
+    // orgId is no longer used — QR flow works via tutorId.
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -470,7 +432,7 @@ class _ClientPageState extends State<ClientPage> {
                               Navigator.push(
                                 context,
                                 MaterialPageRoute(
-                                  builder: (_) => InviteQrPage(orgId: currentOrgId),
+                                   builder: (_) => const InviteQrPage(),
                                 ),
                               );
                             },
@@ -490,7 +452,7 @@ class _ClientPageState extends State<ClientPage> {
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(
-                                    builder: (_) => InviteQrPage(orgId: currentOrgId),
+                                    builder: (_) => const InviteQrPage(),
                                   ),
                                 );
                               },
@@ -544,34 +506,6 @@ class _ClientPageState extends State<ClientPage> {
                         },
                       ),
                     ),
-                    if (currentOrgId != null) ...[
-                      const SizedBox(width: 8),
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: scheme.outlineVariant.withOpacity(0.55),
-                          ),
-                        ),
-                        child: IconButton(
-                          tooltip: 'Share Join Link',
-                          onPressed: () {
-                            final link =
-                                OnboardingLink.generateLink(currentOrgId);
-                            Share.share(
-                              'Join my class! 🎓\n\n$link',
-                              subject: 'Class Invitation',
-                            );
-                          },
-                          icon: Icon(
-                            Icons.qr_code_2,
-                            size: 24,
-                            color: onSurface,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),

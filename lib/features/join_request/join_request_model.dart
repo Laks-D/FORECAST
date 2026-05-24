@@ -5,7 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class JoinRequestModel {
   const JoinRequestModel({
     required this.id,
-    required this.orgId,
+    required this.tutorId,
     required this.clientFirebaseUid,
     required this.clientName,
     required this.clientPhone,
@@ -14,7 +14,7 @@ class JoinRequestModel {
   });
 
   final String id;
-  final String orgId;
+  final String tutorId;
   final String clientFirebaseUid;
   final String clientName;
   final String clientPhone;
@@ -29,7 +29,7 @@ class JoinRequestModel {
   ) {
     return JoinRequestModel(
       id: id,
-      orgId: (data['orgId'] as String?) ?? '',
+      tutorId: (data['tutorId'] as String?) ?? '',
       clientFirebaseUid: (data['clientFirebaseUid'] as String?) ?? '',
       clientName: (data['clientName'] as String?) ?? 'Unknown',
       clientPhone: (data['clientPhone'] as String?) ?? '',
@@ -39,7 +39,7 @@ class JoinRequestModel {
   }
 
   Map<String, dynamic> toMap() => {
-        'orgId': orgId,
+        'tutorId': tutorId,
         'clientFirebaseUid': clientFirebaseUid,
         'clientName': clientName,
         'clientPhone': clientPhone,

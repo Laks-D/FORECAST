@@ -22,13 +22,14 @@ class StudentOnboardingBloc
     try {
       final uid = FirebaseAuth.instance.currentUser?.uid;
 
-      // Write to Firestore: organizations/{orgId}/students/{newDocId}
+      // Write to Firestore: users/{orgId}/students/{newDocId}
+      // Note: orgId in this context holds the tutorId — organizations are removed.
       await firestoreDb
-          .collection('organizations')
+          .collection('users')
           .doc(event.orgId)
           .collection('students')
           .add({
-        'orgId': event.orgId,
+        'tutorId': event.orgId,
         'fullName': event.fullName,
         'phone': event.phoneNumber,
         'profession': event.profession,

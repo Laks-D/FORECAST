@@ -8,6 +8,7 @@ import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../widgets/simple_qr_painter.dart';
 
 class InviteQrPage extends StatefulWidget {
+  // orgId parameter kept for call-site compatibility but is no longer used.
   const InviteQrPage({super.key, this.orgId});
 
   final String? orgId;
@@ -28,19 +29,16 @@ class _InviteQrPageState extends State<InviteQrPage> {
   void _regenerate() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     final ts = DateTime.now().toUtc().millisecondsSinceEpoch.toString();
-    // Use onboarding link with tutorId and timestamp so the QR is unique.
-    // Encode the full onboarding link into the QR so camera apps open the
-    // fallback web page if hosted (web/join/index.html).
-    final link = OnboardingLink.generateLinkWithTutor(widget.orgId, uid, ts);
+    // QR encodes only tutorId + timestamp — no org lookup needed.
+    final link = OnboardingLink.generateLinkWithTutor(null, uid, ts);
     setState(() => _payload = link);
   }
 
   void _share() {
-    // When sharing, include the full onboarding link so recipients opening the link
-    // in a browser still get redirected (if you host a landing page).
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     final ts = DateTime.now().toUtc().millisecondsSinceEpoch.toString();
-    final link = OnboardingLink.generateLinkWithTutor(widget.orgId, uid, ts);
+    // QR encodes only tutorId + timestamp — no org lookup needed.
+    final link = OnboardingLink.generateLinkWithTutor(null, uid, ts);
     Share.share('Join my class!\n\n$link', subject: 'Class Invitation');
   }
 

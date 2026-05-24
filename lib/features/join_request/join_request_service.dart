@@ -28,14 +28,14 @@ class JoinRequestService {
 
   /// Writes a new join-request document and returns the generated doc ID.
   static Future<String> sendRequest({
-    required String orgId,
+    required String tutorId,
     required String clientFirebaseUid,
     required String clientName,
     required String clientPhone,
   }) async {
     final ref = firestoreDb.collection(_kCollection).doc();
     await ref.set({
-      'orgId': orgId,
+      'tutorId': tutorId,
       'clientFirebaseUid': clientFirebaseUid,
       'clientName': clientName,
       'clientPhone': clientPhone,
@@ -58,11 +58,11 @@ class JoinRequestService {
 
   // ── ADMIN SIDE ────────────────────────────────────────────────────────────
 
-  /// Stream of all pending join requests for a given organization.
-  static Stream<List<JoinRequestModel>> watchPendingForOrg(String orgId) {
+  /// Stream of all pending join requests for a given tutor.
+  static Stream<List<JoinRequestModel>> watchPendingForTutor(String tutorId) {
     return firestoreDb
         .collection(_kCollection)
-        .where('orgId', isEqualTo: orgId)
+        .where('tutorId', isEqualTo: tutorId)
         .where('status', isEqualTo: 'pending')
         .orderBy('createdAt', descending: false)
         .snapshots()
@@ -81,20 +81,20 @@ class JoinRequestService {
 
     if (status != 'accepted') return;
 
-    // On acceptance, enroll the client into the org's students collection.
+    // On acceptance, enroll the client into the tutor's students collection.
     final reqSnap = await firestoreDb.collection(_kCollection).doc(docId).get();
     final data = reqSnap.data();
     if (data == null) return;
 
-    final orgId = (data['orgId'] as String?) ?? '';
-    if (orgId.isEmpty) return;
+    final tutorId = (data['tutorId'] as String?) ?? '';
+    if (tutorId.isEmpty) return;
 
     await firestoreDb
-        .collection('organizations')
-        .doc(orgId)
+        .collection('users')
+        .doc(tutorId)
         .collection('students')
         .add({
-      'orgId': orgId,
+      'tutorId': tutorId,
       'fullName': (data['clientName'] as String?) ?? 'Client',
       'phone': (data['clientPhone'] as String?) ?? '',
       'profession': '',
@@ -105,19 +105,5 @@ class JoinRequestService {
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
-  }
-
-  /// Resolves the org ID for a given tutor/admin Firebase UID by querying
-  /// the `organizations` collection (existing pattern used throughout the app).
-  static Future<String?> resolveOrgId(String tutorUid) async {
-    try {
-      final snap = await firestoreDb
-          .collection('organizations')
-          .where('ownerId', isEqualTo: tutorUid)
-          .limit(1)
-          .get();
-      if (snap.docs.isNotEmpty) return snap.docs.first.id;
-    } catch (_) {}
-    return null;
   }
 }

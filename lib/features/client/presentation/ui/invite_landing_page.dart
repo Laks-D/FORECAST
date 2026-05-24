@@ -7,6 +7,8 @@ import '../../../join_request/ui/join_request_waiting_page.dart';
 
 class InviteLandingPage extends StatefulWidget {
   final String? tutorId;
+  // orgId is retained as a parameter so existing call-sites still compile,
+  // but it is intentionally ignored — all routing is done via tutorId.
   final String? orgId;
   final String? qrTimestampMs;
 
@@ -22,10 +24,8 @@ class InviteLandingPage extends StatefulWidget {
 }
 
 class _InviteLandingPageState extends State<InviteLandingPage> {
-  String? _resolvedOrgId;
   String _requestName = 'Client';
   String _requestPhone = '';
-  String _adminName = 'Tutor';
   bool _loading = true;
   bool _sending = false;
   String? _error;
@@ -38,17 +38,6 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
 
   Future<void> _prepare() async {
     try {
-      // Resolve orgId: use provided orgId or lookup by tutorId -> organizations.ownerId
-      var orgId = widget.orgId;
-      if (orgId == null && widget.tutorId != null) {
-        final snap = await firestoreDb
-            .collection('organizations')
-            .where('ownerId', isEqualTo: widget.tutorId)
-            .limit(1)
-            .get();
-        if (snap.docs.isNotEmpty) orgId = snap.docs.first.id;
-      }
-
       final user = FirebaseAuth.instance.currentUser;
       final nameFromAuth = (user?.displayName ?? '').trim();
       final emailFromAuth = (user?.email ?? '').trim();
@@ -56,25 +45,16 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
           ? null
           : await firestoreDb.collection('users').doc(user.uid).get();
 
-      String adminName = 'Tutor';
-      if (orgId != null) {
-        final orgDoc = await firestoreDb.collection('organizations').doc(orgId).get();
-        final data = orgDoc.data();
-        final nameCandidate = (data?['name'] as String?)?.trim();
-        if (nameCandidate != null && nameCandidate.isNotEmpty) {
-          adminName = nameCandidate;
-        }
-      }
-
-      final phoneFromUserDoc = ((userDoc?.data()?['phone'] as String?) ?? '').trim();
+      final phoneFromUserDoc =
+          ((userDoc?.data()?['phone'] as String?) ?? '').trim();
 
       setState(() {
-        _resolvedOrgId = orgId;
         _requestName = nameFromAuth.isNotEmpty
             ? nameFromAuth
-            : (emailFromAuth.isNotEmpty ? emailFromAuth.split('@').first : 'Client');
+            : (emailFromAuth.isNotEmpty
+                ? emailFromAuth.split('@').first
+                : 'Client');
         _requestPhone = phoneFromUserDoc;
-        _adminName = adminName;
         _loading = false;
       });
     } catch (e) {
@@ -87,10 +67,15 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (_error != null) return Scaffold(body: Center(child: Text('Error: $_error')));
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (_error != null) {
+      return Scaffold(body: Center(child: Text('Error: $_error')));
+    }
 
-    final hasOrg = _resolvedOrgId != null;
+    // tutorId must be present for the button to be enabled.
+    final hasTutor = widget.tutorId != null && widget.tutorId!.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Join Request')),
@@ -99,9 +84,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Invite from tutor: ${widget.tutorId ?? 'unknown'}'),
-            const SizedBox(height: 8),
-            Text('Organization: ${hasOrg ? _resolvedOrgId : 'Not available'}'),
+            Text('Invite from: ${widget.tutorId ?? 'unknown'}'),
             const SizedBox(height: 20),
             Text('Signed-in as $_requestName'),
             const SizedBox(height: 8),
@@ -112,7 +95,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: hasOrg && !_sending ? _sendJoinRequest : null,
+                onPressed: hasTutor && !_sending ? _sendJoinRequest : null,
                 child: _sending
                     ? const SizedBox(
                         width: 18,
@@ -129,13 +112,14 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
   }
 
   Future<void> _sendJoinRequest() async {
-    final orgId = _resolvedOrgId;
+    final tutorId = widget.tutorId;
     final user = FirebaseAuth.instance.currentUser;
-    if (orgId == null || user == null) return;
+    if (tutorId == null || tutorId.isEmpty || user == null) return;
 
     if (!JoinRequestService.isQrValid(widget.qrTimestampMs)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This invite QR has expired. Please scan a new one.')),
+        const SnackBar(
+            content: Text('This invite QR has expired. Please scan a new one.')),
       );
       return;
     }
@@ -143,7 +127,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
     setState(() => _sending = true);
     try {
       final docId = await JoinRequestService.sendRequest(
-        orgId: orgId,
+        tutorId: tutorId,
         clientFirebaseUid: user.uid,
         clientName: _requestName,
         clientPhone: _requestPhone,
@@ -154,7 +138,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
         MaterialPageRoute(
           builder: (_) => JoinRequestWaitingPage(
             docId: docId,
-            adminName: _adminName,
+            adminName: tutorId, // shown on waiting screen
           ),
         ),
       );

@@ -68,23 +68,24 @@ service cloud.firestore {
     }
 
     match /join_requests/{requestId} {
-      // Client submits request for self.
+      // Client submits a join request for themselves.
       allow create: if withinDevWindow()
         && signedIn()
         && request.resource.data.clientFirebaseUid == request.auth.uid
         && request.resource.data.status == 'pending';
 
-      // Client can read their own request; tutor can read org requests.
+      // Client can read their own request; tutor can read requests sent to them.
       allow read: if withinDevWindow()
         && signedIn()
         && (
           resource.data.clientFirebaseUid == request.auth.uid
-          || isOrgOwner(resource.data.orgId)
+          || resource.data.tutorId == request.auth.uid
         );
 
-      // Tutor owner can resolve request (accepted/rejected).
+      // Tutor can resolve (accept/reject) requests sent to them.
       allow update: if withinDevWindow()
-        && isOrgOwner(resource.data.orgId);
+        && signedIn()
+        && resource.data.tutorId == request.auth.uid;
 
       allow delete: if false;
     }

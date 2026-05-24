@@ -6,7 +6,7 @@ import '../join_request_model.dart';
 import '../join_request_service.dart';
 
 /// Admin-side cubit that listens to the Firestore `join_requests` collection
-/// for the admin's organization and emits a live list of pending requests.
+/// for the admin's tutorId and emits a live list of pending requests.
 ///
 /// Usage:
 /// ```dart
@@ -18,13 +18,10 @@ class JoinRequestListenerCubit extends Cubit<List<JoinRequestModel>> {
   StreamSubscription<List<JoinRequestModel>>? _sub;
 
   /// Starts the Firestore listener for the given admin [tutorUid].
-  /// Internally resolves `orgId` from the `organizations` collection.
+  /// Uses [tutorUid] directly — no organization lookup needed.
   Future<void> startForAdmin(String tutorUid) async {
     await _sub?.cancel();
-    final orgId = await JoinRequestService.resolveOrgId(tutorUid);
-    if (orgId == null) return; // Admin has no organization yet.
-
-    _sub = JoinRequestService.watchPendingForOrg(orgId).listen(
+    _sub = JoinRequestService.watchPendingForTutor(tutorUid).listen(
       (requests) {
         if (!isClosed) emit(requests);
       },
