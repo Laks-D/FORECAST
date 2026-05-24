@@ -34,16 +34,25 @@ class DashboardScreen extends StatelessWidget {
         BlocProvider(
           create: (_) {
             final cubit = DashboardCubit();
-            // Load persisted profile, then overlay any initial values.
+            // Load persisted profile, then overlay Firebase Auth values ONLY if
+            // Firestore returned no saved data for that field.
             cubit.loadProfile().then((_) {
               final name = (initialUserName ?? '').trim();
               final email = (initialUserEmail ?? '').trim();
               final phone = (initialUserPhone ?? '').trim();
               final avatarBytes = initialUserAvatarBytes;
               final avatarAlignment = initialUserAvatarAlignment;
-              if (name.isNotEmpty) cubit.setUserName(name);
-              if (email.isNotEmpty) cubit.setUserEmail(email);
-              if (phone.isNotEmpty) cubit.setUserPhone(phone);
+              // Don't overwrite a saved profile name with the Firebase Auth
+              // displayName — users may have customised their display name in-app.
+              if (name.isNotEmpty && (cubit.state.userName ?? '').isEmpty) {
+                cubit.setUserName(name);
+              }
+              if (email.isNotEmpty && (cubit.state.userEmail ?? '').isEmpty) {
+                cubit.setUserEmail(email);
+              }
+              if (phone.isNotEmpty && (cubit.state.userPhone ?? '').isEmpty) {
+                cubit.setUserPhone(phone);
+              }
               if (avatarBytes != null) cubit.setUserAvatarBytes(avatarBytes);
               if (avatarAlignment != null) cubit.setUserAvatarAlignment(avatarAlignment);
             });
