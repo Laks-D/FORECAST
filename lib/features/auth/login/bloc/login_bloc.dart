@@ -83,28 +83,10 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       final user = userCredential.user;
       final email = user?.email;
 
-      if (user != null) {
-        // Check if this account is already registered in our backend
-        final userDoc = await firestoreDb.collection('users').doc(user.uid).get();
-        bool exists = userDoc.exists;
-        
-        if (!exists && email != null && email.isNotEmpty) {
-          final emailQuery = await firestoreDb.collection('users').where('email', isEqualTo: email).limit(1).get();
-          if (emailQuery.docs.isNotEmpty) {
-            exists = true;
-          }
-        }
-
-        if (!exists) {
-          // Sign out immediately so we don't leave an orphaned session
-          await FirebaseAuth.instance.signOut();
-          throw FirebaseAuthException(
-            code: 'ACCOUNT_NOT_FOUND',
-            message: 'Account not registered. Please sign up instead.',
-          );
-        }
-      }
-
+      // Upsert the user profile — creates doc on first sign-in, merges on
+      // subsequent ones.  We never block Google Sign-In based on Firestore
+      // existence because the signup Firestore write can legitimately fail
+      // (network unavailable) while Firebase Auth still succeeds.
       await _upsertUserProfile(user);
 
       emit(
@@ -121,8 +103,15 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           errorMessage: e.message ?? 'Google sign-in failed',
         ),
       );
-    } catch (_) {
-      emit(state.copyWith(status: LoginStatus.failure, errorMessage: 'Google sign-in failed'));
+    } catch (e) {
+      final msg = e.toString();
+      // Surface actionable errors (e.g. cancelled by user) rather than a generic message.
+      emit(state.copyWith(
+        status: LoginStatus.failure,
+        errorMessage: msg.contains('canceled') || msg.contains('cancelled')
+            ? 'Sign-in cancelled'
+            : 'Google sign-in failed. Please try again.',
+      ));
     }
   }
 
@@ -165,6 +154,10 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
           'displayName': user?.displayName,
           'photoURL': user?.photoURL,
           'lastLoginAt': FieldValue.serverTimestamp(),
+          // Ensure every signed-in user has at least the 'tutor' role so
+          // _checkRoles() in LandingScreen doesn't mis-route them to client mode.
+          // arrayUnion is safe — it won't overwrite 'student' if already set.
+          'roles': FieldValue.arrayUnion(['tutor']),
         },
         SetOptions(merge: true),
       );
