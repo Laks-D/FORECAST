@@ -9,6 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../../core/auth/google_auth.dart';
 import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
+import '../../../../core/storage/admin_profile_storage.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../core/app/widgets/app_mode_selector.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
@@ -188,6 +189,15 @@ class _SignupScreenState extends State<SignupScreen> {
             await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,
+        );
+        final fullName = _fullNameController.text.trim();
+        // Set Firebase Auth displayName so LandingScreen can seed the dashboard.
+        await credential.user?.updateDisplayName(fullName);
+        // Seed AdminProfileStorage immediately so DashboardCubit.loadProfile()
+        // shows the correct name on first login.
+        await AdminProfileStorage.save(
+          userName: fullName,
+          userEmail: email,
         );
         await _saveUserToFirestore(credential.user?.uid);
       } on FirebaseAuthException catch (e) {

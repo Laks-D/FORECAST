@@ -3,10 +3,11 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../core/app/app_mode.dart';
+import '../../../core/app/app_mode_cubit.dart';
+import '../../../core/app/app_mode_storage.dart';
 import '../../../core/dev/dev_bootstrap.dart';
 import '../../../core/di/service_locator.dart';
-import '../../../core/app/app_mode_cubit.dart';
-import '../../../core/app/app_mode.dart';
 import '../../../core/firebase/firestore_db.dart';
 import '../../../core/services/notification_cubit.dart';
 import '../../auth/login/ui/login_screen.dart';
@@ -17,9 +18,6 @@ import '../../join_request/bloc/join_request_listener_cubit.dart';
 import '../../navigation/bloc/nav_modules_cubit.dart';
 
 /// App root that decides whether to show auth screens or the signed-in app.
-///
-/// Several features assume certain global BLoCs exist above the dashboard
-/// (clients, sessions, nav modules, notifications). This screen provides them.
 class LandingScreen extends StatefulWidget {
 	const LandingScreen({super.key});
 
@@ -30,21 +28,28 @@ class LandingScreen extends StatefulWidget {
 class _LandingScreenState extends State<LandingScreen> {
 	late final Future<void> _bootstrap;
 
+	// Cache the enrollment future per UID so FutureBuilder does not re-fire
+	// every time BlocBuilder<AppModeCubit> rebuilds, which would recreate
+	// MultiBlocProvider and kill the ClientBloc holding the newly added client.
+	String? _lastCheckedUid;
+	Future<bool>? _enrollmentFuture;
+
 	@override
 	void initState() {
 		super.initState();
-		// Best-effort: enables dev-mode anonymous sign-in when SKIP_AUTH=true.
 		_bootstrap = runDevBootstrap();
 	}
 
-	@override
-	void dispose() {
-		super.dispose();
+	Future<bool> _getEnrollmentFuture(String uid) {
+		if (_lastCheckedUid == uid && _enrollmentFuture != null) {
+			return _enrollmentFuture!;
+		}
+		_lastCheckedUid = uid;
+		_enrollmentFuture = _checkEnrolled(uid);
+		return _enrollmentFuture!;
 	}
 
-	/// Returns true if this user has an enrollment record in Firestore,
-	/// meaning they are a student who was accepted by a tutor.
-	Future<bool> _isEnrolledStudent(String uid) async {
+	Future<bool> _checkEnrolled(String uid) async {
 		try {
 			final snap = await firestoreDb
 					.collection('users')
@@ -64,11 +69,8 @@ class _LandingScreenState extends State<LandingScreen> {
 			future: _bootstrap,
 			builder: (context, snap) {
 				return BlocBuilder<AppModeCubit, AppModeState>(
-					buildWhen: (p, n) => p.loaded != n.loaded || p.mode != n.mode,
+					buildWhen: (p, n) => p.loaded != n.loaded,
 					builder: (context, modeState) {
-						// Widget tests (and some non-app entrypoints) may build the widget
-						// tree without calling Firebase.initializeApp(). In the real app,
-						// main() initializes Firebase before runApp.
 						if (Firebase.apps.isEmpty) {
 							if (!modeState.loaded) {
 								return const Scaffold(
@@ -81,7 +83,6 @@ class _LandingScreenState extends State<LandingScreen> {
 						return StreamBuilder<User?>(
 							stream: FirebaseAuth.instance.authStateChanges(),
 							builder: (context, authSnap) {
-								// Avoid flashing the login screen during initial auth restore.
 								if (authSnap.connectionState == ConnectionState.waiting) {
 									return const Scaffold(
 										body: Center(child: CircularProgressIndicator()),
@@ -89,15 +90,14 @@ class _LandingScreenState extends State<LandingScreen> {
 								}
 
 								final user = authSnap.data;
-
-								// Not signed in — show login.
 								if (user == null) {
 									return const LoginScreen();
 								}
 
-								// Signed in — check if this user is an enrolled student.
+								// Use cached future — prevents FutureBuilder from recreating
+								// MultiBlocProvider on every AppModeCubit state change.
 								return FutureBuilder<bool>(
-									future: _isEnrolledStudent(user.uid),
+									future: _getEnrollmentFuture(user.uid),
 									builder: (context, enrollSnap) {
 										if (enrollSnap.connectionState == ConnectionState.waiting) {
 											return const Scaffold(
@@ -108,12 +108,10 @@ class _LandingScreenState extends State<LandingScreen> {
 										final isStudent = enrollSnap.data == true;
 										final appMode = isStudent ? AppMode.client : AppMode.admin;
 
-										// Set mode so the AppModeCubit reflects the correct role.
-										WidgetsBinding.instance.addPostFrameCallback((_) {
-											if (context.mounted) {
-												context.read<AppModeCubit>().setMode(appMode);
-											}
-										});
+										// Set the static directly — avoids AppModeCubit.emit() which
+										// would trigger BlocBuilder to rebuild and recreate ClientBloc.
+										AppModeConfig.mode = appMode;
+										AppModeStorage.save(appMode); // fire-and-forget persistence
 
 										return MultiBlocProvider(
 											providers: [
@@ -122,7 +120,6 @@ class _LandingScreenState extends State<LandingScreen> {
 													create: (_) => sl<ClientBloc>()..add(LoadClients()),
 												),
 												BlocProvider(create: (_) => sl<NavModulesCubit>()),
-												// Tutor-only: listen for incoming join requests.
 												if (!isStudent)
 													BlocProvider(
 														create: (_) => JoinRequestListenerCubit()
@@ -132,8 +129,6 @@ class _LandingScreenState extends State<LandingScreen> {
 											child: AppModeScope(
 												mode: appMode,
 												child: DashboardScreen(
-													// Seed the dashboard with Firebase Auth profile data.
-													// The tutor can overwrite these via the profile settings page.
 													initialUserName: user.displayName,
 													initialUserEmail: user.email,
 												),
