@@ -15,6 +15,7 @@ class DashboardScreen extends StatelessWidget {
     this.initialUserPhone,
     this.initialUserAvatarBytes,
     this.initialUserAvatarAlignment,
+    this.canSwitchMode = false,
   });
 
   final String? initialUserName;
@@ -22,6 +23,9 @@ class DashboardScreen extends StatelessWidget {
   final String? initialUserPhone;
   final Uint8List? initialUserAvatarBytes;
   final Alignment? initialUserAvatarAlignment;
+  /// When true the user is enrolled as both a student and a tutor;
+  /// the UI exposes a mode-switch option so they can toggle roles.
+  final bool canSwitchMode;
 
   @override
   Widget build(BuildContext context) {
@@ -48,13 +52,15 @@ class DashboardScreen extends StatelessWidget {
         ),
         BlocProvider(create: (_) => CalendarCubit()),
       ],
-      child: const _DashboardView(),
+      child: _DashboardView(canSwitchMode: canSwitchMode),
     );
   }
 }
 
 class _DashboardView extends StatelessWidget {
-  const _DashboardView();
+  const _DashboardView({this.canSwitchMode = false});
+
+  final bool canSwitchMode;
 
   @override
   Widget build(BuildContext context) {

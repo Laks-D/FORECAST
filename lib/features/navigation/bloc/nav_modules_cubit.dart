@@ -1,7 +1,7 @@
-import 'dart:convert';
+import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../dashboard/bloc/dashboard_state.dart';
 import '../../../core/app/app_mode.dart';
@@ -10,10 +10,13 @@ import 'nav_modules_state.dart';
 
 class NavModulesCubit extends Cubit<NavModulesState> {
   NavModulesCubit() : super(NavModulesState.defaults()) {
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((_) => _load());
     _load();
   }
 
-  static String get _prefsKey => AppModeConfig.isClient ? 'nav_modules_client_v1' : 'nav_modules_admin_v1';
+  StreamSubscription<User?>? _authSub;
+
+  static String get _settingsKey => AppModeConfig.isClient ? 'navModulesClient' : 'navModulesAdmin';
 
   static List<DashboardTab> get _supportedTabs => AppModeConfig.isClient
       ? const <DashboardTab>[
@@ -82,15 +85,16 @@ class NavModulesCubit extends Cubit<NavModulesState> {
 
   Future<void> _load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw == null || raw.trim().isEmpty) {
-        emit(state.copyWith(isLoaded: true));
-        return;
+      final settings = await UserFirestoreSync.instance.loadSettings();
+      final raw = settings?[_settingsKey];
+      Map<String, dynamic>? jsonMap;
+      if (raw is Map<String, dynamic>) {
+        jsonMap = raw;
+      } else if (raw is Map) {
+        jsonMap = Map<String, dynamic>.from(raw);
       }
 
-      final jsonMap = json.decode(raw);
-      if (jsonMap is! Map<String, dynamic>) {
+      if (jsonMap == null) {
         emit(state.copyWith(isLoaded: true));
         return;
       }
@@ -145,14 +149,11 @@ class NavModulesCubit extends Cubit<NavModulesState> {
 
   Future<void> _persist() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final payload = <String, Object?>{
         'order': state.order.map(_tabToKey).toList(growable: false),
         'enabled': state.enabled.map(_tabToKey).toList(growable: false),
       };
-      await prefs.setString(_prefsKey, json.encode(payload));
-
-      UserFirestoreSync.instance.scheduleSettingsPatch({'navModules': payload});
+      await UserFirestoreSync.instance.patchSettingsNow({_settingsKey: payload});
     } catch (_) {
       // Ignore persistence failures; keep UI responsive.
     }
@@ -214,5 +215,11 @@ class NavModulesCubit extends Cubit<NavModulesState> {
       if (t.name == key) return t;
     }
     return null;
+  }
+
+  @override
+  Future<void> close() async {
+    await _authSub?.cancel();
+    return super.close();
   }
 }

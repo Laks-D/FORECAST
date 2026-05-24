@@ -83,20 +83,58 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
 
     // Client app: show only the signed-in client's own record.
     if (AppModeConfig.isClient) {
+      final uid = _currentUserUidSafe();
       final email = _currentUserEmailSafe();
-      if (email != null && email.isNotEmpty) {
+      if (uid != null && uid.isNotEmpty) {
         final filtered = _allEntities
-            .where((c) => _normalizeEmail(c.email) == email)
+            .where((c) => (c.firebaseUid ?? '').trim() == uid)
             .toList(growable: false);
-        _allEntities = filtered;
+
+        if (filtered.isNotEmpty) {
+          _allEntities = filtered;
+        } else if (email != null && email.isNotEmpty) {
+          final byEmail = _allEntities
+              .where((c) => _normalizeEmail(c.email) == email)
+              .toList(growable: false);
+
+          if (byEmail.length == 1) {
+            final match = byEmail.first;
+            updateClientDetailsUseCase.execute(
+              entityId: match.id,
+              name: match.name,
+              primaryContact: match.primaryContact,
+              firebaseUid: uid,
+              middleName: match.middleName,
+              countryCode: match.countryCode,
+              email: match.email,
+              gender: match.gender,
+              dateOfBirth: match.dateOfBirth,
+              address: match.address,
+              currency: match.currency,
+            );
+            _allEntities = [match];
+          } else {
+            _allEntities = const <Client>[];
+          }
+        } else {
+          _allEntities = const <Client>[];
+        }
       } else {
-        // If auth isn't available (e.g., tests) or no email is set,
-        // keep the list empty rather than exposing all clients.
+        // If auth isn't available (e.g., tests) keep the list empty.
         _allEntities = const <Client>[];
       }
     }
 
     emit(ClientLoaded(_allEntities));
+  }
+
+  String? _currentUserUidSafe() {
+    try {
+      final raw = FirebaseAuth.instance.currentUser?.uid;
+      return (raw ?? '').trim();
+    } catch (_) {
+      return null;
+    }
   }
 
   String? _currentUserEmailSafe() {
@@ -219,10 +257,9 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
         entityId: event.entityId,
         name: event.name ?? client.name,
         primaryContact: event.primaryContact ?? client.primaryContact,
+        firebaseUid: AppModeConfig.isClient ? _currentUserUidSafe() : client.firebaseUid,
         middleName: event.middleName ?? client.middleName,
         countryCode: event.countryCode ?? client.countryCode,
-        // Client app uses email to link the signed-in user to a client record.
-        // Keep email stable in client mode to avoid losing the link.
         email: AppModeConfig.isClient ? client.email : (event.email ?? client.email),
         gender: event.gender ?? client.gender,
         dateOfBirth: event.dateOfBirth ?? client.dateOfBirth,
@@ -244,6 +281,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     createClientUseCase.execute(
       name: event.name,
       primaryContact: event.primaryContact,
+      firebaseUid: event.firebaseUid,
       referredBy: event.referredBy,
       middleName: event.middleName,
       countryCode: event.countryCode,
@@ -340,8 +378,8 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   void _schedulePersist() {
     _persistDebounce?.cancel();
     _persistDebounce = Timer(const Duration(milliseconds: 250), () {
-      // Serialize persists so SharedPreferences + Firestore mirror always end up
-      // with the latest snapshot (prevents out-of-order overwrites).
+      // Serialize persists so Firestore writes end up with the latest snapshot
+      // (prevents out-of-order overwrites).
       _persistChain = _persistChain.then((_) => repository.persist());
     });
   }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../core/storage/program_catalog_storage.dart';
-import '../../../core/services/user_firestore_sync.dart';
 import '../../../design_system/theme/app_chrome_theme.dart';
 import '../../../design_system/widgets/app_card.dart';
 import '../../../design_system/widgets/app_empty_state.dart';
@@ -89,11 +88,6 @@ class _ProgramManagementScreenState extends State<ProgramManagementScreen> {
         .toList(growable: false);
 
     await ProgramCatalogStorage.saveRegisteredPrograms(registered);
-
-    // Persist per-user in Firestore so programs survive logout/login and sync across devices.
-    await UserFirestoreSync.instance.patchSettingsNow({
-      'programCatalog': ProgramCatalogStorage.toJsonList(registered),
-    });
   }
 
   Future<void> _onProgramTap(_ProgramItem item) async {

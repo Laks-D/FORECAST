@@ -1,13 +1,10 @@
-import 'package:shared_preferences/shared_preferences.dart';
-
+import '../services/user_firestore_sync.dart';
 import 'app_role.dart';
 
 class AppRoleStorage {
-  static const _key = 'app_role_v1';
-
   static Future<AppRole> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = (prefs.getString(_key) ?? '').trim();
+    final settings = await UserFirestoreSync.instance.loadSettings();
+    final raw = (settings?['appRole'] as String? ?? '').trim();
 
     if (raw.isEmpty) return AppRole.tutor;
 
@@ -18,7 +15,6 @@ class AppRoleStorage {
   }
 
   static Future<void> save(AppRole role) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_key, role.name);
+    await UserFirestoreSync.instance.patchSettingsNow({'appRole': role.name});
   }
 }

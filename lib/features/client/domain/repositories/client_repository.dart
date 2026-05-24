@@ -56,6 +56,7 @@ abstract class ClientRepository {
     required String entityId,
     required String name,
     required String primaryContact,
+    String? firebaseUid,
     String? middleName,
     String? countryCode,
     String? email,
@@ -70,6 +71,7 @@ abstract class ClientRepository {
   void createClient({
     required String name,
     required String primaryContact,
+    String? firebaseUid,
     String? referredBy,
     String? middleName,
     String? countryCode,

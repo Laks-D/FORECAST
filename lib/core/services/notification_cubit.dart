@@ -1,6 +1,9 @@
 
+import 'dart:async';
+
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'notification_storage.dart';
 
@@ -87,8 +90,11 @@ final class NotificationState extends Equatable {
 
 class NotificationCubit extends Cubit<NotificationState> {
 	NotificationCubit() : super(NotificationState.defaults()) {
+		_authSub = FirebaseAuth.instance.authStateChanges().listen((_) => _load());
 		_load();
 	}
+
+	StreamSubscription<User?>? _authSub;
 
 	Future<void> _load() async {
 		emit(state.copyWith(loading: true));
@@ -190,6 +196,12 @@ class NotificationCubit extends Cubit<NotificationState> {
 	Future<void> clearAll() async {
 		emit(state.copyWith(records: const <AppNotification>[]));
 		await NotificationStorage.clearRecords();
+	}
+
+	@override
+	Future<void> close() async {
+		await _authSub?.cancel();
+		return super.close();
 	}
 }
 

@@ -6,7 +6,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../../core/auth/username_key.dart';
 import '../../../../core/auth/google_auth.dart';
-import '../../../../core/app/app_mode.dart';
 import '../../../../core/firebase/firestore_db.dart';
 
 import 'login_event.dart';
@@ -21,15 +20,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     on<LoginWithGoogleSubmitted>(_onGoogleSubmitted);
   }
 
-  // Client-mode login policy (overrideable via --dart-define if needed).
-  static const String _clientLoginUser = String.fromEnvironment(
-    'CLIENT_LOGIN_USER',
-    defaultValue: 'client_test',
-  );
-  static const String _clientLoginPassword = String.fromEnvironment(
-    'CLIENT_LOGIN_PASS',
-    defaultValue: 'client@123',
-  );
 
   FutureOr<void> _onEmailChanged(LoginEmailChanged event, Emitter<LoginState> emit) {
     emit(state.copyWith(email: event.email, status: LoginStatus.idle, errorMessage: null));
@@ -52,22 +42,6 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
     emit(state.copyWith(status: LoginStatus.submitting, errorMessage: null));
 
     try {
-      if (AppModeConfig.isClient) {
-        final identifier = state.email.trim().toLowerCase();
-        if (identifier != _clientLoginUser.trim().toLowerCase()) {
-          throw FirebaseAuthException(
-            code: 'CLIENT_LOGIN_USER_REQUIRED',
-            message: 'Client login: use $_clientLoginUser',
-          );
-        }
-        if (state.password != _clientLoginPassword) {
-          throw FirebaseAuthException(
-            code: 'CLIENT_LOGIN_WRONG_PASSWORD',
-            message: 'Client login: wrong password',
-          );
-        }
-      }
-
       final resolvedEmail = await _resolveEmailFromIdentifier(state.email);
       final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: resolvedEmail,

@@ -8,6 +8,7 @@ class CreateClientUseCase {
   void execute({
     required String name,
     required String primaryContact,
+    String? firebaseUid,
     String? referredBy,
     String? middleName,
     String? countryCode,
@@ -19,6 +20,7 @@ class CreateClientUseCase {
     repository.createClient(
       name: name,
       primaryContact: primaryContact,
+      firebaseUid: firebaseUid,
       referredBy: referredBy,
       middleName: middleName,
       countryCode: countryCode,

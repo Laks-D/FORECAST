@@ -1,29 +1,31 @@
-import 'dart:convert';
+import 'dart:async';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/services/user_firestore_sync.dart';
 import 'app_theme_state.dart';
 
 class AppThemeCubit extends Cubit<AppThemeState> {
   AppThemeCubit() : super(AppThemeState.defaults) {
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((_) => _load());
     _load();
   }
 
-  static const _prefsKey = 'app_theme_v2';
+  StreamSubscription<User?>? _authSub;
 
   Future<void> reloadFromStorage() => _load();
 
   Future<void> _load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw == null || raw.trim().isEmpty) return;
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return;
-      emit(_fromJson(decoded));
+      final settings = await UserFirestoreSync.instance.loadSettings();
+      final raw = settings?['theme'];
+      if (raw is Map<String, dynamic>) {
+        emit(_fromJson(raw));
+      } else if (raw is Map) {
+        emit(_fromJson(Map<String, dynamic>.from(raw)));
+      }
     } catch (_) {
       // Ignore load failures.
     }
@@ -31,10 +33,8 @@ class AppThemeCubit extends Cubit<AppThemeState> {
 
   Future<void> _persist(AppThemeState next) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final jsonMap = _toJson(next);
-      await prefs.setString(_prefsKey, jsonEncode(jsonMap));
-      UserFirestoreSync.instance.scheduleSettingsPatch({'theme': jsonMap});
+      await UserFirestoreSync.instance.patchSettingsNow({'theme': jsonMap});
     } catch (_) {
       // Ignore persistence failures.
     }
@@ -133,4 +133,10 @@ class AppThemeCubit extends Cubit<AppThemeState> {
   }
 
   void reset() => _set(AppThemeState.defaults);
+
+  @override
+  Future<void> close() async {
+    await _authSub?.cancel();
+    return super.close();
+  }
 }

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
@@ -10,6 +9,7 @@ import '../../../../design_system/widgets/app_loading.dart';
 import '../../../../design_system/widgets/app_search_field.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/app/app_mode.dart';
+import '../../../../core/services/user_firestore_sync.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
@@ -30,7 +30,6 @@ class CoursesPage extends StatefulWidget {
 }
 
 class _CoursesPageState extends State<CoursesPage> {
-  static const _pinnedPrefsKey = 'pinned_courses_v1';
   Set<String> _pinnedCourseKeys = <String>{};
   String _query = '';
 
@@ -42,8 +41,9 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _loadPinnedCourses() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_pinnedPrefsKey) ?? const <String>[];
+      final settings = await UserFirestoreSync.instance.loadSettings();
+      final raw = settings?['pinnedCourses'];
+      final list = raw is List ? raw.whereType<String>().toList() : const <String>[];
       if (!mounted) return;
       setState(() => _pinnedCourseKeys = list.toSet());
     } catch (_) {
@@ -53,11 +53,9 @@ class _CoursesPageState extends State<CoursesPage> {
 
   Future<void> _persistPinnedCourses() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _pinnedPrefsKey,
-        _pinnedCourseKeys.toList(growable: false),
-      );
+      await UserFirestoreSync.instance.patchSettingsNow({
+        'pinnedCourses': _pinnedCourseKeys.toList(growable: false),
+      });
     } catch (_) {
       // Ignore persistence failures.
     }

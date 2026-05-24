@@ -52,6 +52,8 @@ class _JoinRequestWaitingPageState extends State<JoinRequestWaitingPage>
     _timeoutTimer = Timer(const Duration(seconds: _kTimeoutSeconds), () {
       if (!mounted) return;
       if (_status == 'pending') {
+        // Mark expired in Firestore so the tutor's pending list stays clean.
+        JoinRequestService.markExpired(widget.docId);
         setState(() => _timedOut = true);
       }
     });

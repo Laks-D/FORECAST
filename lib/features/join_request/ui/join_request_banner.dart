@@ -62,6 +62,7 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
           parentCtx.read<ClientBloc>().add(CreateClient(
             name: req.clientName.isNotEmpty ? req.clientName : 'Student',
             primaryContact: phone.isNotEmpty ? phone : '0000000000',
+            firebaseUid: req.clientFirebaseUid.isNotEmpty ? req.clientFirebaseUid : null,
           ));
           ScaffoldMessenger.of(parentCtx).showSnackBar(
             SnackBar(

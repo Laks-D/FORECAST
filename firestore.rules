@@ -95,6 +95,13 @@ service cloud.firestore {
         && signedIn()
         && resource.data.tutorId == request.auth.uid;
 
+      // Client can mark their own pending request as 'expired' (timeout cleanup).
+      allow update: if withinDevWindow()
+        && signedIn()
+        && resource.data.clientFirebaseUid == request.auth.uid
+        && resource.data.status == 'pending'
+        && request.resource.data.status == 'expired';
+
       allow delete: if false;
     }
   }

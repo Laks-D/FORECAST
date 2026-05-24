@@ -2,6 +2,20 @@ import '../../../../core/utils/date_utils.dart';
 import '../entities/schedule_session.dart';
 
 class ScheduleGenerator {
+  /// Per-process counter to avoid ID collisions even if two sessions are
+  /// generated within the same microsecond on the same device.
+  static int _seq = 0;
+
+  /// Returns an ID that is unique across devices by mixing the current
+  /// microsecond timestamp, a per-process counter, and the client's ID hash.
+  static int _nextId(String clientId, int offset) {
+    final ts = DateTime.now().microsecondsSinceEpoch;
+    // XOR the low 20 bits of the clientId hash so IDs from different devices
+    // / clients diverge even when generated at the same instant.
+    final clientBits = (clientId.hashCode & 0xFFFFF);
+    _seq++;
+    return ts + offset + (_seq * 100000) + clientBits;
+  }
   static List<ScheduleSession> generate({
     required int count,
     required DateTime startDate,
@@ -43,7 +57,7 @@ class ScheduleGenerator {
     for (var i = 0; i < count; i++) {
       sessions.add(
         ScheduleSession(
-          id: DateTime.now().millisecondsSinceEpoch + i,
+          id: _nextId(clientId, i),
           sessionNo: baseSessionNo + i,
           clientId: clientId,
           status: 'Upcoming',

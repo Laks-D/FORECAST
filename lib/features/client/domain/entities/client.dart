@@ -3,6 +3,7 @@ import 'client_timeline_event.dart';
 class Client {
   const Client({
     required this.id,
+    this.firebaseUid,
     required this.name,
     this.middleName,
     required this.primaryContact,
@@ -16,6 +17,7 @@ class Client {
   });
 
   final String id;
+  final String? firebaseUid;
   final String name;
   final String? middleName;
   final String primaryContact;
@@ -114,6 +116,7 @@ class Client {
 
   Map<String, dynamic> toJson() => {
         'id': id,
+      if (firebaseUid != null) 'firebaseUid': firebaseUid,
         'name': name,
         if (middleName != null) 'middleName': middleName,
         'primaryContact': primaryContact,
@@ -129,6 +132,7 @@ class Client {
   factory Client.fromJson(Map<String, dynamic> json) {
     return Client(
       id: json['id'] as String,
+      firebaseUid: json['firebaseUid'] as String?,
       name: json['name'] as String,
       middleName: json['middleName'] as String?,
       primaryContact: json['primaryContact'] as String,

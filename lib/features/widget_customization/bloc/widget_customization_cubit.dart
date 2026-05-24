@@ -1,16 +1,19 @@
-import 'dart:convert';
+import 'dart:async';
 
 import 'package:bloc/bloc.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/services/user_firestore_sync.dart';
 import 'widget_customization_state.dart';
 
 class WidgetCustomizationCubit extends Cubit<WidgetCustomizationState> {
   WidgetCustomizationCubit() : super(WidgetCustomizationState.defaults()) {
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((_) => _load());
     _load();
   }
 
-  static const _prefsKey = 'widget_customization_v1';
+  StreamSubscription<User?>? _authSub;
+  static const _settingsKey = 'widgetCustomization';
 
   Future<void> setCalendarSelectionStyle(CalendarSelectionStyle style) async {
     if (state.calendarSelectionStyle == style) return;
@@ -37,15 +40,16 @@ class WidgetCustomizationCubit extends Cubit<WidgetCustomizationState> {
 
   Future<void> _load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(_prefsKey);
-      if (raw == null || raw.trim().isEmpty) {
-        emit(state.copyWith(isLoaded: true));
-        return;
+      final settings = await UserFirestoreSync.instance.loadSettings();
+      final raw = settings?[_settingsKey];
+      Map<String, dynamic>? decoded;
+      if (raw is Map<String, dynamic>) {
+        decoded = raw;
+      } else if (raw is Map) {
+        decoded = Map<String, dynamic>.from(raw);
       }
 
-      final decoded = json.decode(raw);
-      if (decoded is! Map<String, dynamic>) {
+      if (decoded == null) {
         emit(state.copyWith(isLoaded: true));
         return;
       }
@@ -69,13 +73,12 @@ class WidgetCustomizationCubit extends Cubit<WidgetCustomizationState> {
 
   Future<void> _persist() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
       final payload = <String, Object?>{
         'calendarSelectionStyle': state.calendarSelectionStyle.name,
         'meterStyle': state.meterStyle.name,
         'meterColorStyle': state.meterColorStyle.name,
       };
-      await prefs.setString(_prefsKey, json.encode(payload));
+      await UserFirestoreSync.instance.patchSettingsNow({_settingsKey: payload});
     } catch (_) {
       // Ignore persistence failures.
     }
@@ -103,5 +106,11 @@ class WidgetCustomizationCubit extends Cubit<WidgetCustomizationState> {
       if (v.name == key) return v;
     }
     return null;
+  }
+
+  @override
+  Future<void> close() async {
+    await _authSub?.cancel();
+    return super.close();
   }
 }

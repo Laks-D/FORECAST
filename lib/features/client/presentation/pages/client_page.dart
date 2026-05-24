@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 import 'package:snow/design_system/theme/app_chrome_theme.dart';
@@ -17,6 +16,7 @@ import 'package:snow/design_system/widgets/app_neumorphic_buttons.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../../utils/app_links.dart';
 import '../../../../core/firebase/firestore_db.dart';
+import '../../../../core/services/user_firestore_sync.dart';
 import '../../domain/entities/client.dart';
 import '../bloc/client_bloc.dart';
 import '../bloc/client_event.dart';
@@ -75,7 +75,6 @@ class ClientPage extends StatefulWidget {
 }
 
 class _ClientPageState extends State<ClientPage> {
-  static const _pinnedPrefsKey = 'pinned_clients_v1';
   Set<String> _pinnedClientIds = <String>{};
 
   @override
@@ -87,8 +86,9 @@ class _ClientPageState extends State<ClientPage> {
 
   Future<void> _loadPinnedClients() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_pinnedPrefsKey) ?? const <String>[];
+      final settings = await UserFirestoreSync.instance.loadSettings();
+      final raw = settings?['pinnedClients'];
+      final list = raw is List ? raw.whereType<String>().toList() : const <String>[];
       if (!mounted) return;
       setState(() => _pinnedClientIds = list.toSet());
     } catch (_) {
@@ -98,11 +98,9 @@ class _ClientPageState extends State<ClientPage> {
 
   Future<void> _persistPinnedClients() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _pinnedPrefsKey,
-        _pinnedClientIds.toList(growable: false),
-      );
+      await UserFirestoreSync.instance.patchSettingsNow({
+        'pinnedClients': _pinnedClientIds.toList(growable: false),
+      });
     } catch (_) {
       // Ignore persistence failures.
     }

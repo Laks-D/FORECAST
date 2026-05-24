@@ -72,56 +72,65 @@ class JoinRequestService {
   }
 
   /// Admin resolves a request by writing `accepted` or `rejected`.
+  ///
+  /// On acceptance this also writes the enrollment record into the student's
+  /// own sub-collection so their device knows they are enrolled.
+  /// The tutor's client record in `users/{tutorId}/clients` is created by the
+  /// UI layer (JoinRequestBanner → ClientBloc) because the Client entity
+  /// requires richer local-state management.
   static Future<void> resolve(String docId, String status) async {
     assert(status == 'accepted' || status == 'rejected');
+
+    // Fetch the request data first so we can use it even after the update.
+    final reqSnap = await firestoreDb.collection(_kCollection).doc(docId).get();
+    final data = reqSnap.data();
+
     await firestoreDb.collection(_kCollection).doc(docId).update({
       'status': status,
       'resolvedAt': FieldValue.serverTimestamp(),
     });
 
-    if (status != 'accepted') return;
-
-    // On acceptance, enroll the client into the tutor's students collection.
-    final reqSnap = await firestoreDb.collection(_kCollection).doc(docId).get();
-    final data = reqSnap.data();
-    if (data == null) return;
+    if (status != 'accepted' || data == null) return;
 
     final tutorId = (data['tutorId'] as String?) ?? '';
     final studentUid = (data['clientFirebaseUid'] as String?) ?? '';
-    if (tutorId.isEmpty) return;
+    if (tutorId.isEmpty || studentUid.isEmpty) return;
 
-    await firestoreDb
-        .collection('users')
-        .doc(tutorId)
-        .collection('students')
-        .add({
-      'tutorId': tutorId,
-      'fullName': (data['clientName'] as String?) ?? 'Client',
-      'phone': (data['clientPhone'] as String?) ?? '',
-      'profession': '',
-      'enrolledBy': studentUid,
-      'status': 'enrolled',
-      'joinedVia': 'qr_request',
-      'joinRequestId': docId,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    // Resolve the tutor's display name from their profile doc.
+    String tutorName = '';
+    try {
+      final tutorDoc = await firestoreDb.collection('users').doc(tutorId).get();
+      tutorName = (tutorDoc.data()?['displayName'] as String?) ?? '';
+    } catch (_) {
+      // Non-fatal — tutorName stays empty rather than blocking enrollment.
+    }
 
     // Write enrollment record to the student's own user doc so their device
-    // can detect them as a student on next login.
-    if (studentUid.isNotEmpty) {
-      await firestoreDb
-          .collection('users')
-          .doc(studentUid)
-          .collection('enrollment')
-          .doc(tutorId)
-          .set({
-        'tutorId': tutorId,
-        'tutorName': (data['clientName'] as String?) ?? '',
-        'status': 'enrolled',
-        'joinRequestId': docId,
-        'enrolledAt': FieldValue.serverTimestamp(),
+    // can detect them as a student on next login / app restart.
+    await firestoreDb
+        .collection('users')
+        .doc(studentUid)
+        .collection('enrollment')
+        .doc(tutorId)
+        .set({
+      'tutorId': tutorId,
+      'tutorName': tutorName,
+      'status': 'enrolled',
+      'joinRequestId': docId,
+      'enrolledAt': FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Client-side: marks a pending request as `expired` when the waiting-page
+  /// timeout fires.  This prevents stale `pending` docs from accumulating.
+  static Future<void> markExpired(String docId) async {
+    try {
+      await firestoreDb.collection(_kCollection).doc(docId).update({
+        'status': 'expired',
+        'resolvedAt': FieldValue.serverTimestamp(),
       });
+    } catch (_) {
+      // Best-effort — the document may already be resolved.
     }
   }
 }

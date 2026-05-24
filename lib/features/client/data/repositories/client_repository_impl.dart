@@ -115,6 +115,7 @@ class ClientRepositoryImpl implements ClientRepository {
     required String entityId,
     required String name,
     required String primaryContact,
+    String? firebaseUid,
     String? middleName,
     String? countryCode,
     String? email,
@@ -127,6 +128,7 @@ class ClientRepositoryImpl implements ClientRepository {
       entityId: entityId,
       name: name,
       primaryContact: primaryContact,
+      firebaseUid: firebaseUid,
       middleName: middleName,
       countryCode: countryCode,
       email: email,
@@ -146,6 +148,7 @@ class ClientRepositoryImpl implements ClientRepository {
   void createClient({
     required String name,
     required String primaryContact,
+    String? firebaseUid,
     String? referredBy,
     String? middleName,
     String? countryCode,
@@ -157,6 +160,7 @@ class ClientRepositoryImpl implements ClientRepository {
     localDataSource.addClient(
       name: name,
       primaryContact: primaryContact,
+      firebaseUid: firebaseUid,
       referredBy: referredBy,
       middleName: middleName,
       countryCode: countryCode,

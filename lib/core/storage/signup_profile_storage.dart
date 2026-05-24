@@ -1,7 +1,3 @@
-import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../services/user_firestore_sync.dart';
 
 class SignupProfileData {
@@ -57,32 +53,22 @@ class SignupProfileData {
 }
 
 class SignupProfileStorage {
-  static const _key = 'signup_profile_data_v1';
-
   static Future<void> saveProfile(SignupProfileData data) async {
-    final prefs = await SharedPreferences.getInstance();
     final jsonMap = data.toJson();
-    await prefs.setString(_key, jsonEncode(jsonMap));
-
-    UserFirestoreSync.instance.scheduleSettingsPatch({'signupProfile': jsonMap});
+    await UserFirestoreSync.instance.patchSettingsNow({'signupProfile': jsonMap});
   }
 
   static Future<SignupProfileData?> getProfile() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null || raw.trim().isEmpty) return null;
-
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return null;
-      return SignupProfileData.fromJson(decoded);
-    } catch (_) {
-      return null;
+    final settings = await UserFirestoreSync.instance.loadSettings();
+    final raw = settings?['signupProfile'];
+    if (raw is Map<String, dynamic>) return SignupProfileData.fromJson(raw);
+    if (raw is Map) {
+      return SignupProfileData.fromJson(Map<String, dynamic>.from(raw));
     }
+    return null;
   }
 
   static Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    await UserFirestoreSync.instance.patchSettingsNow({'signupProfile': null});
   }
 }

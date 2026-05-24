@@ -1,66 +1,92 @@
 import 'dart:async';
-import 'dart:convert';
 
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../domain/entities/schedule_session.dart';
 import '../../../../core/utils/date_utils.dart';
-import '../../../../core/services/user_firestore_sync.dart';
+import '../../../../core/firebase/firestore_db.dart';
 
 class ScheduleLocalDataSource {
-  static const _storageKey = 'sessions_data_v1';
-  static const _deletedStorageKey = 'sessions_deleted_v1';
-
   final List<ScheduleSession> _sessions = [];
   final List<ScheduleSession> _deletedSessions = [];
-  final StreamController<List<ScheduleSession>> _controller =
-      StreamController<List<ScheduleSession>>.broadcast();
 
-  Stream<List<ScheduleSession>> watchSessions() async* {
-    yield List.unmodifiable(_sessions);
-    yield* _controller.stream;
+  CollectionReference<Map<String, dynamic>>? _sessionsCollection({bool deleted = false}) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.trim().isEmpty) return null;
+    final userDoc = firestoreDb.collection('users').doc(uid);
+    return userDoc.collection(deleted ? 'deleted_sessions' : 'sessions');
+  }
+
+  Stream<List<ScheduleSession>> watchSessions() {
+    final col = _sessionsCollection();
+    if (col == null) return Stream.value(const <ScheduleSession>[]);
+
+    return col.snapshots().map((snap) {
+      final items = snap.docs.map((doc) {
+        final json = Map<String, dynamic>.from(doc.data());
+        json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
+        return ScheduleSession.fromJson(json);
+      }).toList(growable: false);
+
+      _sessions
+        ..clear()
+        ..addAll(items);
+      return List.unmodifiable(_sessions);
+    });
   }
 
   Future<void> addSession(ScheduleSession session) async {
     _sessions.add(session);
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    await _persistSession(session);
   }
 
   Future<void> addSessions(List<ScheduleSession> sessions) async {
+    if (sessions.isEmpty) return;
     _sessions.addAll(sessions);
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    final batch = firestoreDb.batch();
+    final col = _sessionsCollection();
+    if (col == null) return;
+    final now = FieldValue.serverTimestamp();
+    for (final s in sessions) {
+      final ref = col.doc(s.id.toString());
+      final json = s.toJson();
+      json['updatedAt'] = now;
+      batch.set(ref, json, SetOptions(merge: true));
+    }
+    await batch.commit();
   }
 
   Future<void> updateSession(ScheduleSession session) async {
     final idx = _sessions.indexWhere((s) => s.id == session.id);
     if (idx < 0) return;
     _sessions[idx] = session;
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    await _persistSession(session);
   }
 
   Future<void> updateSessions(List<ScheduleSession> sessions) async {
     if (sessions.isEmpty) return;
+    final col = _sessionsCollection();
+    if (col == null) return;
 
-    var didChange = false;
+    final batch = firestoreDb.batch();
+    final now = FieldValue.serverTimestamp();
     for (final session in sessions) {
       final idx = _sessions.indexWhere((s) => s.id == session.id);
       if (idx < 0) continue;
       _sessions[idx] = session;
-      didChange = true;
+      final ref = col.doc(session.id.toString());
+      final json = session.toJson();
+      json['updatedAt'] = now;
+      batch.set(ref, json, SetOptions(merge: true));
     }
-
-    if (!didChange) return;
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    await batch.commit();
   }
 
   Future<void> deleteSession(int id) async {
     _sessions.removeWhere((s) => s.id == id);
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    final ref = _sessionsCollection()?.doc(id.toString());
+    if (ref != null) await ref.delete();
   }
 
   Future<void> deleteUpcomingSessionsForClient(String clientId) async {
@@ -77,78 +103,116 @@ class ScheduleLocalDataSource {
 
     if (toDelete.isEmpty) return;
 
-    _sessions.removeWhere((s) => toDelete.any((d) => d.id == s.id));
-    _deletedSessions.addAll(toDelete);
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    final sessionsCol = _sessionsCollection();
+    final deletedCol = _sessionsCollection(deleted: true);
+    if (sessionsCol == null || deletedCol == null) return;
+
+    final batch = firestoreDb.batch();
+    final now = FieldValue.serverTimestamp();
+    for (final s in toDelete) {
+      _sessions.removeWhere((e) => e.id == s.id);
+      _deletedSessions.add(s);
+
+      final json = s.toJson();
+      json['updatedAt'] = now;
+      batch.set(deletedCol.doc(s.id.toString()), json, SetOptions(merge: true));
+      batch.delete(sessionsCol.doc(s.id.toString()));
+    }
+
+    await batch.commit();
   }
 
   Future<void> restoreDeletedUpcomingSessionsForClient(String clientId) async {
     if (clientId.trim().isEmpty) return;
 
+    final deletedCol = _sessionsCollection(deleted: true);
+    if (deletedCol == null) return;
+
+    if (_deletedSessions.isEmpty) {
+      try {
+        final snap = await deletedCol.where('clientId', isEqualTo: clientId).get();
+        _deletedSessions
+          ..clear()
+          ..addAll(
+            snap.docs.map((doc) {
+              final json = Map<String, dynamic>.from(doc.data());
+              json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
+              return ScheduleSession.fromJson(json);
+            }),
+          );
+      } catch (_) {
+        return;
+      }
+    }
+
     final restore = _deletedSessions.where((s) => s.clientId == clientId).toList();
     if (restore.isEmpty) return;
 
-    final existingIds = _sessions.map((e) => e.id).toSet();
+    final sessionsCol = _sessionsCollection();
+    if (sessionsCol == null) return;
+
+    final batch = firestoreDb.batch();
+    final now = FieldValue.serverTimestamp();
     for (final s in restore) {
-      if (existingIds.contains(s.id)) continue;
-      _sessions.add(s);
+      final exists = _sessions.any((e) => e.id == s.id);
+      if (!exists) _sessions.add(s);
+      _deletedSessions.removeWhere((e) => e.id == s.id);
+
+      final json = s.toJson();
+      json['updatedAt'] = now;
+      batch.set(sessionsCol.doc(s.id.toString()), json, SetOptions(merge: true));
+      batch.delete(deletedCol.doc(s.id.toString()));
     }
 
-    _deletedSessions.removeWhere((s) => s.clientId == clientId);
-    _controller.add(List.unmodifiable(_sessions));
-    await persist();
+    await batch.commit();
   }
 
-  Future<void> dispose() async {
-    await _controller.close();
-  }
-
-  /* ================= PERSISTENCE ================= */
-
-  /// Save all sessions to SharedPreferences.
-  Future<void> persist() async {
-    final prefs = await SharedPreferences.getInstance();
-    final jsonList = _sessions.map((s) => s.toJson()).toList();
-    await prefs.setString(_storageKey, jsonEncode(jsonList));
-
-    final deletedJsonList = _deletedSessions.map((s) => s.toJson()).toList();
-    await prefs.setString(_deletedStorageKey, jsonEncode(deletedJsonList));
-
-    // Mirror into Firestore under the signed-in user.
-    UserFirestoreSync.instance.scheduleSessionsSync(List.unmodifiable(_sessions));
-  }
-
-  /// Load all sessions from SharedPreferences into memory.
   Future<void> loadFromStorage() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_storageKey);
-    final rawDeleted = prefs.getString(_deletedStorageKey);
-    if ((raw == null || raw.trim().isEmpty) &&
-        (rawDeleted == null || rawDeleted.trim().isEmpty)) {
+    final sessionsCol = _sessionsCollection();
+    final deletedCol = _sessionsCollection(deleted: true);
+    if (sessionsCol == null) {
+      _sessions.clear();
+      _deletedSessions.clear();
       return;
     }
-    try {
-      _sessions.clear();
-      if (raw != null && raw.trim().isNotEmpty) {
-        final decoded = jsonDecode(raw) as List<dynamic>;
-        for (final item in decoded) {
-          _sessions.add(ScheduleSession.fromJson(item as Map<String, dynamic>));
-        }
-      }
 
-      _deletedSessions.clear();
-      if (rawDeleted != null && rawDeleted.trim().isNotEmpty) {
-        final decodedDeleted = jsonDecode(rawDeleted) as List<dynamic>;
-        for (final item in decodedDeleted) {
-          _deletedSessions.add(
-            ScheduleSession.fromJson(item as Map<String, dynamic>),
-          );
-        }
-      }
-      _controller.add(List.unmodifiable(_sessions));
+    try {
+      final snap = await sessionsCol.get();
+      _sessions
+        ..clear()
+        ..addAll(
+          snap.docs.map((doc) {
+            final json = Map<String, dynamic>.from(doc.data());
+            json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
+            return ScheduleSession.fromJson(json);
+          }),
+        );
     } catch (_) {
-      // Ignore corrupt data.
+      _sessions.clear();
     }
+
+    if (deletedCol == null) return;
+    try {
+      final deletedSnap = await deletedCol.get();
+      _deletedSessions
+        ..clear()
+        ..addAll(
+          deletedSnap.docs.map((doc) {
+            final json = Map<String, dynamic>.from(doc.data());
+            json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
+            return ScheduleSession.fromJson(json);
+          }),
+        );
+    } catch (_) {
+      _deletedSessions.clear();
+    }
+  }
+
+  Future<void> _persistSession(ScheduleSession session) async {
+    final ref = _sessionsCollection()?.doc(session.id.toString());
+    if (ref == null) return;
+    final json = session.toJson();
+    json['updatedAt'] = FieldValue.serverTimestamp();
+    await ref.set(json, SetOptions(merge: true));
   }
 }

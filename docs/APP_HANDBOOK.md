@@ -8,14 +8,14 @@ This document is a practical, code-grounded guide to **how the app works**, its 
 
 ## 1) What the app is
 
-GeneralApp is an offline-first admin-style app for:
+GeneralApp is a Firebase-first admin-style app for:
 - managing **clients**,
 - scheduling **classes/sessions**,
 - scheduling & tracking **payments**,
 - customizing **theme** and **modules/tabs**,
 - basic **notifications** (in-app records + Firebase Messaging token registration).
 
-**Primary persistence is local** via `SharedPreferences`. There is also **best-effort mirroring to Cloud Firestore** for cross-device survival/sync.
+**Primary persistence is Cloud Firestore** for all user data and settings.
 
 Key entry points:
 - App bootstrap: `lib/main.dart`
@@ -56,8 +56,7 @@ Tabs are defined in `DashboardTab` and rendered in `DashboardPhoneFrame`:
 - which tabs are **enabled/visible**
 
 Persistence:
-- `SharedPreferences` key: `nav_modules_v1`
-- mirrored to Firestore settings doc via `UserFirestoreSync.scheduleSettingsPatch({'navModules': ...})`
+- Firestore settings doc `users/{uid}/settings/app` using `navModulesAdmin` or `navModulesClient`
 
 Safety rules:
 - Home + Settings are always enabled
@@ -67,26 +66,17 @@ Settings can also open “hidden modules” as standalone screens while reusing 
 
 ---
 
-## 4) Data model, storage, and Firestore mirroring
+## 4) Data model and Firestore storage
 
-### Local storage (primary)
-Most app data is stored in `SharedPreferences`:
-- Theme customization: `app_theme_v2`
-- Navigation modules: `nav_modules_v1`
-- Admin profile: `admin_profile_data_v1`
-- Signup profile: `signup_profile_data_v1`
-- Sessions: `sessions_data_v1`
-- Clients: (client storage is also local; see client data layer)
-- Notifications prefs/records: notification storage keys
+### Firestore (primary)
+All app data and settings live in Firestore:
+- Settings: `users/{uid}/settings/app` (theme, nav modules, notification prefs, signup/admin profile)
+- Clients: `users/{uid}/clients/{clientId}`
+- Deleted clients: `users/{uid}/deleted_clients/{clientId}`
+- Sessions: `users/{uid}/sessions/{sessionId}`
+- Deleted sessions: `users/{uid}/deleted_sessions/{sessionId}`
 
-### Firestore mirroring (best-effort)
-`UserFirestoreSync` is explicitly described as mirroring local data:
-- Settings patches → `users/{uid}/settings/app` (debounced merge)
-- Clients upsert → `users/{uid}/clients/{clientId}` (debounced batch)
-- Sessions upsert → `users/{uid}/sessions/{sessionId}` (debounced batch)
-- Admin profile also upserts top-level `users/{uid}` profile fields
-
-> Note: `docs/FIRESTORE_SCHEMA.md` describes Firestore as source-of-truth, but the current code treats local storage as primary and Firestore as sync/mirroring.
+The `UserFirestoreSync` service is used for settings/profile writes and reads.
 
 ---
 
@@ -154,7 +144,7 @@ Key files:
 - `lib/features/calendar/ui/widgets/calendar_page_body.dart`
 - `lib/features/calendar/ui/widgets/schedule_sessions_sheet.dart`
 - `lib/features/calendar/domain/services/schedule_generator.dart`
-- session local persistence: `lib/features/calendar/data/datasources/schedule_local_datasource.dart`
+- session persistence: `lib/features/calendar/data/datasources/schedule_local_datasource.dart`
 
 #### B) Payment Schedule (Client timeline payments)
 - payment events live in a client’s `timeline` as type `payment`
