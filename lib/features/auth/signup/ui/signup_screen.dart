@@ -289,54 +289,64 @@ class _SignupScreenState extends State<SignupScreen> {
             try {
               final userCredential = await GoogleAuth.signIn();
               final user = userCredential.user;
-              
-              if (user != null) {
-                // Check if account is ALREADY registered
-                final userDoc = await firestoreDb.collection('users').doc(user.uid).get();
-                bool exists = userDoc.exists;
-                
-                final email = user.email;
-                if (!exists && email != null && email.isNotEmpty) {
-                  final emailQuery = await firestoreDb.collection('users').where('email', isEqualTo: email).limit(1).get();
-                  if (emailQuery.docs.isNotEmpty) {
-                    exists = true;
-                  }
-                }
 
-                if (exists) {
-                  await FirebaseAuth.instance.signOut();
-                  throw FirebaseAuthException(
-                    code: 'ACCOUNT_EXISTS',
-                    message: 'Google account is already registered. Please log in.',
-                  );
-                }
+              if (user == null) return;
 
+              // Use Firebase Auth's own flag — no Firestore network call needed.
+              final isNewUser =
+                  userCredential.additionalUserInfo?.isNewUser ?? true;
+
+              if (!isNewUser) {
+                // Already has a Firebase Auth account — sign them out of the
+                // partial session and redirect to the login screen.
+                await FirebaseAuth.instance.signOut();
                 if (!mounted) return;
-                setState(() {
-                  _isGoogleSignup = true;
-                  _googleUser = user;
-                  if (user.displayName != null) {
-                    _fullNameController.text = user.displayName!;
-                  }
-                  if (user.email != null) {
-                    _emailController.text = user.email!;
-                  }
-                  _googlePhotoUrl = user.photoURL;
-                });
-                
                 messenger.showSnackBar(
-                  const SnackBar(content: Text('Please confirm your details to complete sign up.')),
+                  const SnackBar(
+                    content: Text(
+                        'You already have an account. Please use the Login screen.'),
+                  ),
                 );
+                Navigator.of(context).pop(); // go back to login
+                return;
               }
+
+              if (!mounted) return;
+              setState(() {
+                _isGoogleSignup = true;
+                _googleUser = user;
+                if (user.displayName != null) {
+                  _fullNameController.text = user.displayName!;
+                }
+                if (user.email != null) {
+                  _emailController.text = user.email!;
+                }
+                _googlePhotoUrl = user.photoURL;
+              });
+
+              messenger.showSnackBar(
+                const SnackBar(
+                    content:
+                        Text('Please confirm your details to complete sign up.')),
+              );
             } on FirebaseAuthException catch (e) {
               if (!mounted) return;
               messenger.showSnackBar(
-                SnackBar(content: Text(e.message ?? 'Google sign-in failed (${e.code})')),
+                SnackBar(
+                    content: Text(
+                        e.message ?? 'Google sign-in failed (${e.code})')),
               );
-            } catch (_) {
+            } catch (e) {
               if (!mounted) return;
+              final msg = e.toString();
               messenger.showSnackBar(
-                const SnackBar(content: Text('Google sign-in failed')),
+                SnackBar(
+                  content: Text(
+                    msg.contains('canceled') || msg.contains('cancelled')
+                        ? 'Sign-in cancelled'
+                        : 'Google sign-in failed. Please try again.',
+                  ),
+                ),
               );
             }
           },
