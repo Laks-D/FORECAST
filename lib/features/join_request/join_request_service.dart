@@ -87,6 +87,7 @@ class JoinRequestService {
     if (data == null) return;
 
     final tutorId = (data['tutorId'] as String?) ?? '';
+    final studentUid = (data['clientFirebaseUid'] as String?) ?? '';
     if (tutorId.isEmpty) return;
 
     await firestoreDb
@@ -98,12 +99,29 @@ class JoinRequestService {
       'fullName': (data['clientName'] as String?) ?? 'Client',
       'phone': (data['clientPhone'] as String?) ?? '',
       'profession': '',
-      'enrolledBy': (data['clientFirebaseUid'] as String?) ?? '',
+      'enrolledBy': studentUid,
       'status': 'enrolled',
       'joinedVia': 'qr_request',
       'joinRequestId': docId,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
+
+    // Write enrollment record to the student's own user doc so their device
+    // can detect them as a student on next login.
+    if (studentUid.isNotEmpty) {
+      await firestoreDb
+          .collection('users')
+          .doc(studentUid)
+          .collection('enrollment')
+          .doc(tutorId)
+          .set({
+        'tutorId': tutorId,
+        'tutorName': (data['clientName'] as String?) ?? '',
+        'status': 'enrolled',
+        'joinRequestId': docId,
+        'enrolledAt': FieldValue.serverTimestamp(),
+      });
+    }
   }
 }

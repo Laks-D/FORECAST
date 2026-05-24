@@ -50,6 +50,14 @@ service cloud.firestore {
       match /{document=**} {
         allow read, write: if withinDevWindow() && isUser(uid);
       }
+
+      // Enrollment sub-docs are written by the TUTOR (not the student).
+      // The tutorId is the document key, so request.auth.uid == tutorId.
+      match /enrollment/{tutorId} {
+        allow read: if withinDevWindow() && isUser(uid);
+        allow create, update: if withinDevWindow() && signedIn()
+          && request.auth.uid == tutorId;
+      }
     }
 
     match /organizations/{orgId} {

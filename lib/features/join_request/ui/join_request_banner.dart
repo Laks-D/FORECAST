@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../client/presentation/bloc/client_bloc.dart';
+import '../../client/presentation/bloc/client_event.dart';
 import '../bloc/join_request_listener_cubit.dart';
 import '../join_request_model.dart';
 import '../join_request_service.dart';
@@ -55,6 +57,12 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
         onAccept: () async {
           await JoinRequestService.resolve(req.id, 'accepted');
           if (!parentCtx.mounted) return;
+          // Add student to the tutor's local client list so they appear immediately.
+          final phone = req.clientPhone.trim();
+          parentCtx.read<ClientBloc>().add(CreateClient(
+            name: req.clientName.isNotEmpty ? req.clientName : 'Student',
+            primaryContact: phone.isNotEmpty ? phone : '0000000000',
+          ));
           ScaffoldMessenger.of(parentCtx).showSnackBar(
             SnackBar(
               content: Text('✓ ${req.clientName} accepted'),

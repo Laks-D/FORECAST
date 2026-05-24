@@ -1,5 +1,3 @@
-
-
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +7,7 @@ import '../../../core/dev/dev_bootstrap.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../core/app/app_mode_cubit.dart';
 import '../../../core/app/app_mode.dart';
+import '../../../core/firebase/firestore_db.dart';
 import '../../../core/services/notification_cubit.dart';
 import '../../auth/login/ui/login_screen.dart';
 import '../../client/presentation/bloc/client_bloc.dart';
@@ -41,6 +40,22 @@ class _LandingScreenState extends State<LandingScreen> {
 	@override
 	void dispose() {
 		super.dispose();
+	}
+
+	/// Returns true if this user has an enrollment record in Firestore,
+	/// meaning they are a student who was accepted by a tutor.
+	Future<bool> _isEnrolledStudent(String uid) async {
+		try {
+			final snap = await firestoreDb
+					.collection('users')
+					.doc(uid)
+					.collection('enrollment')
+					.limit(1)
+					.get();
+			return snap.docs.isNotEmpty;
+		} catch (_) {
+			return false;
+		}
 	}
 
 	@override
@@ -80,30 +95,57 @@ class _LandingScreenState extends State<LandingScreen> {
 									return const LoginScreen();
 								}
 
-								// Signed in — always show the tutor dashboard.
-								// Organization lookup is removed; routing is purely by Firebase UID.
-								return MultiBlocProvider(
-									providers: [
-										BlocProvider(create: (_) => NotificationCubit()),
-										BlocProvider(
-											create: (_) => sl<ClientBloc>()..add(LoadClients()),
-										),
-										BlocProvider(create: (_) => sl<NavModulesCubit>()),
-										BlocProvider(
-											create: (_) => JoinRequestListenerCubit()..startForAdmin(user.uid),
-										),
-									],
-								child: AppModeScope(
-									mode: modeState.mode ?? AppMode.admin,
-									child: const DashboardScreen(),
-								),
+								// Signed in — check if this user is an enrolled student.
+								return FutureBuilder<bool>(
+									future: _isEnrolledStudent(user.uid),
+									builder: (context, enrollSnap) {
+										if (enrollSnap.connectionState == ConnectionState.waiting) {
+											return const Scaffold(
+												body: Center(child: CircularProgressIndicator()),
+											);
+										}
+
+										final isStudent = enrollSnap.data == true;
+										final appMode = isStudent ? AppMode.client : AppMode.admin;
+
+										// Set mode so the AppModeCubit reflects the correct role.
+										WidgetsBinding.instance.addPostFrameCallback((_) {
+											if (context.mounted) {
+												context.read<AppModeCubit>().setMode(appMode);
+											}
+										});
+
+										return MultiBlocProvider(
+											providers: [
+												BlocProvider(create: (_) => NotificationCubit()),
+												BlocProvider(
+													create: (_) => sl<ClientBloc>()..add(LoadClients()),
+												),
+												BlocProvider(create: (_) => sl<NavModulesCubit>()),
+												// Tutor-only: listen for incoming join requests.
+												if (!isStudent)
+													BlocProvider(
+														create: (_) => JoinRequestListenerCubit()
+															..startForAdmin(user.uid),
+													),
+											],
+											child: AppModeScope(
+												mode: appMode,
+												child: DashboardScreen(
+													// Seed the dashboard with Firebase Auth profile data.
+													// The tutor can overwrite these via the profile settings page.
+													initialUserName: user.displayName,
+													initialUserEmail: user.email,
+												),
+											),
+										);
+									},
 								);
 							},
 						);
 					},
-					);
-				},
 				);
-			}
-		}
-
+			},
+		);
+	}
+}
