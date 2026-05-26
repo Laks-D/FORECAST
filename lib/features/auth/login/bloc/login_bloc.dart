@@ -134,29 +134,37 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   Future<String?> _checkRoleAccess(String? uid, AppMode intendedMode) async {
     if (uid == null) return null;
 
+    final List<String> roles;
     try {
       final doc = await firestoreDb.collection('users').doc(uid).get();
-      final roles = (doc.data()?['roles'] as List?)?.cast<String>() ?? [];
-
-      // New user — no roles set yet (first Google sign-in before signup form).
-      // Let them through; LandingScreen / signup will assign the role.
-      if (roles.isEmpty) return null;
-
-      if (intendedMode == AppMode.admin && !roles.contains('tutor')) {
-        // Has student role but not tutor.
-        return roles.contains('student')
-            ? 'You are registered as a student. Please use the Student tab to log in.'
-            : 'Your account does not have tutor access. Please sign up as a tutor.';
-      }
-
-      if (intendedMode == AppMode.client && !roles.contains('student')) {
-        // Has tutor role but not student.
-        return roles.contains('tutor')
-            ? 'You are registered as a tutor. Please use the Tutor tab to log in.'
-            : 'You are not enrolled under any tutor yet. Please scan a QR code first.';
-      }
+      roles = (doc.data()?['roles'] as List?)?.cast<String>() ?? [];
+    } on FirebaseException catch (e) {
+      // Fail-closed: we cannot verify the role so we block the login and ask
+      // the user to check their connection.  This prevents a student from
+      // accidentally (or deliberately) entering the tutor dashboard just
+      // because Firestore was temporarily unreachable.
+      final isOffline = e.code == 'unavailable' || e.code == 'network-request-failed';
+      return isOffline
+          ? 'Could not verify your account. Check your internet connection and try again.'
+          : 'Account verification failed (${e.code}). Please try again.';
     } catch (_) {
-      // Firestore unavailable — skip the check rather than locking users out.
+      return 'Could not verify your account. Please check your connection and try again.';
+    }
+
+    // New user with no roles yet (e.g. first Google sign-in before signup form).
+    // Let them through; the signup flow will assign the correct role.
+    if (roles.isEmpty) return null;
+
+    if (intendedMode == AppMode.admin && !roles.contains('tutor')) {
+      return roles.contains('student')
+          ? 'You are registered as a student. Please use the Student tab to log in.'
+          : 'Your account does not have tutor access. Please sign up as a tutor.';
+    }
+
+    if (intendedMode == AppMode.client && !roles.contains('student')) {
+      return roles.contains('tutor')
+          ? 'You are registered as a tutor. Please use the Tutor tab to log in.'
+          : 'You are not enrolled under any tutor yet. Please scan a QR code first.';
     }
 
     return null; // Access granted.
