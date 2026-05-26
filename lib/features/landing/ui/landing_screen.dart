@@ -67,7 +67,6 @@ class _LandingScreenState extends State<LandingScreen> {
 		} catch (_) {
 			// Non-fatal — we'll fall back to the mode chooser.
 		}
-		_modeLoaded = true;
 	}
 
 	Future<_Roles> _getRolesFuture(String uid) {
