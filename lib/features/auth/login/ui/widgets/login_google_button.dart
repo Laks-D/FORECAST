@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../core/app/app_mode.dart';
+import '../../../../../core/app/app_mode_cubit.dart';
 import '../../../../../design_system/theme/app_chrome_theme.dart';
 import '../../bloc/login_bloc.dart';
 import '../../bloc/login_event.dart';
@@ -32,7 +34,13 @@ class LoginGoogleButton extends StatelessWidget {
         child: OutlinedButton(
           onPressed: submitting
               ? null
-              : () => context.read<LoginBloc>().add(const LoginWithGoogleSubmitted()),
+              : () {
+                  final mode =
+                      context.read<AppModeCubit>().state.mode ?? AppMode.admin;
+                  context
+                      .read<LoginBloc>()
+                      .add(LoginWithGoogleSubmitted(intendedMode: mode));
+                },
           style: OutlinedButton.styleFrom(
             backgroundColor: scheme.surface,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../../../../core/app/app_mode.dart';
+import '../../../../../core/app/app_mode_cubit.dart';
 import '../../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../../design_system/theme/app_visual_style.dart';
 import '../../bloc/login_bloc.dart';
@@ -27,7 +29,13 @@ class LoginSubmitButton extends StatelessWidget {
           height: 52,
           child: ElevatedButton(
             onPressed: model.enabled && !model.submitting
-                ? () => context.read<LoginBloc>().add(const LoginSubmitted())
+                ? () {
+                    final mode =
+                        context.read<AppModeCubit>().state.mode ?? AppMode.admin;
+                    context
+                        .read<LoginBloc>()
+                        .add(LoginSubmitted(intendedMode: mode));
+                  }
                 : null,
             style: visual.neumorphism
                 ? Theme.of(context).elevatedButtonTheme.style?.copyWith(

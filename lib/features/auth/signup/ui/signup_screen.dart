@@ -11,6 +11,8 @@ import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/storage/admin_profile_storage.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
+import '../../../../core/app/app_mode.dart';
+import '../../../../core/app/app_mode_cubit.dart';
 import '../../../../core/app/widgets/app_mode_selector.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
@@ -133,7 +135,11 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
 
-  Future<void> _saveUserToFirestore(String? uid) async {
+  /// Writes the new user's profile to Firestore.
+  ///
+  /// [role] is either `'tutor'` (signed up from Tutor tab) or `'student'`
+  /// (signed up from Student tab).
+  Future<void> _saveUserToFirestore(String? uid, {required String role}) async {
     if (uid == null) return;
     try {
       final userRef = firestoreDb.collection('users').doc(uid);
@@ -147,9 +153,9 @@ class _SignupScreenState extends State<SignupScreen> {
           if (_googlePhotoUrl != null) 'photoURL': _googlePhotoUrl,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-          // Default role is tutor — the user signed up to manage students.
-          // 'student' is added automatically when they enroll via a QR invite.
-          'roles': ['tutor'],
+          // Role is determined by which tab was selected on signup.
+          // 'student' is added separately when they enroll via a QR invite.
+          'roles': [role],
         },
         SetOptions(merge: true),
       );
@@ -183,6 +189,10 @@ class _SignupScreenState extends State<SignupScreen> {
     final email = _emailController.text.trim();
     if (email.isEmpty) return;
 
+    // Determine the role based on the tab that was selected.
+    final currentMode = context.read<AppModeCubit>().state.mode ?? AppMode.admin;
+    final role = currentMode == AppMode.admin ? 'tutor' : 'student';
+
     if (!_isGoogleSignup) {
       final password = _passwordController.text;
       if (password.isEmpty) return;
@@ -202,7 +212,7 @@ class _SignupScreenState extends State<SignupScreen> {
           userName: fullName,
           userEmail: email,
         );
-        await _saveUserToFirestore(credential.user?.uid);
+        await _saveUserToFirestore(credential.user?.uid, role: role);
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
           try {
@@ -242,8 +252,8 @@ class _SignupScreenState extends State<SignupScreen> {
         return;
       }
     } else {
-      // It's a Google signup, user is already authenticated
-      await _saveUserToFirestore(_googleUser?.uid);
+      // It's a Google signup, user is already authenticated.
+      await _saveUserToFirestore(_googleUser?.uid, role: role);
     }
 
     final profile = SignupProfileData(

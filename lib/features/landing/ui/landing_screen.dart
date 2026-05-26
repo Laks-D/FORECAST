@@ -45,7 +45,6 @@ class _LandingScreenState extends State<LandingScreen> {
 	/// The user's preferred app mode — loaded from Firestore on init and
 	/// updated whenever they pick a mode in the chooser or switch in Settings.
 	AppMode? _savedMode;
-	bool _modeLoaded = false;
 
 	@override
 	void initState() {
