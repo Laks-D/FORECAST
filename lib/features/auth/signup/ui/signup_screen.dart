@@ -215,28 +215,22 @@ class _SignupScreenState extends State<SignupScreen> {
         await _saveUserToFirestore(credential.user?.uid, role: role);
       } on FirebaseAuthException catch (e) {
         if (e.code == 'email-already-in-use') {
-          try {
-            await FirebaseAuth.instance.signInWithEmailAndPassword(
-              email: email,
-              password: password,
-            );
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                  content: Text('Account already exists — signed you in.')),
-            );
-            Navigator.of(context).popUntil((route) => route.isFirst);
-            return;
-          } on FirebaseAuthException {
-            if (!mounted) return;
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                    'Email already registered. Please log in or reset your password.'),
+          if (!mounted) return;
+          // Don't silently sign them in — their existing account may have a
+          // different role than the tab they selected.  Tell them to log in
+          // through the correct tab instead.
+          final tabLabel = role == 'tutor' ? 'Tutor' : 'Student';
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'This email is already registered. '
+                'Please log in using the $tabLabel tab.',
               ),
-            );
-            return;
-          }
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          return;
         }
 
         if (!mounted) return;
