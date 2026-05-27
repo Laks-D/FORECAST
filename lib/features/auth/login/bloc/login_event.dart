@@ -34,7 +34,7 @@ final class LoginPasswordVisibilityToggled extends LoginEvent {
 /// Fired when the user taps the Login button.
 ///
 /// [intendedMode] reflects the tab the user had selected (Tutor = admin,
-/// Student = client).  The bloc validates that their Firestore roles include
+/// Client = client).  The bloc validates that their Firestore roles include
 /// the corresponding role and blocks sign-in otherwise.
 final class LoginSubmitted extends LoginEvent {
   const LoginSubmitted({required this.intendedMode});

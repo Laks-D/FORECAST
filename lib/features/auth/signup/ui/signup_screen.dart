@@ -137,8 +137,8 @@ class _SignupScreenState extends State<SignupScreen> {
 
   /// Writes the new user's profile to Firestore.
   ///
-  /// [role] is either `'tutor'` (signed up from Tutor tab) or `'student'`
-  /// (signed up from Student tab).
+  /// [role] is either `'tutor'` (signed up from Tutor tab) or `'client'`
+  /// (signed up from Client tab).
   Future<void> _saveUserToFirestore(String? uid, {required String role}) async {
     if (uid == null) return;
     try {
@@ -154,7 +154,6 @@ class _SignupScreenState extends State<SignupScreen> {
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
           // Role is determined by which tab was selected on signup.
-          // 'student' is added separately when they enroll via a QR invite.
           'roles': [role],
         },
         SetOptions(merge: true),
@@ -191,7 +190,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
     // Determine the role based on the tab that was selected.
     final currentMode = context.read<AppModeCubit>().state.mode ?? AppMode.admin;
-    final role = currentMode == AppMode.admin ? 'tutor' : 'student';
+    final role = currentMode == AppMode.admin ? 'tutor' : 'client';
 
     if (!_isGoogleSignup) {
       final password = _passwordController.text;
@@ -219,7 +218,7 @@ class _SignupScreenState extends State<SignupScreen> {
           // Don't silently sign them in — their existing account may have a
           // different role than the tab they selected.  Tell them to log in
           // through the correct tab instead.
-          final tabLabel = role == 'tutor' ? 'Tutor' : 'Student';
+            final tabLabel = role == 'tutor' ? 'Tutor' : 'Client';
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(

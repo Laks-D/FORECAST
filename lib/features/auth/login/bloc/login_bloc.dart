@@ -6,17 +6,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../../core/auth/username_key.dart';
 import '../../../../core/auth/google_auth.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../../../core/firebase/firestore_db.dart';
 
 import 'login_event.dart';
 import 'login_state.dart';
 
-/// Handles authentication only.
-///
-/// Role validation (Tutor tab vs Student tab) is intentionally NOT done here.
-/// It is done in [LandingScreen] after auth, where an [_AccessDeniedPage] can
-/// be shown persistently without the race condition caused by
-/// FirebaseAuth.signOut() → authStateChanges → new LoginBloc (no error state).
+/// Handles authentication with role validation based on the selected tab.
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
   LoginBloc() : super(const LoginState()) {
     on<LoginEmailChanged>(_onEmailChanged);
@@ -53,10 +49,12 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
         password: state.password,
       );
 
+      await _assertRoleAccess(credential.user, event.intendedMode);
       await _upsertLoginTimestamp(credential.user);
       emit(state.copyWith(status: LoginStatus.success, email: resolvedEmail));
     } on FirebaseAuthException catch (e) {
       final message = switch (e.code) {
+        'ROLE_MISMATCH' => (e.message ?? 'Use the correct login tab for this account.'),
         'network-request-failed' => 'No internet connection. Please try again.',
         _ => (e.message ?? 'Login failed (${e.code})'),
       };
@@ -83,6 +81,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       final user = userCredential.user;
       final email = user?.email;
 
+      await _assertRoleAccess(user, event.intendedMode);
       await _upsertLoginTimestamp(user);
 
       emit(
@@ -109,6 +108,92 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+
+  Future<void> _assertRoleAccess(User? user, AppMode intendedMode) async {
+    if (user == null) return;
+
+    final roles = await _resolveRoles(user.uid);
+    if (roles.isDualRole) return;
+
+    final needsClient = intendedMode == AppMode.client;
+    final hasClient = roles.isClient;
+    final hasTutor = roles.isTutor;
+
+    if (needsClient && !hasClient && hasTutor) {
+      await FirebaseAuth.instance.signOut();
+      throw FirebaseAuthException(
+        code: 'ROLE_MISMATCH',
+        message: 'This account is tutor-only. Please use the Tutor login tab.',
+      );
+    }
+
+    if (!needsClient && !hasTutor && hasClient) {
+      await FirebaseAuth.instance.signOut();
+      throw FirebaseAuthException(
+        code: 'ROLE_MISMATCH',
+        message: 'This account is client-only. Please use the Client login tab.',
+      );
+    }
+
+    if (!hasClient && !hasTutor) {
+      await FirebaseAuth.instance.signOut();
+      throw FirebaseAuthException(
+        code: 'ROLE_MISMATCH',
+        message: 'Account role not set. Please complete the correct signup.',
+      );
+    }
+  }
+
+  Future<_RoleInfo> _resolveRoles(String uid) async {
+    try {
+      final snap = await firestoreDb.collection('users').doc(uid).get();
+      final raw = snap.data()?['roles'];
+      if (raw is List) {
+        final roles = raw.cast<String>();
+        final isClient = roles.contains('client') || roles.contains('student');
+        final isTutor = roles.contains('tutor');
+        return _RoleInfo(isClient: isClient, isTutor: isTutor);
+      }
+    } catch (_) {}
+
+    bool isClient = false;
+    bool isTutor = false;
+    try {
+      final s = await firestoreDb
+          .collection('users')
+          .doc(uid)
+          .collection('enrollment')
+          .limit(1)
+          .get();
+      isClient = s.docs.isNotEmpty;
+    } catch (_) {}
+    try {
+      final s = await firestoreDb
+          .collection('users')
+          .doc(uid)
+          .collection('clients')
+          .limit(1)
+          .get();
+      isTutor = s.docs.isNotEmpty;
+    } catch (_) {}
+    if (!isTutor) {
+      try {
+        final s = await firestoreDb
+            .collection('organizations')
+            .where('ownerId', isEqualTo: uid)
+            .limit(1)
+            .get();
+        isTutor = s.docs.isNotEmpty;
+      } catch (_) {}
+    }
+    if (isClient || isTutor) {
+      firestoreDb.collection('users').doc(uid).set(
+        {'roles': [if (isTutor) 'tutor', if (isClient) 'client']},
+        SetOptions(merge: true),
+      );
+    }
+    return _RoleInfo(isClient: isClient, isTutor: isTutor);
+  }
 
   Future<String> _resolveEmailFromIdentifier(String identifierRaw) async {
     final identifier = identifierRaw.trim();
@@ -154,4 +239,11 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       );
     } catch (_) {}
   }
+}
+
+class _RoleInfo {
+  const _RoleInfo({required this.isClient, required this.isTutor});
+  final bool isClient;
+  final bool isTutor;
+  bool get isDualRole => isClient && isTutor;
 }

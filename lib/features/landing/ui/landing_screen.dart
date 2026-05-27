@@ -19,10 +19,10 @@ import '../../join_request/bloc/join_request_listener_cubit.dart';
 import '../../navigation/bloc/nav_modules_cubit.dart';
 
 class _Roles {
-  const _Roles({required this.isStudent, required this.isTutor});
-  final bool isStudent;
+  const _Roles({required this.isClient, required this.isTutor});
+  final bool isClient;
   final bool isTutor;
-  bool get isDualRole => isStudent && isTutor;
+  bool get isDualRole => isClient && isTutor;
 }
 
 class LandingScreen extends StatefulWidget {
@@ -58,15 +58,14 @@ class _LandingScreenState extends State<LandingScreen> {
       final raw = snap.data()?['roles'];
       if (raw is List && raw.isNotEmpty) {
         final roles = raw.cast<String>();
-        return _Roles(
-          isStudent: roles.contains('student'),
-          isTutor: roles.contains('tutor'),
-        );
+        final isClient = roles.contains('client') || roles.contains('student');
+        final isTutor = roles.contains('tutor');
+        return _Roles(isClient: isClient, isTutor: isTutor);
       }
     } catch (_) {}
 
     // 2. Legacy fallback: infer from sub-collections & backfill.
-    bool isStudent = false;
+    bool isClient = false;
     bool isTutor = false;
     try {
       final s = await firestoreDb
@@ -75,7 +74,7 @@ class _LandingScreenState extends State<LandingScreen> {
           .collection('enrollment')
           .limit(1)
           .get();
-      isStudent = s.docs.isNotEmpty;
+      isClient = s.docs.isNotEmpty;
     } catch (_) {}
     try {
       final s = await firestoreDb
@@ -96,17 +95,17 @@ class _LandingScreenState extends State<LandingScreen> {
         isTutor = s.docs.isNotEmpty;
       } catch (_) {}
     }
-    if (isStudent || isTutor) {
+    if (isClient || isTutor) {
       firestoreDb
           .collection('users')
           .doc(uid)
           .set(
-            {'roles': [if (isTutor) 'tutor', if (isStudent) 'student']},
+            {'roles': [if (isTutor) 'tutor', if (isClient) 'client']},
             SetOptions(merge: true),
           )
           .ignore();
     }
-    return _Roles(isStudent: isStudent, isTutor: isTutor);
+    return _Roles(isClient: isClient, isTutor: isTutor);
   }
 
   @override
@@ -151,7 +150,7 @@ class _LandingScreenState extends State<LandingScreen> {
                     }
 
                     final roles = rolesSnap.data ??
-                        const _Roles(isStudent: false, isTutor: false);
+                        const _Roles(isClient: false, isTutor: false);
 
                     // ── Dual-role: the tab they logged in through decides mode.
                     if (roles.isDualRole) {
@@ -181,7 +180,7 @@ class _LandingScreenState extends State<LandingScreen> {
                           isDualRole: false);
                     }
 
-                    if (roles.isStudent) {
+                    if (roles.isClient) {
                       AppModeConfig.mode = AppMode.client;
                       AppModeStorage.save(AppMode.client);
                       return _buildApp(
@@ -211,13 +210,13 @@ class _LandingScreenState extends State<LandingScreen> {
     required AppMode appMode,
     required bool isDualRole,
   }) {
-    final isStudent = appMode == AppMode.client;
+    final isClient = appMode == AppMode.client;
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => NotificationCubit()),
         BlocProvider(create: (_) => sl<ClientBloc>()..add(LoadClients())),
         BlocProvider(create: (_) => sl<NavModulesCubit>()),
-        if (!isStudent)
+        if (!isClient)
           BlocProvider(
             create: (_) =>
                 JoinRequestListenerCubit()..startForAdmin(user.uid),

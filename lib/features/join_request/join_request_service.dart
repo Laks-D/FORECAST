@@ -105,9 +105,9 @@ class JoinRequestService {
       // Non-fatal — tutorName stays empty rather than blocking enrollment.
     }
 
-    // Write enrollment record to the student's own user doc so their device
-    // can detect them as a student on next login / app restart.
-    // Also add 'student' to their roles array so _checkRoles() works
+    // Write enrollment record to the client's own user doc so their device
+    // can detect them as a client on next login / app restart.
+    // Also add 'client' to their roles array so role checks work
     // correctly even before they have any enrollment sub-doc loaded.
     await Future.wait([
       firestoreDb
@@ -123,7 +123,7 @@ class JoinRequestService {
         'enrolledAt': FieldValue.serverTimestamp(),
       }),
       firestoreDb.collection('users').doc(studentUid).set(
-        {'roles': FieldValue.arrayUnion(['student'])},
+        {'roles': FieldValue.arrayUnion(['client'])},
         SetOptions(merge: true),
       ),
     ]);
