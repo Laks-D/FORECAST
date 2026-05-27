@@ -7,10 +7,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../../core/auth/google_auth.dart';
+import '../../../../core/auth/signup_controller.dart';
 import '../../../../core/firebase/firestore_db.dart';
-import '../../../../core/profile/user_profile_cubit.dart';
-import '../../../../core/storage/admin_profile_storage.dart';
-import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../core/app/app_mode.dart';
 import '../../../../core/app/app_mode_cubit.dart';
 import '../../../../core/app/widgets/app_mode_selector.dart';
@@ -39,6 +37,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   bool _acceptTerms = true;
   bool _isGoogleSignup = false;
+  bool _isLoading = false;
   User? _googleUser;
   String? _googlePhotoUrl;
 
@@ -183,91 +182,104 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 
   Future<void> _onFinishRegistration() async {
+    // Guard against double-tap.
+    if (_isLoading) return;
     if (!_formKey.currentState!.validate()) return;
 
     final email = _emailController.text.trim();
     if (email.isEmpty) return;
 
-    // Determine the role based on the tab that was selected.
+    // Determine the role from whichever tab is selected.
     final currentMode = context.read<AppModeCubit>().state.mode ?? AppMode.admin;
     final role = currentMode == AppMode.admin ? 'tutor' : 'client';
 
-    if (!_isGoogleSignup) {
-      final password = _passwordController.text;
-      if (password.isEmpty) return;
+    setState(() => _isLoading = true);
 
-      try {
-        final credential =
-            await FirebaseAuth.instance.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
-        final fullName = _fullNameController.text.trim();
-        // Set Firebase Auth displayName so LandingScreen can seed the dashboard.
-        await credential.user?.updateDisplayName(fullName);
-        // Seed AdminProfileStorage immediately so DashboardCubit.loadProfile()
-        // shows the correct name on first login.
-        await AdminProfileStorage.save(
-          userName: fullName,
-          userEmail: email,
-        );
-        await _saveUserToFirestore(credential.user?.uid, role: role);
-      } on FirebaseAuthException catch (e) {
-        if (e.code == 'email-already-in-use') {
+    // Tell LandingScreen to show a loading screen instead of routing to the
+    // dashboard when authStateChanges fires during account creation.
+    SignupController.instance.isSignupInProgress = true;
+
+    try {
+      if (!_isGoogleSignup) {
+        final password = _passwordController.text;
+        if (password.isEmpty) {
+          SignupController.instance.isSignupInProgress = false;
+          setState(() => _isLoading = false);
+          return;
+        }
+
+        late final String uid;
+        try {
+          // createUserWithEmailAndPassword immediately fires authStateChanges.
+          // LandingScreen is blocked by isSignupInProgress so it won't route
+          // to the dashboard.
+          final credential =
+              await FirebaseAuth.instance.createUserWithEmailAndPassword(
+            email: email,
+            password: password,
+          );
+          uid = credential.user!.uid;
+          final fullName = _fullNameController.text.trim();
+          await credential.user?.updateDisplayName(fullName);
+          // User IS authenticated here — Firestore write will succeed.
+          await _saveUserToFirestore(uid, role: role);
+        } on FirebaseAuthException catch (e) {
+          SignupController.instance.isSignupInProgress = false;
           if (!mounted) return;
-          // Don't silently sign them in — their existing account may have a
-          // different role than the tab they selected.  Tell them to log in
-          // through the correct tab instead.
-            final tabLabel = role == 'tutor' ? 'Tutor' : 'Client';
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
+          setState(() => _isLoading = false);
+          if (e.code == 'email-already-in-use') {
+            final tabLabel = role == 'tutor' ? 'Tutor' : 'Student';
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
               content: Text(
                 'This email is already registered. '
                 'Please log in using the $tabLabel tab.',
               ),
               duration: const Duration(seconds: 4),
-            ),
+            ));
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(e.message ?? 'Signup failed (${e.code})')),
+            );
+          }
+          return;
+        } catch (_) {
+          SignupController.instance.isSignupInProgress = false;
+          if (!mounted) return;
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Signup failed. Please try again.')),
           );
-          Navigator.of(context).popUntil((route) => route.isFirst);
           return;
         }
+      } else {
+        // Google signup — user is already authenticated.
+        await _saveUserToFirestore(_googleUser?.uid, role: role);
+      }
 
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Signup failed (${e.code})')),
-        );
-        return;
-      } catch (_) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Signup failed')),
-        );
+      // ── Account created and role saved successfully ──────────────────
+      //
+      // 1. Queue the success message for LoginScreen to display.
+      SignupController.instance.pendingSuccessMessage =
+          'Account created successfully! Please log in.';
+
+      // 2. Pop SignupScreen BEFORE signing out so the Navigator state is
+      //    clean when LandingScreen reacts to the auth change.
+      if (!mounted) {
+        SignupController.instance.isSignupInProgress = false;
+        await FirebaseAuth.instance.signOut();
         return;
       }
-    } else {
-      // It's a Google signup, user is already authenticated.
-      await _saveUserToFirestore(_googleUser?.uid, role: role);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+
+      // 3. Sign out. authStateChanges fires → LandingScreen sees user==null
+      //    → reads pendingSuccessMessage → shows SnackBar → shows LoginScreen.
+      await FirebaseAuth.instance.signOut();
+
+    } finally {
+      // Always clear the flag so LandingScreen never stays blocked.
+      SignupController.instance.isSignupInProgress = false;
+      if (mounted) setState(() => _isLoading = false);
     }
-
-    final profile = SignupProfileData(
-      fullName: _fullNameController.text.trim(),
-      profession: _professionController.text.trim(),
-      nationality: _nationality,
-      currency: _currency,
-      email: email,
-    );
-
-    await SignupProfileStorage.saveProfile(profile);
-    if (!mounted) return;
-
-    // Ensure global default currency reflects saved profile.
-    try {
-      context.read<UserProfileCubit>().refresh();
-    } catch (_) {}
-
-    // No navigation needed: LandingScreen listens to FirebaseAuth and will
-    // switch to the signed-in app automatically.
-    Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
   @override
@@ -616,8 +628,9 @@ class _SignupScreenState extends State<SignupScreen> {
                             width: double.infinity,
                             height: 52,
                             child: ElevatedButton(
-                              onPressed:
-                                  _acceptTerms ? _onFinishRegistration : null,
+                              onPressed: (_acceptTerms && !_isLoading)
+                                  ? _onFinishRegistration
+                                  : null,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: chrome.textColor,
                                 foregroundColor: chrome.surfaceColor,
@@ -634,7 +647,16 @@ class _SignupScreenState extends State<SignupScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              child: const Text('Sign up'),
+                              child: _isLoading
+                                  ? SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: chrome.surfaceColor,
+                                      ),
+                                    )
+                                  : const Text('Sign up'),
                             ),
                           ),
                           const SizedBox(height: 16),

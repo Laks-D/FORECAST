@@ -107,26 +107,18 @@ class JoinRequestService {
 
     // Write enrollment record to the client's own user doc so their device
     // can detect them as a client on next login / app restart.
-    // Also add 'client' to their roles array so role checks work
-    // correctly even before they have any enrollment sub-doc loaded.
-    await Future.wait([
-      firestoreDb
-          .collection('users')
-          .doc(studentUid)
-          .collection('enrollment')
-          .doc(tutorId)
-          .set({
-        'tutorId': tutorId,
-        'tutorName': tutorName,
-        'status': 'enrolled',
-        'joinRequestId': docId,
-        'enrolledAt': FieldValue.serverTimestamp(),
-      }),
-      firestoreDb.collection('users').doc(studentUid).set(
-        {'roles': FieldValue.arrayUnion(['client'])},
-        SetOptions(merge: true),
-      ),
-    ]);
+    await firestoreDb
+        .collection('users')
+        .doc(studentUid)
+        .collection('enrollment')
+        .doc(tutorId)
+        .set({
+      'tutorId': tutorId,
+      'tutorName': tutorName,
+      'status': 'enrolled',
+      'joinRequestId': docId,
+      'enrolledAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Client-side: marks a pending request as `expired` when the waiting-page

@@ -81,7 +81,7 @@ class AppModeSelector extends StatelessWidget {
                     ),
                     Expanded(
                       child: _ModeChip(
-                        label: 'Client',
+                        label: 'Student',
                         selected: isClient,
                         disabled: disabled,
                         selectedTextColor: selectedTextColor,

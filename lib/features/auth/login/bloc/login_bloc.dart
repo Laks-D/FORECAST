@@ -131,7 +131,7 @@ class LoginBloc extends Bloc<LoginEvent, LoginState> {
       await FirebaseAuth.instance.signOut();
       throw FirebaseAuthException(
         code: 'ROLE_MISMATCH',
-        message: 'This account is client-only. Please use the Client login tab.',
+        message: 'This account is student-only. Please use the Student login tab.',
       );
     }
 

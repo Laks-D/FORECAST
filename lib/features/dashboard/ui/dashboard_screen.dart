@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:typed_data';
 
 import '../../calendar/bloc/calendar_cubit.dart';
+import '../../../core/app/app_mode.dart';
 import '../bloc/dashboard_cubit.dart';
 import 'widgets/dashboard_phone_frame.dart';
 import '../../join_request/ui/join_request_banner.dart';
@@ -74,12 +75,16 @@ class _DashboardView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final isClient = AppModeScope.isClient(context);
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: JoinRequestBanner(
-        child: const DashboardPhoneFrame(),
-      ),
+      body: isClient
+          ? const DashboardPhoneFrame()
+          : const JoinRequestBanner(
+              child: DashboardPhoneFrame(),
+            ),
     );
   }
 }
+

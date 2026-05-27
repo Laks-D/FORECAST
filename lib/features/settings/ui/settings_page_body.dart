@@ -23,6 +23,7 @@ import '../../theme_customization/bloc/app_theme_state.dart';
 import '../../theme_customization/ui/theme_customization_screen.dart';
 import 'program_management_screen.dart';
 import 'profile/profile_details_screen.dart';
+import 'profile/client_profile_details_screen.dart';
 import '../../../core/services/notification_cubit.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
@@ -634,57 +635,55 @@ class _ClientProfileCardCompact extends StatelessWidget {
           fontWeight: FontWeight.w500,
         );
 
-    return BlocBuilder<ClientBloc, ClientState>(
-      builder: (context, state) {
-        Client? me;
-        if (state is ClientLoaded && state.entities.isNotEmpty) {
-          me = state.entities.first;
-        }
-
-        return InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => me == null
-                    ? const ProfileNotLinkedPage()
-                    : MyProfilePage(client: me),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(22),
-          child: Ink(
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-              boxShadow: shadows,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const _AvatarCircleSmall(),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(me?.displayName ?? 'My profile', style: titleStyle),
-                        const SizedBox(height: 4),
-                        Text(me?.email ?? 'View your details', style: subtitleStyle),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: scheme.onSurface.withOpacity(0.35),
-                  ),
-                ],
-              ),
+    return InkWell(
+      onTap: () {
+        final dashboardCubit = context.read<DashboardCubit>();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BlocProvider.value(
+              value: dashboardCubit,
+              child: const ClientProfileDetailsScreen(),
             ),
           ),
         );
       },
+      borderRadius: BorderRadius.circular(22),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+          boxShadow: shadows,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const _AvatarCircleSmall(),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocSelector<DashboardCubit, DashboardState, String>(
+                      selector: (state) => state.userName ?? 'User',
+                      builder: (context, name) {
+                        return Text(name, style: titleStyle);
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Student Profile', style: subtitleStyle),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: scheme.onSurface.withOpacity(0.35),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

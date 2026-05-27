@@ -76,7 +76,7 @@ class LoginCard extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             Text(
-              isClientApp ? 'Client log in' : 'Tutor log in',
+              isClientApp ? 'Student log in' : 'Tutor log in',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
