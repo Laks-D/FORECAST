@@ -9,6 +9,7 @@ import 'core/app/app_mode.dart';
 import 'core/app/app_mode_cubit.dart';
 import 'core/firebase/firestore_db.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/deep_link_service.dart';
 import 'core/profile/user_profile_cubit.dart';
 import 'design_system/theme/app_theme.dart';
 import 'design_system/theme/app_chrome_theme.dart';
@@ -55,6 +56,7 @@ Future<void> runConfiguredApp({AppMode? forcedMode}) async {
 
   await setupServiceLocator();
   await NotificationService.instance.init();
+  DeepLinkService.instance.init();
   runApp(App(forcedMode: forcedMode));
 }
 
@@ -107,6 +109,7 @@ class App extends StatelessWidget {
               neumorphism: state.activeThemeId == 'neumorphism',
             ),
             themeMode: state.themeMode,
+            navigatorKey: DeepLinkService.instance.navigatorKey,
             home: const LandingScreen(),
           );
         },
