@@ -28,7 +28,6 @@ import '../../../core/services/notification_cubit.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
 import '../../../core/app/app_mode.dart';
-import '../../../core/app/app_mode_storage.dart';
 
 
 class SettingsPageBody extends StatelessWidget {
@@ -289,6 +288,7 @@ class SettingsPageBody extends StatelessWidget {
                     ],
                   ),
                   if (AppModeConfig.isDualRole) ...[
+                    const SizedBox(height: 16),
                     _SectionCardDark(
                       color: cardColor,
                       neumorphism: visual.neumorphism,
@@ -296,16 +296,12 @@ class SettingsPageBody extends StatelessWidget {
                         _SectionTileDark(
                           leading: Icons.swap_horiz_rounded,
                           title: 'Switch to Student Mode',
-                          subtitle: 'Re-logs you in as student',
+                          subtitle: 'Sign out, then log in via the Student tab',
                           chevronColor: chevronColor,
-                          onTap: () async {
-                            await AppModeStorage.save(AppMode.client);
-                            FirebaseAuth.instance.signOut();
-                          },
+                          onTap: () => FirebaseAuth.instance.signOut(),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
                   ],
                   const SizedBox(height: 32),
                   _SectionCardDark(
@@ -567,6 +563,7 @@ class _ClientSettingsPageBody extends StatelessWidget {
                     ],
                   ),
                   if (AppModeConfig.isDualRole) ...[
+                    const SizedBox(height: 16),
                     _SectionCardDark(
                       color: cardColor,
                       neumorphism: visual.neumorphism,
@@ -574,16 +571,12 @@ class _ClientSettingsPageBody extends StatelessWidget {
                         _SectionTileDark(
                           leading: Icons.swap_horiz_rounded,
                           title: 'Switch to Tutor Mode',
-                          subtitle: 'Re-logs you in as tutor',
+                          subtitle: 'Sign out, then log in via the Tutor tab',
                           chevronColor: chevronColor,
-                          onTap: () async {
-                            await AppModeStorage.save(AppMode.admin);
-                            FirebaseAuth.instance.signOut();
-                          },
+                          onTap: () => FirebaseAuth.instance.signOut(),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
                   ],
                   const SizedBox(height: 32),
                   _SectionCardDark(

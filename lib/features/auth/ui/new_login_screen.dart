@@ -2,8 +2,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../../core/auth/login_controller.dart';
 import '../repository/auth_repository.dart';
-import 'new_signup_screen.dart';
+import '../../auth/forgot_password/ui/forgot_password_screen.dart';
 
 /// Login screen for a specific [role] ('tutor' or 'client').
 ///
@@ -81,6 +82,9 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
         password: _passCtrl.text,
         expectedRole: widget.role,
       );
+      // Record which tab was used — LandingScreen uses this to route
+      // dual-role users to the correct dashboard.
+      LoginController.instance.lastLoginRole = widget.role;
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
 
@@ -100,6 +104,8 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
   String _friendlyError(FirebaseAuthException e) {
     return switch (e.code) {
       'user-not-found' => 'No account found with that email.',
+      'USER_NOT_FOUND' =>
+        'No account found for this Google profile. Please sign up first.',
       'wrong-password' => 'Incorrect password.',
       'invalid-credential' => 'Incorrect email or password.',
       'user-disabled' => 'This account has been disabled.',
@@ -110,10 +116,10 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
     };
   }
 
-  void _goToSignup() {
+  void _goToForgotPassword() {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => NewSignupScreen(role: widget.role),
+      MaterialPageRoute<void>(
+        builder: (_) => const ForgotPasswordScreen(),
       ),
     );
   }
@@ -125,22 +131,12 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
       _error = null;
     });
     try {
-      final user = await AuthRepository.instance.signInWithGoogle(
+      await AuthRepository.instance.signInWithGoogle(
         expectedRole: widget.role,
       );
+      LoginController.instance.lastLoginRole = widget.role;
       if (!mounted) return;
-      if (user == null) {
-        // New Google account — role written, signed out. Prompt to sign in.
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: const Text(
-              'Account created! Tap \'Continue with Google\' to sign in.'),
-          backgroundColor: Colors.green.shade600,
-          duration: const Duration(seconds: 4),
-        ));
-      } else {
-        Navigator.of(context).popUntil((route) => route.isFirst);
-      }
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (e) {
       setState(() {
         _error = _friendlyError(e);
@@ -386,12 +382,29 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // Sign-up link
+                // Forgot password link
+                Center(
+                  child: TextButton(
+                    onPressed: _goToForgotPassword,
+                    child: Text(
+                      'Forgot password?',
+                      style: TextStyle(
+                        color: _accentColor,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // Back to role selection
                 Center(
                   child: GestureDetector(
-                    onTap: _goToSignup,
+                    onTap: () => Navigator.of(context).pop(),
                     child: RichText(
                       text: TextSpan(
                         text: "Don't have an account? ",

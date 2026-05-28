@@ -5,7 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/app/app_mode.dart';
 import '../../../core/app/app_mode_cubit.dart';
-import '../../../core/app/app_mode_storage.dart';
+import '../../../core/auth/login_controller.dart';
 import '../../../core/auth/signup_controller.dart';
 import '../../../core/dev/dev_bootstrap.dart';
 import '../../../core/di/service_locator.dart';
@@ -114,32 +114,32 @@ class _LandingScreenState extends State<LandingScreen> {
                 final isClient =
                     roles.contains('client') || roles.contains('student');
 
-                // Dual-role: use AppModeCubit to decide which dashboard.
+                // Dual-role: route to the dashboard that matches the login tab
+                // used this session. If no login happened yet this session
+                // (e.g., app restarted while already signed in), fall back to
+                // tutor dashboard.
                 if (isTutor && isClient) {
-                  return BlocBuilder<AppModeCubit, AppModeState>(
-                    builder: (context, modeState) {
-                      final mode = modeState.mode ?? AppMode.admin;
-                      AppModeConfig.isDualRole = true;
-                      AppModeConfig.mode = mode;
-                      AppModeStorage.save(mode);
-                      return _buildDashboard(
-                          user: user, appMode: mode, isDualRole: true);
-                    },
-                  );
+                  final loginRole = LoginController.instance.lastLoginRole;
+                  final mode = loginRole == 'client'
+                      ? AppMode.client
+                      : AppMode.admin;
+                  AppModeConfig.isDualRole = true;
+                  AppModeConfig.mode = mode;
+                  context.read<AppModeCubit>().setMode(mode);
+                  return _buildDashboard(
+                      user: user, appMode: mode, isDualRole: true);
                 }
 
                 AppModeConfig.isDualRole = false;
 
                 if (isTutor) {
                   AppModeConfig.mode = AppMode.admin;
-                  AppModeStorage.save(AppMode.admin);
                   return _buildDashboard(
                       user: user, appMode: AppMode.admin, isDualRole: false);
                 }
 
                 if (isClient) {
                   AppModeConfig.mode = AppMode.client;
-                  AppModeStorage.save(AppMode.client);
                   return _buildDashboard(
                       user: user, appMode: AppMode.client, isDualRole: false);
                 }

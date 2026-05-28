@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../domain/entities/schedule_session.dart';
+import '../../../../core/app/app_mode.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/firebase/firestore_db.dart';
 
@@ -19,6 +20,12 @@ class ScheduleLocalDataSource {
   }
 
   Stream<List<ScheduleSession>> watchSessions() {
+    // Student mode: stream sessions from every enrolled tutor's collection
+    // where clientId matches the current student's UID.
+    if (AppModeConfig.isClient) {
+      return _watchClientSessions();
+    }
+
     final col = _sessionsCollection();
     if (col == null) return Stream.value(const <ScheduleSession>[]);
 
@@ -34,6 +41,82 @@ class ScheduleLocalDataSource {
         ..addAll(items);
       return List.unmodifiable(_sessions);
     });
+  }
+
+  /// Streams sessions from each enrolled tutor's collection, filtered to the
+  /// current student's UID. Combines multiple streams into one.
+  Stream<List<ScheduleSession>> _watchClientSessions() async* {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.trim().isEmpty) {
+      yield const <ScheduleSession>[];
+      return;
+    }
+
+    // Fetch enrolled tutor IDs from the student's enrollment subcollection.
+    List<String> tutorIds;
+    try {
+      final snap = await firestoreDb
+          .collection('users')
+          .doc(uid)
+          .collection('enrollment')
+          .where('status', isEqualTo: 'enrolled')
+          .get();
+      tutorIds = snap.docs.map((d) => d.id).toList();
+    } catch (_) {
+      yield const <ScheduleSession>[];
+      return;
+    }
+
+    if (tutorIds.isEmpty) {
+      yield const <ScheduleSession>[];
+      return;
+    }
+
+    // Combine one real-time stream per tutor.
+    final streams = tutorIds.map((tutorId) {
+      return firestoreDb
+          .collection('users')
+          .doc(tutorId)
+          .collection('sessions')
+          .where('clientId', isEqualTo: uid)
+          .snapshots()
+          .map((snap) => snap.docs.map((doc) {
+                final json = Map<String, dynamic>.from(doc.data());
+                json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
+                return ScheduleSession.fromJson(json);
+              }).toList(growable: false));
+    }).toList();
+
+    // Emit a merged list whenever any tutor stream emits.
+    final latest = List<List<ScheduleSession>>.filled(streams.length, const []);
+    final controllers = <StreamController<List<ScheduleSession>>>[];
+    final subs = <StreamSubscription<List<ScheduleSession>>>[];
+
+    final merged = StreamController<List<ScheduleSession>>();
+
+    for (var i = 0; i < streams.length; i++) {
+      final idx = i;
+      subs.add(streams[idx].listen(
+        (items) {
+          latest[idx] = items;
+          if (!merged.isClosed) {
+            merged.add(latest.expand((l) => l).toList(growable: false));
+          }
+        },
+        onError: (_) {},
+      ));
+    }
+
+    merged.onCancel = () {
+      for (final s in subs) {
+        s.cancel();
+      }
+      for (final c in controllers) {
+        c.close();
+      }
+    };
+
+    yield* merged.stream;
   }
 
   Future<void> addSession(ScheduleSession session) async {
@@ -168,6 +251,11 @@ class ScheduleLocalDataSource {
   }
 
   Future<void> loadFromStorage() async {
+    // Client (student) mode: sessions come entirely from the real-time
+    // _watchClientSessions() stream. Skip the local load to avoid reading
+    // from the wrong (student's own empty) sessions collection.
+    if (AppModeConfig.isClient) return;
+
     final sessionsCol = _sessionsCollection();
     final deletedCol = _sessionsCollection(deleted: true);
     if (sessionsCol == null) {

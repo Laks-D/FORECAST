@@ -5,59 +5,51 @@ import '../../../core/auth/google_auth.dart';
 import '../../../core/firebase/firestore_db.dart';
 import '../../../core/storage/admin_profile_storage.dart';
 
-/// All Firebase Auth + Firestore calls for the auth flow live here.
+/// All Firebase Auth + Firestore calls for the auth flow.
 ///
-/// Keeping them in one place makes it easy to trace exactly what happens
-/// during signup and login without hunting through BLoC handlers.
+/// Role values: 'tutor' | 'client' | 'both'
+/// Stored in Firestore as roles: ['tutor'] | ['client'] | ['tutor','client']
 class AuthRepository {
   AuthRepository._();
   static final instance = AuthRepository._();
 
   // ── Sign-up ──────────────────────────────────────────────────────────────
 
-  /// Creates a new Firebase Auth account, writes the user profile + role to
-  /// Firestore, then **signs the user out**.
+  /// Creates a new Firebase Auth account, writes profile + role(s) to
+  /// Firestore, then signs the user out.
   ///
-  /// The caller must set [SignupController.isSignupInProgress] = true before
-  /// calling and may rely on LandingScreen blocking dashboard routing while
-  /// that flag is set.
-  ///
-  /// Throws [FirebaseAuthException] or [Exception] on failure.
+  /// [role] is 'tutor', 'client', or 'both'.
   Future<void> signUp({
     required String email,
     required String password,
     required String fullName,
     required String profession,
-    required String role, // 'tutor' | 'client'
+    required String role,
   }) async {
-    // 1. Create Firebase Auth account.
-    final credential =
-        await FirebaseAuth.instance.createUserWithEmailAndPassword(
+    final credential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
       email: email.trim(),
       password: password,
     );
     final user = credential.user!;
 
-    // 2. Write display name to Firebase Auth.
     await user.updateDisplayName(fullName.trim());
 
-    // 3. Write full profile + role to Firestore while authenticated.
+    final roles = _rolesFromInput(role);
+
     await firestoreDb.collection('users').doc(user.uid).set(
       {
         'fullName': fullName.trim(),
         'profession': profession.trim(),
         'email': email.trim(),
-        'roles': [role],
+        'roles': roles,
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       },
       SetOptions(merge: true),
     );
 
-    // 4. Create a self-profile in the `clients` subcollection ONLY for students.
-    // This allows the student app to have a linked profile to read and display on the profile page.
-    final isClientMode = role.trim().toLowerCase() == 'client' || role.trim().toLowerCase() == 'student';
-    if (isClientMode) {
+    // Create self-profile doc for students (and dual-role users as students).
+    if (roles.contains('client')) {
       final nowIso = DateTime.now().toIso8601String();
       await firestoreDb
           .collection('users')
@@ -83,25 +75,114 @@ class AuthRepository {
         SetOptions(merge: true),
       );
     }
-    // 5. Save to AdminProfileStorage so Tutor dashboard has name/email on first login.
+
     await AdminProfileStorage.save(
       userName: fullName.trim(),
       userEmail: email.trim(),
     );
 
-    // 6. Sign out — user must explicitly log in after signup.
     await FirebaseAuth.instance.signOut();
   }
+
+  // ── Add role to existing account ──────────────────────────────────────────
+
+  /// Called when a user who already has one role wants to add another.
+  ///
+  /// Example: signed up as Tutor, now wants to also be a Student.
+  ///
+  /// [email] + [password] are used to verify the existing account.
+  /// [newRole] is 'tutor' or 'client' — the role to add.
+  ///
+  /// Returns the new merged roles list on success.
+  /// Throws [FirebaseAuthException] with code ROLE_ALREADY_EXISTS if the
+  /// account already has this role.
+  Future<List<String>> addRoleToExistingAccount({
+    required String email,
+    required String password,
+    required String newRole,
+  }) async {
+    // Verify identity by signing in.
+    final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: email.trim(),
+      password: password,
+    );
+    final user = credential.user!;
+
+    // Fetch current roles.
+    final snap = await firestoreDb.collection('users').doc(user.uid).get();
+    final raw = snap.data()?['roles'];
+    final currentRoles =
+        raw is List ? raw.cast<String>().toList() : <String>[];
+
+    final newRoles = _rolesFromInput(newRole);
+
+    // Check if role already exists.
+    final alreadyHasAll = newRoles.every(currentRoles.contains);
+    if (alreadyHasAll) {
+      await FirebaseAuth.instance.signOut();
+      throw FirebaseAuthException(
+        code: 'ROLE_ALREADY_EXISTS',
+        message: 'Your account already has the ${newRole == 'client' ? 'Student' : 'Tutor'} role.',
+      );
+    }
+
+    // Merge roles (no duplicates).
+    final merged = {...currentRoles, ...newRoles}.toList();
+
+    // Update Firestore roles.
+    await firestoreDb.collection('users').doc(user.uid).set(
+      {
+        'roles': merged,
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Create student self-profile doc if adding client role.
+    if (newRoles.contains('client') && !currentRoles.contains('client')) {
+      final name = snap.data()?['fullName'] as String? ??
+          user.displayName?.trim() ??
+          '';
+      final nowIso = DateTime.now().toIso8601String();
+      await firestoreDb
+          .collection('users')
+          .doc(user.uid)
+          .collection('clients')
+          .doc(user.uid)
+          .set(
+        {
+          'id': user.uid,
+          'firebaseUid': user.uid,
+          'name': name,
+          'primaryContact': '',
+          'email': email.trim(),
+          'status': 'Active',
+          'timeline': [
+            {
+              'id': 'creation_${DateTime.now().millisecondsSinceEpoch}',
+              'type': 'Profile created',
+              'createdAt': nowIso,
+            }
+          ],
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    await FirebaseAuth.instance.signOut();
+    return merged;
+  }
+
 
   // ── Login ─────────────────────────────────────────────────────────────────
 
   /// Signs in with email/password and validates that the account has the
-  /// [expectedRole].  Signs out and throws [FirebaseAuthException] with code
-  /// [ROLE_MISMATCH] if the role does not match.
+  /// [expectedRole] ('tutor' or 'client').
+  /// Throws [FirebaseAuthException] with code ROLE_MISMATCH on failure.
   Future<User> signIn({
     required String email,
     required String password,
-    required String expectedRole, // 'tutor' | 'client'
+    required String expectedRole,
   }) async {
     final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
       email: email.trim(),
@@ -109,7 +190,6 @@ class AuthRepository {
     );
     final user = credential.user!;
     await _assertRole(user.uid, expectedRole);
-    // Update last-login timestamp.
     firestoreDb.collection('users').doc(user.uid).set(
       {'lastLoginAt': FieldValue.serverTimestamp()},
       SetOptions(merge: true),
@@ -117,45 +197,89 @@ class AuthRepository {
     return user;
   }
 
-  /// Signs in with Google and validates the role. If the Google account does
-  /// not exist yet in Firestore (new user), treats it as a signup and writes
-  /// the role, then signs out and returns null so the caller knows to show
-  /// a success message.
-  ///
-  /// Returns the signed-in [User] on successful login.
-  /// Throws [FirebaseAuthException] on mismatch / failure.
+  /// Signs in with Google for an EXISTING account.
+  /// Throws ROLE_MISMATCH or USER_NOT_FOUND as needed.
   Future<User?> signInWithGoogle({required String expectedRole}) async {
     final credential = await GoogleAuth.signIn();
     final user = credential.user!;
     final isNew = credential.additionalUserInfo?.isNewUser ?? false;
 
     if (isNew) {
-      // Brand-new Google account — write role then sign out so the user
-      // lands back on the login screen (same pattern as email signup).
-      final name = user.displayName?.trim() ?? '';
-      final email = user.email?.trim() ?? '';
-      await firestoreDb.collection('users').doc(user.uid).set(
-        {
-          'fullName': name,
-          'email': email,
-          'roles': [expectedRole],
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      await AdminProfileStorage.save(userName: name, userEmail: email);
       await FirebaseAuth.instance.signOut();
-      return null; // caller shows 'Account created — sign in again' message
+      throw FirebaseAuthException(
+        code: 'USER_NOT_FOUND',
+        message: 'No account found for this Google profile. Please sign up first.',
+      );
     }
 
-    // Existing account — validate role (signs out + throws on mismatch).
     await _assertRole(user.uid, expectedRole);
     firestoreDb.collection('users').doc(user.uid).set(
       {'lastLoginAt': FieldValue.serverTimestamp()},
       SetOptions(merge: true),
     ).ignore();
     return user;
+  }
+
+  /// Signs up with Google for a NEW account.
+  /// [role] is 'tutor', 'client', or 'both'.
+  Future<void> signUpWithGoogle({required String role}) async {
+    final credential = await GoogleAuth.signIn();
+    final user = credential.user!;
+    final isNew = credential.additionalUserInfo?.isNewUser ?? false;
+
+    if (!isNew) {
+      await FirebaseAuth.instance.signOut();
+      throw FirebaseAuthException(
+        code: 'email-already-in-use',
+        message: 'An account already exists for this Google profile. Please use the login screen.',
+      );
+    }
+
+    final name = user.displayName?.trim() ?? '';
+    final email = user.email?.trim() ?? '';
+    final roles = _rolesFromInput(role);
+
+    await firestoreDb.collection('users').doc(user.uid).set(
+      {
+        'fullName': name,
+        'email': email,
+        'roles': roles,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
+      SetOptions(merge: true),
+    );
+
+    // Create self-profile doc for students.
+    if (roles.contains('client')) {
+      final nowIso = DateTime.now().toIso8601String();
+      await firestoreDb
+          .collection('users')
+          .doc(user.uid)
+          .collection('clients')
+          .doc(user.uid)
+          .set(
+        {
+          'id': user.uid,
+          'firebaseUid': user.uid,
+          'name': name,
+          'primaryContact': '',
+          'email': email,
+          'status': 'Active',
+          'timeline': [
+            {
+              'id': 'creation_${DateTime.now().millisecondsSinceEpoch}',
+              'type': 'Profile created',
+              'createdAt': nowIso,
+            }
+          ],
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    await AdminProfileStorage.save(userName: name, userEmail: email);
+    await FirebaseAuth.instance.signOut();
   }
 
   // ── Sign-out ──────────────────────────────────────────────────────────────
@@ -164,24 +288,32 @@ class AuthRepository {
 
   // ── Role helpers ─────────────────────────────────────────────────────────
 
+  /// Converts the signup role string to a Firestore roles array.
+  static List<String> _rolesFromInput(String role) {
+    if (role == 'both') return ['tutor', 'client'];
+    if (role == 'tutor') return ['tutor'];
+    return ['client'];
+  }
+
+  /// Validates that [uid]'s Firestore roles array contains [expectedRole].
+  /// Signs out and throws ROLE_MISMATCH if not.
   Future<void> _assertRole(String uid, String expectedRole) async {
     final snap = await firestoreDb.collection('users').doc(uid).get();
     final raw = snap.data()?['roles'];
-    List<String> roles = [];
-    if (raw is List) roles = raw.cast<String>();
+    final List<String> roles = raw is List ? raw.cast<String>() : [];
 
-    // Legacy: check sub-collections if roles array is empty.
+    // If no roles array yet, try to infer from enrollment/organizations only.
+    // NOTE: We do NOT use the clients subcollection here because students also
+    // have a self-profile doc there — it would wrongly flag them as tutors.
     if (roles.isEmpty) {
-      roles = await _inferRolesFromSubcollections(uid);
-      if (roles.isNotEmpty) {
+      final inferred = await _inferRolesFromSubcollections(uid);
+      if (inferred.isNotEmpty) {
         firestoreDb.collection('users').doc(uid).set(
-          {'roles': roles},
+          {'roles': inferred},
           SetOptions(merge: true),
         ).ignore();
+        return _assertRoleAgainstList(uid, inferred, expectedRole);
       }
-    }
-
-    if (roles.isEmpty) {
       await FirebaseAuth.instance.signOut();
       throw FirebaseAuthException(
         code: 'ROLE_MISMATCH',
@@ -189,6 +321,14 @@ class AuthRepository {
       );
     }
 
+    await _assertRoleAgainstList(uid, roles, expectedRole);
+  }
+
+  Future<void> _assertRoleAgainstList(
+    String uid,
+    List<String> roles,
+    String expectedRole,
+  ) async {
     final wantsTutor = expectedRole == 'tutor';
     final hasTutor = roles.contains('tutor');
     final hasClient = roles.contains('client') || roles.contains('student');
@@ -197,8 +337,7 @@ class AuthRepository {
       await FirebaseAuth.instance.signOut();
       throw FirebaseAuthException(
         code: 'ROLE_MISMATCH',
-        message:
-            'This is a Student account. Please use the Student login.',
+        message: 'This is a Student account. Please use the Student login.',
       );
     }
     if (!wantsTutor && !hasClient) {
@@ -210,18 +349,11 @@ class AuthRepository {
     }
   }
 
+  /// Legacy fallback — only checks organizations (tutor) and enrollment (client).
+  /// Does NOT use the clients subcollection (students have self-profile docs there).
   Future<List<String>> _inferRolesFromSubcollections(String uid) async {
     bool isTutor = false;
     bool isClient = false;
-    try {
-      final s = await firestoreDb
-          .collection('users')
-          .doc(uid)
-          .collection('clients')
-          .limit(1)
-          .get();
-      isTutor = s.docs.isNotEmpty;
-    } catch (_) {}
     try {
       final s = await firestoreDb
           .collection('organizations')

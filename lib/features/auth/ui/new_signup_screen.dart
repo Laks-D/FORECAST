@@ -37,9 +37,15 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
   String? _error;
 
   bool get _isTutor => widget.role == 'tutor';
-  String get _roleLabel => _isTutor ? 'Tutor' : 'Student';
-  Color get _accentColor =>
-      _isTutor ? const Color(0xFF6C63FF) : const Color(0xFF00C4B4);
+  bool get _isBoth => widget.role == 'both';
+  String get _roleLabel {
+    if (_isBoth) return 'Tutor + Student';
+    return _isTutor ? 'Tutor' : 'Student';
+  }
+  Color get _accentColor {
+    if (_isBoth) return const Color(0xFFFF6B9D);
+    return _isTutor ? const Color(0xFF6C63FF) : const Color(0xFF00C4B4);
+  }
 
   @override
   void dispose() {
@@ -71,33 +77,31 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
         fullName: _nameCtrl.text.trim(),
         profession: _profCtrl.text.trim(),
         role: widget.role,
-        // AuthRepository.signUp calls signOut() at the end.
       );
 
       // ── Success path ──────────────────────────────────────────────────────
-      // Store state that AuthGate will read when it is re-created after signOut.
       SignupController.instance.pendingSuccessMessage =
           'Account created! Please sign in.';
       SignupController.instance.pendingLoginRole = widget.role;
 
-      // Pop ALL routes (signup + login) back to LandingScreen (route.isFirst).
-      // LandingScreen currently shows a loading spinner (isSignupInProgress=true).
       if (!mounted) {
-        // Widget disposed during async gap — state already set, signOut was
-        // called inside AuthRepository.signUp, so just clear the flag.
         SignupController.instance.isSignupInProgress = false;
         return;
       }
       Navigator.of(context).popUntil((route) => route.isFirst);
-
-      // AuthRepository.signUp already called signOut().
-      // authStateChanges now fires: user==null → LandingScreen shows AuthGate.
-      // AuthGate reads pendingLoginRole/pendingSuccessMessage → shows login.
-      // Clear the flag so LandingScreen stops showing the spinner.
       SignupController.instance.isSignupInProgress = false;
+
     } on FirebaseAuthException catch (e) {
       SignupController.instance.isSignupInProgress = false;
       if (!mounted) return;
+
+      // ── Email already exists: offer to add the new role ──────────────────
+      if (e.code == 'email-already-in-use' && widget.role != 'both') {
+        setState(() => _loading = false);
+        await _showAddRoleDialog(_emailCtrl.text.trim());
+        return;
+      }
+
       setState(() {
         _error = _friendlyError(e);
         _loading = false;
@@ -112,15 +116,200 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
     }
   }
 
+  /// Shows a dialog asking for the existing account's password to confirm
+  /// identity, then adds the new role to the existing account.
+  Future<void> _showAddRoleDialog(String email) async {
+    final roleLabel = _isTutor ? 'Tutor' : 'Student';
+    final existingLabel = _isTutor ? 'Student' : 'Tutor';
+    final passCtrl = TextEditingController();
+    bool dialogLoading = false;
+    String? dialogError;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDlgState) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Row(
+                children: [
+                  Icon(Icons.add_circle_outline,
+                      color: _accentColor, size: 22),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Add $roleLabel Role',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'An account already exists for $email. '
+                    'It looks like you registered as a $existingLabel.\n\n'
+                    'Enter your existing password to also add the $roleLabel role to this account.',
+                    style: const TextStyle(fontSize: 14),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: passCtrl,
+                    obscureText: true,
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Existing password',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  if (dialogError != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      dialogError!,
+                      style: TextStyle(
+                          color: Colors.red.shade700, fontSize: 13),
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: dialogLoading
+                      ? null
+                      : () => Navigator.of(ctx).pop(false),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: dialogLoading
+                      ? null
+                      : () async {
+                          final pass = passCtrl.text;
+                          if (pass.isEmpty) {
+                            setDlgState(
+                                () => dialogError = 'Enter your password');
+                            return;
+                          }
+                          setDlgState(() {
+                            dialogLoading = true;
+                            dialogError = null;
+                          });
+                          try {
+                            await AuthRepository.instance
+                                .addRoleToExistingAccount(
+                              email: email,
+                              password: pass,
+                              newRole: widget.role,
+                            );
+                            if (ctx.mounted) Navigator.of(ctx).pop(true);
+                          } on FirebaseAuthException catch (e) {
+                            setDlgState(() {
+                              dialogLoading = false;
+                              dialogError = switch (e.code) {
+                                'wrong-password' ||
+                                'invalid-credential' =>
+                                  'Incorrect password.',
+                                'ROLE_ALREADY_EXISTS' =>
+                                  e.message ?? 'Role already added.',
+                                'too-many-requests' =>
+                                  'Too many attempts. Try later.',
+                                _ => e.message ?? 'Failed (${e.code}).',
+                              };
+                            });
+                          } catch (_) {
+                            setDlgState(() {
+                              dialogLoading = false;
+                              dialogError = 'Something went wrong. Try again.';
+                            });
+                          }
+                        },
+                  style: FilledButton.styleFrom(
+                      backgroundColor: _accentColor),
+                  child: dialogLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : Text('Add $roleLabel Role'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    if (confirmed == true) {
+      // Role added successfully — send user back to sign in.
+      SignupController.instance.pendingSuccessMessage =
+          '$roleLabel role added! You can now sign in via either tab.';
+      SignupController.instance.pendingLoginRole = widget.role;
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    }
+  }
+
   String _friendlyError(FirebaseAuthException e) {
     return switch (e.code) {
       'email-already-in-use' =>
-        'An account with this email already exists. Please sign in.',
+        'This email already has an account. Use the Sign In tab instead.',
       'weak-password' => 'Password is too weak (min 6 characters).',
       'invalid-email' => 'Enter a valid email address.',
       'network-request-failed' => 'No internet connection.',
+      'ROLE_ALREADY_EXISTS' => e.message ?? 'You already have this role.',
       _ => e.message ?? 'Sign-up failed (${e.code}).',
     };
+  }
+
+
+  Future<void> _onGoogleSignUp() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    SignupController.instance.isSignupInProgress = true;
+    try {
+      await AuthRepository.instance.signUpWithGoogle(role: widget.role);
+
+      SignupController.instance.pendingSuccessMessage =
+          'Account created! Please sign in with Google.';
+      SignupController.instance.pendingLoginRole = widget.role;
+
+      if (!mounted) {
+        SignupController.instance.isSignupInProgress = false;
+        return;
+      }
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      SignupController.instance.isSignupInProgress = false;
+    } on FirebaseAuthException catch (e) {
+      SignupController.instance.isSignupInProgress = false;
+      if (!mounted) return;
+      setState(() {
+        _error = _friendlyError(e);
+        _loading = false;
+      });
+    } catch (e) {
+      SignupController.instance.isSignupInProgress = false;
+      if (!mounted) return;
+      final msg = e.toString();
+      setState(() {
+        _error = msg.contains('canceled') || msg.contains('cancelled')
+            ? null
+            : 'Google sign-up failed. Please try again.';
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -150,9 +339,11 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    _isTutor
-                        ? Icons.person_add_rounded
-                        : Icons.school_rounded,
+                    _isBoth
+                        ? Icons.swap_horiz_rounded
+                        : (_isTutor
+                            ? Icons.person_add_rounded
+                            : Icons.school_rounded),
                     color: _accentColor,
                     size: 26,
                   ),
@@ -185,11 +376,11 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                         (v == null || v.trim().isEmpty) ? 'Required' : null),
                 const SizedBox(height: 16),
 
-                _label(_isTutor ? 'Profession' : 'Grade / School'),
+                _label(_isTutor || _isBoth ? 'Profession' : 'Grade / School'),
                 const SizedBox(height: 6),
                 _field(context,
                     controller: _profCtrl,
-                    hint: _isTutor
+                    hint: (_isTutor || _isBoth)
                         ? 'e.g. Mathematics Teacher'
                         : 'e.g. Grade 10 / Delhi Public School'),
                 const SizedBox(height: 16),
@@ -299,10 +490,70 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                   ),
                 ),
 
+                const SizedBox(height: 16),
+
+                // ── OR divider ────────────────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: Divider(
+                        color: scheme.outlineVariant.withOpacity(0.5),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: scheme.onSurface.withOpacity(0.45),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: scheme.outlineVariant.withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                // ── Sign up with Google ───────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: _loading ? null : _onGoogleSignUp,
+                    icon: Image.network(
+                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                      width: 20,
+                      height: 20,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.login, size: 20),
+                    ),
+                    label: Text(
+                      'Sign up with Google',
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(color: scheme.outlineVariant),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                  ),
+                ),
+
                 const SizedBox(height: 24),
+                // Back to role selection
                 Center(
                   child: GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
+                    onTap: () => Navigator.of(context).popUntil((r) => r.isFirst),
                     child: RichText(
                       text: TextSpan(
                         text: 'Already have an account? ',

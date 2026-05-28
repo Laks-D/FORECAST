@@ -39,6 +39,18 @@ class _AuthGateState extends State<AuthGate> {
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
+
+        // 'both' role: user must choose which tab to sign in from.
+        // Just show the success message on RoleSelectionScreen.
+        if (role == 'both') {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(msg),
+            backgroundColor: Colors.green.shade600,
+            duration: const Duration(seconds: 4),
+          ));
+          return;
+        }
+
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => NewLoginScreen(
