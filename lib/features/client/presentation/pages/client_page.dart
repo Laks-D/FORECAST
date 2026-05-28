@@ -3,8 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:share_plus/share_plus.dart';
 
 import 'package:snow/design_system/theme/app_chrome_theme.dart';
 import 'package:snow/design_system/theme/app_visual_style.dart';
@@ -14,8 +12,6 @@ import 'package:snow/design_system/widgets/app_search_field.dart';
 import 'package:snow/design_system/widgets/app_neumorphic_buttons.dart';
 
 import '../../../calendar/bloc/sessions_cubit.dart';
-import '../../../../utils/app_links.dart';
-import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/services/user_firestore_sync.dart';
 import '../../domain/entities/client.dart';
 import '../bloc/client_bloc.dart';

@@ -39,8 +39,6 @@ class _LoginFieldsState extends State<LoginFields> {
 
   @override
   Widget build(BuildContext context) {
-    final isClient = widget.isClient;
-
     return Column(
       children: [
         LoginTextField(

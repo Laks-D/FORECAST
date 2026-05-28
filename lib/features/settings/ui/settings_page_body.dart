@@ -29,10 +29,7 @@ import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
 import '../../../core/app/app_mode.dart';
 import '../../../core/app/app_mode_storage.dart';
-import '../../client/presentation/bloc/client_state.dart';
-import '../../client/presentation/pages/my_profile_page.dart';
-import '../../client/presentation/pages/profile_not_linked_page.dart';
-import '../../client/domain/entities/client.dart';
+
 
 class SettingsPageBody extends StatelessWidget {
   const SettingsPageBody({super.key});
