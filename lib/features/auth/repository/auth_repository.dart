@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import '../../../core/auth/google_auth.dart';
 import '../../../core/firebase/firestore_db.dart';
 import '../../../core/storage/admin_profile_storage.dart';
 
@@ -124,7 +125,37 @@ class AuthRepository {
   /// Returns the signed-in [User] on successful login.
   /// Throws [FirebaseAuthException] on mismatch / failure.
   Future<User?> signInWithGoogle({required String expectedRole}) async {
-    throw UnimplementedError('Google sign-in not wired in this version');
+    final credential = await GoogleAuth.signIn();
+    final user = credential.user!;
+    final isNew = credential.additionalUserInfo?.isNewUser ?? false;
+
+    if (isNew) {
+      // Brand-new Google account — write role then sign out so the user
+      // lands back on the login screen (same pattern as email signup).
+      final name = user.displayName?.trim() ?? '';
+      final email = user.email?.trim() ?? '';
+      await firestoreDb.collection('users').doc(user.uid).set(
+        {
+          'fullName': name,
+          'email': email,
+          'roles': [expectedRole],
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
+      await AdminProfileStorage.save(userName: name, userEmail: email);
+      await FirebaseAuth.instance.signOut();
+      return null; // caller shows 'Account created — sign in again' message
+    }
+
+    // Existing account — validate role (signs out + throws on mismatch).
+    await _assertRole(user.uid, expectedRole);
+    firestoreDb.collection('users').doc(user.uid).set(
+      {'lastLoginAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    ).ignore();
+    return user;
   }
 
   // ── Sign-out ──────────────────────────────────────────────────────────────

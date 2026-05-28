@@ -118,6 +118,45 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
     );
   }
 
+  Future<void> _onGoogleLogin() async {
+    if (_loading) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final user = await AuthRepository.instance.signInWithGoogle(
+        expectedRole: widget.role,
+      );
+      if (!mounted) return;
+      if (user == null) {
+        // New Google account — role written, signed out. Prompt to sign in.
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text(
+              'Account created! Tap \'Continue with Google\' to sign in.'),
+          backgroundColor: Colors.green.shade600,
+          duration: const Duration(seconds: 4),
+        ));
+      } else {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _error = _friendlyError(e);
+        _loading = false;
+      });
+    } catch (e) {
+      final msg = e.toString();
+      setState(() {
+        _error = msg.contains('canceled') || msg.contains('cancelled')
+            ? null
+            : 'Google sign-in failed. Please try again.';
+        _loading = false;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
@@ -272,6 +311,78 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
                               fontWeight: FontWeight.w600,
                             ),
                           ),
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // ── OR divider ────────────────────────────────────────────
+                Row(
+                  children: [
+                    Expanded(
+                      child: Divider(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outlineVariant
+                            .withOpacity(0.5),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        'or',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.45),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Divider(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outlineVariant
+                            .withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 14),
+
+                // ── Google button ─────────────────────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: OutlinedButton.icon(
+                    onPressed: _loading ? null : _onGoogleLogin,
+                    icon: Image.network(
+                      'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg',
+                      width: 20,
+                      height: 20,
+                      errorBuilder: (_, __, ___) =>
+                          const Icon(Icons.login, size: 20),
+                    ),
+                    label: Text(
+                      'Continue with Google',
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: BorderSide(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outlineVariant,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
                   ),
                 ),
 
