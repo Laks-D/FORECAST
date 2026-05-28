@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You're Invited!</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 24px;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 28px;
+      padding: 40px 32px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 32px 64px rgba(0,0,0,0.4);
+    }
+
+    .icon {
+      width: 80px;
+      height: 80px;
+      border-radius: 24px;
+      background: linear-gradient(135deg, #6C63FF, #3ecfcf);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+      font-size: 38px;
+    }
+
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: #ffffff;
+      margin-bottom: 10px;
+      letter-spacing: -0.5px;
+    }
+
+    p {
+      font-size: 15px;
+      color: rgba(255,255,255,0.60);
+      line-height: 1.6;
+      margin-bottom: 32px;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 16px;
+      border-radius: 16px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
+      text-decoration: none;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+    .btn:active { transform: scale(0.97); opacity: 0.9; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #6C63FF, #3ecfcf);
+      color: #fff;
+      margin-bottom: 12px;
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: rgba(255,255,255,0.75);
+      border: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      text-align: left;
+      margin-bottom: 14px;
+    }
+    .step-num {
+      min-width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: rgba(108,99,255,0.25);
+      color: #a5a0ff;
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .step-text {
+      font-size: 14px;
+      color: rgba(255,255,255,0.65);
+      line-height: 1.5;
+    }
+    .step-text strong { color: rgba(255,255,255,0.9); }
+
+    .divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      margin: 28px 0;
+    }
+
+    .footer {
+      font-size: 12px;
+      color: rgba(255,255,255,0.3);
+      margin-top: 24px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🎓</div>
+    <h1>You're Invited!</h1>
+    <p>Your tutor has invited you to join their class. Open the app to accept and get started.</p>
+
+    <a id="openAppBtn" class="btn btn-primary" href="#">Open in App</a>
+    <a id="installBtn" class="btn btn-secondary" href="#" target="_blank" style="display:none">Download the App</a>
+
+    <hr class="divider" />
+
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <strong>Install the app</strong> if you haven't already, then come back here.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <strong>Sign up as a Student</strong> using the Student tab on the login screen.
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        Tap <strong>"Open in App"</strong> above to be taken directly to the invite.
+      </div>
+    </div>
+
+    <p class="footer">This invite link expires after use.</p>
+  </div>
+
+  <script>
+    // Grab the full query string from the URL and pass it into the app deep-link.
+    const params = window.location.search; // e.g. "?tutorId=abc&orgId=xyz&ts=123"
+
+    // Android Intent URL — opens the app directly if installed.
+    // Falls back to Play Store if not installed.
+    const pkg = 'com.nurturinginstitute.app'; // ← update to your actual package name
+    const domain = 'genericapp-prod.web.app';
+    const intentUrl =
+      'intent://' + domain + '/join' + params +
+      '#Intent;scheme=https;package=' + pkg + ';' +
+      'S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps;end';
+
+    // iOS Universal Link — will open app if configured, otherwise stays on web.
+    const universalUrl = 'https://' + domain + '/join' + params;
+
+    const openBtn  = document.getElementById('openAppBtn');
+    const installBtn = document.getElementById('installBtn');
+
+    const ua = navigator.userAgent || '';
+    const isAndroid = /android/i.test(ua);
+    const isIOS = /iphone|ipad|ipod/i.test(ua);
+
+    if (isAndroid) {
+      openBtn.href = intentUrl;
+    } else if (isIOS) {
+      openBtn.href = universalUrl;
+    } else {
+      // Desktop — just show instructions.
+      openBtn.textContent = 'Scan the QR from inside the app';
+      openBtn.style.pointerEvents = 'none';
+      openBtn.style.opacity = '0.5';
+    }
+  </script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 /// Utility class for generating and parsing onboarding links
 class OnboardingLink {
-  static const String _baseUrl = 'https://my-admin-app.web.app/join';
+  static const String _baseUrl = 'https://genericapp-prod.web.app/join';
 
   /// @deprecated Organizations are removed. Use [generateLinkWithTutor] instead.
   /// Kept temporarily for any lingering call-sites that haven't been updated.
