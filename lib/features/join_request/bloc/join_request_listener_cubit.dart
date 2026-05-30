@@ -17,8 +17,7 @@ class JoinRequestListenerCubit extends Cubit<List<JoinRequestModel>> {
 
   StreamSubscription<List<JoinRequestModel>>? _sub;
 
-  /// Starts the Firestore listener for the given admin [tutorUid].
-  /// Uses [tutorUid] directly — no organization lookup needed.
+  /// Starts the Firestore listener for the given tutor [tutorUid].
   Future<void> startForAdmin(String tutorUid) async {
     await _sub?.cancel();
     _sub = JoinRequestService.watchPendingForTutor(tutorUid).listen(

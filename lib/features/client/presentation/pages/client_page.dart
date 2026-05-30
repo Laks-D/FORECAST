@@ -60,11 +60,9 @@ class ClientPage extends StatefulWidget {
   const ClientPage({
     super.key,
     this.embedInDashboard = false,
-    this.orgId,
   });
 
   final bool embedInDashboard;
-  final String? orgId;
 
   @override
   State<ClientPage> createState() => _ClientPageState();
@@ -386,7 +384,6 @@ class _ClientPageState extends State<ClientPage> {
     final visual = AppVisualStyle.of(context);
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final onSurface = scheme.onSurface;
-    // orgId is no longer used — QR flow works via tutorId.
 
     return Scaffold(
       backgroundColor: bgColor,

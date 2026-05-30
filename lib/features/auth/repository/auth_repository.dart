@@ -353,7 +353,7 @@ class AuthRepository {
     final raw = snap.data()?['roles'];
     final List<String> roles = raw is List ? raw.cast<String>() : [];
 
-    // If no roles array yet, try to infer from enrollment/organizations only.
+    // If no roles array yet, fall back to inferring from enrollment subcollection.
     // NOTE: We do NOT use the clients subcollection here because students also
     // have a self-profile doc there — it would wrongly flag them as tutors.
     if (roles.isEmpty) {
@@ -401,7 +401,7 @@ class AuthRepository {
   }
 
   /// Legacy fallback — checks enrollment subcollection to detect client role.
-  /// Tutor detection via organizations is removed; tutors must have roles array.
+  /// Tutors must have a roles array in their user doc.
   Future<List<String>> _inferRolesFromSubcollections(String uid) async {
     bool isClient = false;
     try {
