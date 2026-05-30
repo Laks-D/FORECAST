@@ -2,11 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // DEV safety valve: extend as needed, but don't leave permanently open.
-    function withinDevWindow() {
-      // At least one year from today (2026-03-28).
-      return request.time < timestamp.date(2027, 3, 28);
-    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
 
     function signedIn() {
       return request.auth != null;
@@ -16,96 +13,177 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
-    function isOrgOwner(orgId) {
+    // True when the signed-in student has an enrollment doc under the given tutor.
+    // Used to allow students to read their tutor's data.
+    function isEnrolledWith(tutorUid) {
       return signedIn()
-        && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)/enrollment/$(tutorUid));
     }
 
-    // Used by the app startup probe in lib/main.dart.
+    // ── Health probe ───────────────────────────────────────────────────────
+    // Used by app startup to confirm Firestore is reachable.
+
     match /__health/{docId} {
-      allow read: if withinDevWindow();
+      allow read: if true;
       allow write: if false;
     }
 
-    // WARNING: This doc currently stores an email address.
-    // If you want "no personal details" in Firestore, change the app to stop storing email here.
-    // For now, we allow unauthenticated GET so username-login works.
-    match /usernames/{usernameKey} {
-      allow get: if withinDevWindow();
-      allow list: if false;
+    // ── Usernames (username → uid lookup) ──────────────────────────────────
 
-      allow create: if withinDevWindow()
-        && signedIn()
+    match /usernames/{usernameKey} {
+      // Public lookup needed for username-based login (unauthenticated).
+      allow get: if true;
+      allow list: if false;
+      allow create: if signedIn()
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly(['uid', 'email', 'username', 'createdAt'])
         && !exists(/databases/$(database)/documents/usernames/$(usernameKey));
-
       allow update, delete: if false;
     }
 
-    function isEnrolledStudent(tutorId) {
-      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)/enrollment/$(tutorId));
-    }
+    // ── User documents ─────────────────────────────────────────────────────
 
-    // Per-user data: everything should live under users/{uid}/...
     match /users/{uid} {
-      allow read, create, update, delete: if withinDevWindow() && isUser(uid);
+      // Any signed-in user can read another's profile doc (needed for tutor
+      // name resolution in join_request accept flow and enrollment resolver).
+      allow read: if signedIn();
+      // Only the owner can write their own profile.
+      allow create, update, delete: if isUser(uid);
 
-      match /{document=**} {
-        allow read: if withinDevWindow() && (isUser(uid) || isEnrolledStudent(uid));
-        allow write: if withinDevWindow() && isUser(uid);
+      // ── sessions ──────────────────────────────────────────────────────
+      match /sessions/{sessionId} {
+        // Tutor (owner) has full control.
+        allow read, write: if isUser(uid);
+        // Enrolled student can read sessions where they are the client.
+        allow read: if isEnrolledWith(uid)
+          && resource.data.clientId == request.auth.uid;
       }
 
-      // Enrollment sub-docs are written by the TUTOR (not the student).
-      // The tutorId is the document key, so request.auth.uid == tutorId.
+      match /deleted_sessions/{sessionId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── clients ────────────────────────────────────────────────────────
+      // Tutors manage their own client roster.
+      // Enrolled students can read their own profile doc inside the tutor's
+      // clients subcollection (users/{tutorUid}/clients/{studentUid}).
+      match /clients/{clientId} {
+        allow read, write: if isUser(uid);
+        // Student reads their own client-profile doc inside a tutor's roster.
+        allow read: if isEnrolledWith(uid)
+          && clientId == request.auth.uid;
+      }
+
+      match /deleted_clients/{clientId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── enrollment ─────────────────────────────────────────────────────
+      // Written by:
+      //   a) The TUTOR when they accept a join request (tutorId == doc key).
+      //   b) The STUDENT themselves via the fallback self-enroll path in
+      //      StudentEnrollmentResolver._enroll() (uid == request.auth.uid).
       match /enrollment/{tutorId} {
-        allow read: if withinDevWindow() && isUser(uid);
-        allow create, update: if withinDevWindow() && signedIn()
+        allow read: if isUser(uid);
+        // Tutor accepts join request → writes enrollment under the student.
+        allow create, update: if signedIn()
           && request.auth.uid == tutorId;
+        // Student self-enrolls via email/phone fallback.
+        allow create, update: if isUser(uid);
+        allow delete: if false;
+      }
+
+      // ── settings ──────────────────────────────────────────────────────
+      // UserFirestoreSync reads/writes users/{uid}/settings/app.
+      match /settings/{docId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── fcmTokens ─────────────────────────────────────────────────────
+      // PushNotificationService writes users/{uid}/fcmTokens/{token}.
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── notifications ─────────────────────────────────────────────────
+      match /notifications/{notifId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── Catch-all for any future sub-collections ───────────────────────
+      match /{subcollection}/{docId} {
+        allow read, write: if isUser(uid);
       }
     }
+
+    // ── Collection-group: clients ──────────────────────────────────────────
+    // StudentEnrollmentResolver queries collectionGroup('clients') by email
+    // or phone to find an orphan client record and auto-enroll the student.
+    // Only the student searching for themselves (by their own email/phone) is
+    // permitted — server can't enforce the field match directly on a group
+    // query, so we allow any signed-in user and rely on app-level filtering.
+    match /{path=**}/clients/{clientId} {
+      allow read: if signedIn();
+    }
+
+    // ── Organizations ──────────────────────────────────────────────────────
+    // - QR invite flow reads an org to resolve tutorId before login.
+    // - Role inference queries orgs by ownerId.
+    // - Tutor creates/updates their own orgs.
 
     match /organizations/{orgId} {
-      // Allow anyone to read org info — needed for QR invite flow
-      // where the student resolves tutorId→orgId before signing in.
-      allow read: if withinDevWindow();
+      // Reading a specific org is public (needed for QR invite before login).
+      allow get: if true;
+      // Listing orgs is restricted to authenticated users (tenant_provider
+      // and role-inference query orgs filtered by ownerId).
+      allow list: if signedIn();
+      allow create: if signedIn();
+      allow update, delete: if signedIn()
+        && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
 
-      // Only authenticated users can write (create org, add students, etc.)
-      allow write: if withinDevWindow() && signedIn();
+      match /students/{studentId} {
+        // Org owner (tutor) has full access.
+        allow read, write: if signedIn()
+          && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
+        // Students read their own record (student_onboarding_bloc).
+        allow read: if signedIn() && studentId == request.auth.uid;
+      }
 
       match /{document=**} {
-        // Sub-collections (e.g. students): read open, write requires auth
-        allow read: if withinDevWindow();
-        allow write: if withinDevWindow() && signedIn();
+        allow read: if signedIn();
+        allow write: if signedIn()
+          && get(/databases/$(database)/documents/organizations/$(orgId)).data.ownerId == request.auth.uid;
       }
     }
 
+    // ── Join requests ──────────────────────────────────────────────────────
+
     match /join_requests/{requestId} {
-      // Client submits a join request for themselves.
-      allow create: if withinDevWindow()
-        && signedIn()
+      // Student creates a request for themselves only.
+      allow create: if signedIn()
         && request.resource.data.clientFirebaseUid == request.auth.uid
         && request.resource.data.status == 'pending';
 
-      // Client can read their own request; tutor can read requests sent to them.
-      allow read: if withinDevWindow()
-        && signedIn()
+      // Student reads their own request; tutor reads requests sent to them.
+      allow read: if signedIn()
         && (
           resource.data.clientFirebaseUid == request.auth.uid
           || resource.data.tutorId == request.auth.uid
         );
 
-      // Tutor can resolve (accept/reject) requests sent to them.
-      allow update: if withinDevWindow()
-        && signedIn()
-        && resource.data.tutorId == request.auth.uid;
+      // Tutor resolves (accept/reject) — only status + resolvedAt may change.
+      allow update: if signedIn()
+        && resource.data.tutorId == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'resolvedAt']);
 
-      // Client can mark their own pending request as 'expired' (timeout cleanup).
-      allow update: if withinDevWindow()
-        && signedIn()
+      // Student marks their own pending request as 'expired' (timeout cleanup).
+      allow update: if signedIn()
         && resource.data.clientFirebaseUid == request.auth.uid
         && resource.data.status == 'pending'
-        && request.resource.data.status == 'expired';
+        && request.resource.data.status == 'expired'
+        && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['status', 'resolvedAt']);
 
       allow delete: if false;
     }
