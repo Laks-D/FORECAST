@@ -5,17 +5,15 @@ import '../../../../core/firebase/firestore_db.dart';
 import '../../../join_request/join_request_service.dart';
 import '../../../join_request/ui/join_request_waiting_page.dart';
 
+/// Shown when a student opens an invite link or scans a QR.
+/// Sends a join request to the tutor identified by [tutorId].
 class InviteLandingPage extends StatefulWidget {
   final String? tutorId;
-  // orgId is retained as a parameter so existing call-sites still compile,
-  // but it is intentionally ignored — all routing is done via tutorId.
-  final String? orgId;
   final String? qrTimestampMs;
 
   const InviteLandingPage({
     super.key,
     this.tutorId,
-    this.orgId,
     this.qrTimestampMs,
   });
 
@@ -78,7 +76,8 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.wifi_off_rounded, size: 52, color: Color(0xFF6C63FF)),
+                const Icon(Icons.wifi_off_rounded,
+                    size: 52, color: Color(0xFF6C63FF)),
                 const SizedBox(height: 16),
                 const Text(
                   'Could not connect',
@@ -112,7 +111,6 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
       );
     }
 
-    // tutorId must be present for the button to be enabled.
     final hasTutor = widget.tutorId != null && widget.tutorId!.isNotEmpty;
 
     return Scaffold(
@@ -122,7 +120,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Invite from: ${widget.tutorId ?? 'unknown'}'),
+            Text('Invite from tutor: ${widget.tutorId ?? 'unknown'}'),
             const SizedBox(height: 20),
             Text('Signed-in as $_requestName'),
             const SizedBox(height: 8),
@@ -176,7 +174,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
         MaterialPageRoute(
           builder: (_) => JoinRequestWaitingPage(
             docId: docId,
-            adminName: tutorId, // shown on waiting screen
+            adminName: tutorId,
           ),
         ),
       );

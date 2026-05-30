@@ -19,34 +19,26 @@ class _ScanInvitePageState extends State<ScanInvitePage> {
     final bar = capture.barcodes.isNotEmpty ? capture.barcodes.first : null;
     final raw = bar?.rawValue;
     if (raw == null) return;
-    // Accept both full onboarding URLs and compact query-string payloads (tutorId=...&ts=...)
+
     String? tutorId = OnboardingLink.parseTutorId(raw);
-    String? orgId = OnboardingLink.parseOrgId(raw);
     String? ts = OnboardingLink.parseTimestamp(raw);
 
-    // If parsing as a URL failed, try parsing as a raw query string
-    if (tutorId == null && orgId == null) {
+    // Fallback: try parsing as a raw query string (e.g. older QR codes).
+    if (tutorId == null) {
       try {
-        // Normalize by prefixing a dummy scheme + host so Dart can parse the query.
-        final uri = Uri.parse('https://placeholder/?' + raw);
+        final uri = Uri.parse('https://placeholder/?$raw');
         tutorId = uri.queryParameters['tutorId'];
-        orgId = uri.queryParameters['orgId'];
         ts = uri.queryParameters['ts'];
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     }
 
-    if (tutorId == null && orgId == null) return;
+    if (tutorId == null) return;
 
     setState(() => _scanned = true);
-    // Always route to invite landing. It will create a join request instead of
-    // forcing registration/onboarding.
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
         builder: (_) => InviteLandingPage(
           tutorId: tutorId,
-          orgId: orgId,
           qrTimestampMs: ts,
         ),
       ),
@@ -57,9 +49,7 @@ class _ScanInvitePageState extends State<ScanInvitePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Scan Invite')),
-      body: MobileScanner(
-        onDetect: _onDetect,
-      ),
+      body: MobileScanner(onDetect: _onDetect),
     );
   }
 }

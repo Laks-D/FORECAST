@@ -7,11 +7,10 @@ import '../../../../utils/app_links.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../widgets/simple_qr_painter.dart';
 
+/// Displays a QR code the tutor can share so students can scan it to join.
+/// Encodes: tutorId + timestamp only.
 class InviteQrPage extends StatefulWidget {
-  // orgId parameter kept for call-site compatibility but is no longer used.
-  const InviteQrPage({super.key, this.orgId});
-
-  final String? orgId;
+  const InviteQrPage({super.key});
 
   @override
   State<InviteQrPage> createState() => _InviteQrPageState();
@@ -29,16 +28,13 @@ class _InviteQrPageState extends State<InviteQrPage> {
   void _regenerate() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     final ts = DateTime.now().toUtc().millisecondsSinceEpoch.toString();
-    // QR encodes only tutorId + timestamp — no org lookup needed.
-    final link = OnboardingLink.generateLinkWithTutor(null, uid, ts);
-    setState(() => _payload = link);
+    setState(() => _payload = OnboardingLink.generateLink(uid, ts));
   }
 
   void _share() {
     final uid = FirebaseAuth.instance.currentUser?.uid ?? 'anonymous';
     final ts = DateTime.now().toUtc().millisecondsSinceEpoch.toString();
-    // QR encodes only tutorId + timestamp — no org lookup needed.
-    final link = OnboardingLink.generateLinkWithTutor(null, uid, ts);
+    final link = OnboardingLink.generateLink(uid, ts);
     Share.share('Join my class!\n\n$link', subject: 'Class Invitation');
   }
 

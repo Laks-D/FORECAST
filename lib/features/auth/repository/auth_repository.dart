@@ -400,19 +400,10 @@ class AuthRepository {
     }
   }
 
-  /// Legacy fallback — only checks organizations (tutor) and enrollment (client).
-  /// Does NOT use the clients subcollection (students have self-profile docs there).
+  /// Legacy fallback — checks enrollment subcollection to detect client role.
+  /// Tutor detection via organizations is removed; tutors must have roles array.
   Future<List<String>> _inferRolesFromSubcollections(String uid) async {
-    bool isTutor = false;
     bool isClient = false;
-    try {
-      final s = await firestoreDb
-          .collection('organizations')
-          .where('ownerId', isEqualTo: uid)
-          .limit(1)
-          .get();
-      if (s.docs.isNotEmpty) isTutor = true;
-    } catch (_) {}
     try {
       final s = await firestoreDb
           .collection('users')
@@ -422,8 +413,9 @@ class AuthRepository {
           .get();
       isClient = s.docs.isNotEmpty;
     } catch (_) {}
-    return [if (isTutor) 'tutor', if (isClient) 'client'];
+    return [if (isClient) 'client'];
   }
+
 
   // ── Role fetch (used by LandingScreen) ───────────────────────────────────
 
