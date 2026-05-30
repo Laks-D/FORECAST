@@ -85,6 +85,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     if (AppModeConfig.isClient) {
       final uid = _currentUserUidSafe();
       final email = _currentUserEmailSafe();
+      final phone = _currentUserPhoneSafe();
       if (uid != null && uid.isNotEmpty) {
         final filtered = _allEntities
             .where((c) => (c.firebaseUid ?? '').trim() == uid)
@@ -92,13 +93,24 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
 
         if (filtered.isNotEmpty) {
           _allEntities = filtered;
-        } else if (email != null && email.isNotEmpty) {
-          final byEmail = _allEntities
-              .where((c) => _normalizeEmail(c.email) == email)
-              .toList(growable: false);
+        } else {
+          // Attempt to match by email
+          List<Client> matchCandidates = [];
+          if (email != null && email.isNotEmpty) {
+            matchCandidates = _allEntities
+                .where((c) => _normalizeEmail(c.email) == email)
+                .toList(growable: false);
+          }
+          
+          // Attempt to match by phone if email didn't yield exactly 1 match
+          if (matchCandidates.length != 1 && phone != null && phone.isNotEmpty) {
+            matchCandidates = _allEntities
+                .where((c) => _normalizePhone(c.primaryContact) == phone)
+                .toList(growable: false);
+          }
 
-          if (byEmail.length == 1) {
-            final match = byEmail.first;
+          if (matchCandidates.length == 1) {
+            final match = matchCandidates.first;
             updateClientDetailsUseCase.execute(
               entityId: match.id,
               name: match.name,
@@ -114,10 +126,9 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
             );
             _allEntities = [match];
           } else {
+            // No match found
             _allEntities = const <Client>[];
           }
-        } else {
-          _allEntities = const <Client>[];
         }
       } else {
         // If auth isn't available (e.g., tests) keep the list empty.
@@ -129,25 +140,26 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   }
 
   String? _currentUserUidSafe() {
-    try {
-      final raw = FirebaseAuth.instance.currentUser?.uid;
-      return (raw ?? '').trim();
-    } catch (_) {
-      return null;
-    }
+    return FirebaseAuth.instance.currentUser?.uid;
   }
 
   String? _currentUserEmailSafe() {
-    try {
-      final raw = FirebaseAuth.instance.currentUser?.email;
-      return _normalizeEmail(raw);
-    } catch (_) {
-      return null;
-    }
+    return _normalizeEmail(FirebaseAuth.instance.currentUser?.email);
   }
 
-  static String? _normalizeEmail(String? raw) {
-    final s = (raw ?? '').trim().toLowerCase();
+  String? _currentUserPhoneSafe() {
+    return _normalizePhone(FirebaseAuth.instance.currentUser?.phoneNumber);
+  }
+
+  String? _normalizeEmail(String? email) {
+    if (email == null) return null;
+    final s = email.trim().toLowerCase();
+    return s.isEmpty ? null : s;
+  }
+
+  String? _normalizePhone(String? phone) {
+    if (phone == null) return null;
+    final s = phone.trim().replaceAll(RegExp(r'[^\d+]'), '');
     return s.isEmpty ? null : s;
   }
 

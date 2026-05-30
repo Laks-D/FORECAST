@@ -1,7 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../client/presentation/bloc/client_bloc.dart';
+import '../../client/presentation/bloc/client_event.dart';
 import '../join_request_service.dart';
 
 /// Client-side screen shown after submitting a join request.
@@ -287,8 +290,10 @@ class _AcceptedView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                   ),
                 ),
-                onPressed: () =>
-                    Navigator.of(context).popUntil((r) => r.isFirst),
+                onPressed: () {
+                  context.read<ClientBloc>().add(LoadClients());
+                  Navigator.of(context).popUntil((r) => r.isFirst);
+                },
                 child: const Text(
                   'Go to Home',
                   style: TextStyle(

@@ -43,9 +43,16 @@ class DeepLinkService {
     final orgId = uri.queryParameters['orgId'];
     final ts = uri.queryParameters['ts'];
 
-    final ctx = navigatorKey.currentContext;
-    if (ctx == null) return;
+    _pushWhenReady(tutorId, orgId, ts);
+  }
 
+  Future<void> _pushWhenReady(String? tutorId, String? orgId, String? ts) async {
+    // Wait until the navigator key is attached to the widget tree.
+    while (navigatorKey.currentContext == null) {
+      await Future.delayed(const Duration(milliseconds: 100));
+    }
+
+    final ctx = navigatorKey.currentContext!;
     Navigator.of(ctx).push(
       MaterialPageRoute<void>(
         builder: (_) => InviteLandingPage(

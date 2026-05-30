@@ -5,6 +5,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../domain/entities/client.dart';
 import '../../domain/entities/client_timeline_event.dart';
+import '../../../../core/app/app_mode.dart';
+import '../../../../core/app/student_enrollment_resolver.dart';
 import '../../../../core/firebase/firestore_db.dart';
 
 /// Firestore-backed client datasource.
@@ -27,20 +29,25 @@ class ClientLocalDataSource {
 
   List<Client> fetchDeletedClients() => _deleted;
 
-  CollectionReference<Map<String, dynamic>>? _collection({bool deleted = false}) {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null || uid.trim().isEmpty) return null;
-    final userDoc = firestoreDb.collection('users').doc(uid);
+  Future<CollectionReference<Map<String, dynamic>>?> _collection({bool deleted = false}) async {
+    String? targetUid;
+    if (AppModeConfig.isClient) {
+      targetUid = await StudentEnrollmentResolver.getTargetUid();
+    } else {
+      targetUid = FirebaseAuth.instance.currentUser?.uid;
+    }
+    if (targetUid == null || targetUid.trim().isEmpty) return null;
+    final userDoc = firestoreDb.collection('users').doc(targetUid);
     return userDoc.collection(deleted ? 'deleted_clients' : 'clients');
   }
 
-  DocumentReference<Map<String, dynamic>>? _doc(String id, {bool deleted = false}) {
-    final col = _collection(deleted: deleted);
+  Future<DocumentReference<Map<String, dynamic>>?> _doc(String id, {bool deleted = false}) async {
+    final col = await _collection(deleted: deleted);
     return col?.doc(id);
   }
 
   Future<void> _persistClient(Client client, {bool deleted = false}) async {
-    final ref = _doc(client.id, deleted: deleted);
+    final ref = await _doc(client.id, deleted: deleted);
     if (ref == null) return;
     final json = client.toJson();
     json['updatedAt'] = FieldValue.serverTimestamp();
@@ -56,8 +63,7 @@ class ClientLocalDataSource {
     _deleted.add(client);
 
     unawaited(_persistClient(client, deleted: true));
-    final ref = _doc(entityId);
-    if (ref != null) unawaited(ref.delete());
+    unawaited(_doc(entityId).then((ref) => ref?.delete()));
   }
 
   void restoreClient(String entityId) {
@@ -67,8 +73,7 @@ class ClientLocalDataSource {
     _data.add(client);
 
     unawaited(_persistClient(client));
-    final ref = _doc(entityId, deleted: true);
-    if (ref != null) unawaited(ref.delete());
+    unawaited(_doc(entityId, deleted: true).then((ref) => ref?.delete()));
   }
 
   void addNote(String entityId, String note, {DateTime? createdAt}) {
@@ -432,6 +437,46 @@ class ClientLocalDataSource {
     String? address,
     String? currency,
   }) {
+    // Deduplicate: If a client with the same UID, Phone, or Email already exists,
+    // do not create a duplicate. Just patch the firebaseUid if it's missing.
+    final normPhone = primaryContact.replaceAll(RegExp(r'\D'), '');
+    final normEmail = email?.trim().toLowerCase();
+    
+    final existingIdx = _data.indexWhere((c) {
+      if (firebaseUid != null && c.firebaseUid == firebaseUid) return true;
+      
+      final cPhone = c.primaryContact.replaceAll(RegExp(r'\D'), '');
+      if (normPhone.isNotEmpty && cPhone == normPhone) return true;
+      
+      final cEmail = c.email?.trim().toLowerCase();
+      if (normEmail != null && normEmail.isNotEmpty && cEmail == normEmail) return true;
+      
+      return false;
+    });
+
+    if (existingIdx >= 0) {
+      final existing = _data[existingIdx];
+      if (existing.firebaseUid == null && firebaseUid != null) {
+        final updated = Client(
+          id: existing.id,
+          firebaseUid: firebaseUid,
+          name: existing.name,
+          middleName: existing.middleName,
+          primaryContact: existing.primaryContact,
+          countryCode: existing.countryCode,
+          email: existing.email,
+          gender: existing.gender,
+          dateOfBirth: existing.dateOfBirth,
+          address: existing.address,
+          currency: existing.currency,
+          timeline: existing.timeline,
+        );
+        _data[existingIdx] = updated;
+        unawaited(_persistClient(updated));
+      }
+      return;
+    }
+
     final client = Client(
       id: _nextId(),
       firebaseUid: firebaseUid,
@@ -469,12 +514,18 @@ class ClientLocalDataSource {
   }
 
   Future<void> loadFromStorage() async {
-    final col = _collection();
+    // Wait for Firebase Auth to complete its initial sync
+    // This prevents a race condition on cold startup where currentUser is temporarily null
+    await FirebaseAuth.instance.authStateChanges().first;
+
+    final col = await _collection();
     if (col == null) {
       _data.clear();
       _deleted.clear();
       return;
     }
+
+    final deletedCol = await _collection(deleted: true);
 
     try {
       final snap = await col.get();
@@ -492,17 +543,18 @@ class ClientLocalDataSource {
     }
 
     try {
-      final deletedSnap = await _collection(deleted: true)?.get();
-      _deleted
-        ..clear()
-        ..addAll(
-          deletedSnap?.docs.map((doc) {
-                final json = Map<String, dynamic>.from(doc.data());
-                json['id'] = json['id'] ?? doc.id;
-                return Client.fromJson(json);
-              }) ??
-              const <Client>[],
-        );
+      if (deletedCol != null) {
+        final deletedSnap = await deletedCol.get();
+        _deleted
+          ..clear()
+          ..addAll(
+            deletedSnap.docs.map((doc) {
+                  final json = Map<String, dynamic>.from(doc.data());
+                  json['id'] = json['id'] ?? doc.id;
+                  return Client.fromJson(json);
+                }),
+          );
+      }
     } catch (_) {
       _deleted.clear();
     }

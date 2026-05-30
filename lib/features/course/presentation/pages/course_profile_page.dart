@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/app/app_mode.dart';
+import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
@@ -64,12 +66,12 @@ class CourseProfilePage extends StatelessWidget {
             const SizedBox(height: 12),
             _SectionCard(
               title: 'Tutor info',
-              child: FutureBuilder<SignupProfileData?>(
-                future: SignupProfileStorage.getProfile(),
+              child: FutureBuilder<Map<String, String>>(
+                future: _getTutorInfo(isClientMode),
                 builder: (context, snap) {
-                  final profile = snap.data;
-                  final tutorName = (profile?.fullName ?? '').trim();
-                  final tutorEmail = (profile?.email ?? '').trim();
+                  final data = snap.data ?? {};
+                  final tutorName = data['name'] ?? '';
+                  final tutorEmail = data['email'] ?? '';
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,6 +214,48 @@ class CourseProfilePage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<Map<String, String>> _getTutorInfo(bool isClientMode) async {
+    if (!isClientMode) {
+      final profile = await SignupProfileStorage.getProfile();
+      return {
+        'name': (profile?.fullName ?? '').trim(),
+        'email': (profile?.email ?? '').trim(),
+      };
+    }
+
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return {};
+
+    final snap = await firestoreDb
+        .collection('users')
+        .doc(uid)
+        .collection('enrollment')
+        .limit(1)
+        .get();
+
+    if (snap.docs.isEmpty) return {};
+
+    final data = snap.docs.first.data();
+    final tutorId = data['tutorId'] as String?;
+    final tutorName = data['tutorName'] as String?;
+
+    if (tutorId == null) return {};
+
+    try {
+      final tutorDoc = await firestoreDb.collection('users').doc(tutorId).get();
+      final tData = tutorDoc.data();
+      return {
+        'name': (tutorName ?? tData?['displayName'] ?? '').trim(),
+        'email': (tData?['email'] ?? '').trim(),
+      };
+    } catch (_) {
+      return {
+        'name': (tutorName ?? '').trim(),
+        'email': '',
+      };
+    }
   }
 }
 

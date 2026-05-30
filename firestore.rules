@@ -43,12 +43,17 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    function isEnrolledStudent(tutorId) {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)/enrollment/$(tutorId));
+    }
+
     // Per-user data: everything should live under users/{uid}/...
     match /users/{uid} {
       allow read, create, update, delete: if withinDevWindow() && isUser(uid);
 
       match /{document=**} {
-        allow read, write: if withinDevWindow() && isUser(uid);
+        allow read: if withinDevWindow() && (isUser(uid) || isEnrolledStudent(uid));
+        allow write: if withinDevWindow() && isUser(uid);
       }
 
       // Enrollment sub-docs are written by the TUTOR (not the student).

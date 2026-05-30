@@ -15,6 +15,7 @@ import 'package:snow/design_system/theme/app_chrome_theme.dart';
 import 'package:snow/design_system/theme/app_visual_style.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
+import '../../../client/presentation/bloc/client_event.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import 'client_transactions_page.dart';
 
@@ -127,196 +128,203 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
 
                         final listItems = _buildMonthGroupedItems(payments);
 
-                        return ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-                          itemCount: listItems.length,
-                          itemBuilder: (context, index) {
-                            final item = listItems[index];
-                            if (item is _MonthHeaderItem) {
-                              return Padding(
-                                padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        item.label,
+                        return RefreshIndicator(
+                          onRefresh: () async {
+                            context.read<ClientBloc>().add(LoadClients());
+                            // Wait a short duration to let the bloc state update
+                            await Future.delayed(const Duration(milliseconds: 800));
+                          },
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                            itemCount: listItems.length,
+                            itemBuilder: (context, index) {
+                              final item = listItems[index];
+                              if (item is _MonthHeaderItem) {
+                                return Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(
+                                          item.label,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleSmall
+                                              ?.copyWith(
+                                                color: chrome.mutedColor,
+                                                fontWeight: FontWeight.w800,
+                                              ),
+                                        ),
+                                      ),
+                                      Text(
+                                        '${item.currency}${item.total.toStringAsFixed(0)}',
                                         style: Theme.of(context)
                                             .textTheme
                                             .titleSmall
                                             ?.copyWith(
-                                              color: chrome.mutedColor,
-                                              fontWeight: FontWeight.w800,
+                                              color: chrome.textColor,
+                                              fontWeight: FontWeight.w900,
                                             ),
                                       ),
-                                    ),
-                                    Text(
-                                      '${defaultCurrency}${item.total.toStringAsFixed(0)}',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleSmall
-                                          ?.copyWith(
-                                            color: chrome.textColor,
-                                            fontWeight: FontWeight.w900,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-
-                            final payment = (item as _PaymentItem).payment;
-                            final subtitle = () {
-                              final rawNote = (payment.note ?? '').trim();
-
-                              if (payment.paymentCount <= 1) {
-                                if (rawNote.isEmpty) return '';
-                                return rawNote;
+                                    ],
+                                  ),
+                                );
                               }
 
-                              if (rawNote.isEmpty || rawNote == 'Multiple payments') {
-                                return '${payment.paymentCount} payments';
-                              }
+                              final payment = (item as _PaymentItem).payment;
+                              final subtitle = () {
+                                final rawNote = (payment.note ?? '').trim();
 
-                              return '${payment.paymentCount} payments • $rawNote';
-                            }();
+                                if (payment.paymentCount <= 1) {
+                                  if (rawNote.isEmpty) return '';
+                                  return rawNote;
+                                }
 
-                            final cardColor = visual.neumorphism
-                                ? scheme.surface
-                                : chrome.surfaceColor;
-                            final shadows = visual.neumorphism
-                                ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
-                                : <BoxShadow>[
-                                    BoxShadow(
-                                      color: Colors.black.withOpacity(0.08),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 8),
-                                    ),
-                                  ];
+                                if (rawNote.isEmpty || rawNote == 'Multiple payments') {
+                                  return '${payment.paymentCount} payments';
+                                }
 
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 14),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: cardColor,
-                                  borderRadius: BorderRadius.circular(28),
-                                  border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-                                  boxShadow: shadows,
-                                ),
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: InkWell(
-                                    onTap: () {
-                                      final entity = state.entities.firstWhere(
-                                        (e) => e.id == payment.entityId,
-                                      );
+                                return '${payment.paymentCount} payments • $rawNote';
+                              }();
 
-                                      final clientBloc = context.read<ClientBloc>();
-                                      final sessionsCubit = context.read<SessionsCubit>();
+                              final cardColor = visual.neumorphism
+                                  ? scheme.surface
+                                  : chrome.surfaceColor;
+                              final shadows = visual.neumorphism
+                                  ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+                                  : <BoxShadow>[
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.08),
+                                        blurRadius: 18,
+                                        offset: const Offset(0, 8),
+                                      ),
+                                    ];
 
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => MultiBlocProvider(
-                                            providers: [
-                                              BlocProvider.value(value: clientBloc),
-                                              BlocProvider.value(value: sessionsCubit),
-                                            ],
-                                            child: ClientTransactionsPage(clientId: entity.id),
-                                          ),
-                                        ),
-                                      );
-                                    },
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 14),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: cardColor,
                                     borderRadius: BorderRadius.circular(28),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(20),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 58,
-                                            height: 58,
-                                            decoration: BoxDecoration(
-                                              color: VibrantColors.pastelGreen.withOpacity(0.15),
-                                              borderRadius: BorderRadius.circular(20),
-                                              border: Border.all(color: VibrantColors.pastelGreen.withOpacity(0.2)),
-                                            ),
-                                            alignment: Alignment.center,
-                                            child: const Icon(
-                                              Icons.payments_outlined,
-                                              color: VibrantColors.pastelGreen,
-                                              size: 28,
+                                    border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+                                    boxShadow: shadows,
+                                  ),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkWell(
+                                      onTap: () {
+                                        final entity = state.entities.firstWhere(
+                                          (e) => e.id == payment.entityId,
+                                        );
+
+                                        final clientBloc = context.read<ClientBloc>();
+                                        final sessionsCubit = context.read<SessionsCubit>();
+
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => MultiBlocProvider(
+                                              providers: [
+                                                BlocProvider.value(value: clientBloc),
+                                                BlocProvider.value(value: sessionsCubit),
+                                              ],
+                                              child: ClientTransactionsPage(clientId: entity.id),
                                             ),
                                           ),
-                                          const SizedBox(width: 18),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  payment.customerName,
-                                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                                        color: chrome.textColor,
-                                                        fontWeight: FontWeight.w900,
-                                                        fontSize: 18,
-                                                      ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                                const SizedBox(height: 6),
-                                                Text(
-                                                  payment.contact,
-                                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                        color: chrome.mutedColor,
-                                                        fontWeight: FontWeight.w600,
-                                                      ),
-                                                ),
-                                                if (subtitle.isNotEmpty) ...[
-                                                  const SizedBox(height: 4),
+                                        );
+                                      },
+                                      borderRadius: BorderRadius.circular(28),
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(20),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 58,
+                                              height: 58,
+                                              decoration: BoxDecoration(
+                                                color: VibrantColors.pastelGreen.withOpacity(0.15),
+                                                borderRadius: BorderRadius.circular(20),
+                                                border: Border.all(color: VibrantColors.pastelGreen.withOpacity(0.2)),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: const Icon(
+                                                Icons.payments_outlined,
+                                                color: VibrantColors.pastelGreen,
+                                                size: 28,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 18),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: [
                                                   Text(
-                                                    subtitle,
-                                                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                          color: chrome.mutedColor.withOpacity(0.7),
-                                                          fontWeight: FontWeight.w500,
+                                                    payment.customerName,
+                                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                          color: chrome.textColor,
+                                                          fontWeight: FontWeight.w900,
+                                                          fontSize: 18,
                                                         ),
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
                                                   ),
+                                                  const SizedBox(height: 6),
+                                                  Text(
+                                                    payment.contact,
+                                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                          color: chrome.mutedColor,
+                                                          fontWeight: FontWeight.w600,
+                                                        ),
+                                                  ),
+                                                  if (subtitle.isNotEmpty) ...[
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      subtitle,
+                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                            color: chrome.mutedColor.withOpacity(0.7),
+                                                            fontWeight: FontWeight.w500,
+                                                          ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
+                                                    ),
+                                                  ],
                                                 ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Column(
+                                              crossAxisAlignment: CrossAxisAlignment.end,
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Text(
+                                                  '${payment.currency}${payment.amount.toStringAsFixed(0)}',
+                                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                        color: chrome.textColor,
+                                                        fontWeight: FontWeight.w900,
+                                                        fontSize: 20,
+                                                      ),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                Text(
+                                                  _formatDate(payment.paidAt).toUpperCase(),
+                                                  style: TextStyle(
+                                                    color: chrome.mutedColor,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
                                               ],
                                             ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Column(
-                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: [
-                                              Text(
-                                                '${defaultCurrency}${payment.amount.toStringAsFixed(0)}',
-                                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                                      color: chrome.textColor,
-                                                      fontWeight: FontWeight.w900,
-                                                      fontSize: 20,
-                                                    ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              Text(
-                                                _formatDate(payment.paidAt).toUpperCase(),
-                                                style: TextStyle(
-                                                  color: chrome.mutedColor,
-                                                  fontSize: 10,
-                                                  fontWeight: FontWeight.w800,
-                                                  letterSpacing: 0.5,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         );
                       },
                     ),
@@ -352,9 +360,11 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     }
 
     final totals = <int, double>{};
+    final currencies = <int, String>{};
     for (final p in payments) {
       final key = ymKey(p.paidAt);
       totals[key] = (totals[key] ?? 0) + p.amount;
+      currencies[key] = p.currency;
     }
 
     final items = <_PaymentsListItem>[];
@@ -367,6 +377,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
           _MonthHeaderItem(
             label: monthLabel(p.paidAt),
             total: totals[key] ?? 0,
+            currency: currencies[key] ?? '',
           ),
         );
       }
@@ -432,6 +443,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
             amount: event.amount ?? 0,
             paidAt: event.createdAt,
             note: event.note,
+            currency: entity.currency ?? '',
           ),
         );
       }
@@ -452,6 +464,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
           paidAt: p.paidAt,
           note: p.note,
           paymentCount: 1,
+          currency: p.currency,
         );
         continue;
       }
@@ -495,6 +508,7 @@ class _PaymentVM {
   final String? note;
   final DateTime paidAt;
   final int paymentCount;
+  final String currency;
 
   _PaymentVM({
     required this.entityId,
@@ -504,6 +518,7 @@ class _PaymentVM {
     required this.note,
     required this.paidAt,
     required this.paymentCount,
+    required this.currency,
   });
 
   _PaymentVM copyWith({
@@ -520,6 +535,7 @@ class _PaymentVM {
       note: note ?? this.note,
       paidAt: paidAt ?? this.paidAt,
       paymentCount: paymentCount ?? this.paymentCount,
+      currency: this.currency,
     );
   }
 }
@@ -531,6 +547,7 @@ class _PaymentSingleVM {
   final double amount;
   final String? note;
   final DateTime paidAt;
+  final String currency;
 
   _PaymentSingleVM({
     required this.entityId,
@@ -539,6 +556,7 @@ class _PaymentSingleVM {
     required this.amount,
     required this.note,
     required this.paidAt,
+    required this.currency,
   });
 }
 
@@ -549,10 +567,11 @@ abstract class _PaymentsListItem {
 }
 
 class _MonthHeaderItem extends _PaymentsListItem {
-  const _MonthHeaderItem({required this.label, required this.total});
+  const _MonthHeaderItem({required this.label, required this.total, required this.currency});
 
   final String label;
   final double total;
+  final String currency;
 }
 
 class _PaymentItem extends _PaymentsListItem {

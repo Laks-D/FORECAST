@@ -522,40 +522,46 @@ class _ClientPageState extends State<ClientPage> {
                       }
 
                       final entities = _orderedClients(state.entities);
-                      return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-                        itemCount: entities.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
-                        itemBuilder: (context, index) {
-                          final entity = entities[index];
-                          final isPinned = _pinnedClientIds.contains(entity.id);
-
-                          return _ClientCard(
-                            entity: entity,
-                            scheme: scheme,
-                            chrome: chrome,
-                            onTap: () {
-                              final clientBloc = context.read<ClientBloc>();
-                              final sessionsCubit =
-                                  context.read<SessionsCubit>();
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => MultiBlocProvider(
-                                    providers: [
-                                      BlocProvider.value(value: clientBloc),
-                                      BlocProvider.value(value: sessionsCubit),
-                                    ],
-                                    child: ClientProfilePage(entity: entity),
-                                  ),
-                                ),
-                              );
-                            },
-                            pinned: isPinned,
-                            onPinToggle: () => _togglePin(entity),
-                            onDelete: () => _confirmDeleteClient(entity),
-                          );
+                      return RefreshIndicator(
+                        onRefresh: () async {
+                          context.read<ClientBloc>().add(LoadClients());
+                          await Future.delayed(const Duration(milliseconds: 800));
                         },
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                          itemCount: entities.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 14),
+                          itemBuilder: (context, index) {
+                            final entity = entities[index];
+                            final isPinned = _pinnedClientIds.contains(entity.id);
+
+                            return _ClientCard(
+                              entity: entity,
+                              scheme: scheme,
+                              chrome: chrome,
+                              onTap: () {
+                                final clientBloc = context.read<ClientBloc>();
+                                final sessionsCubit =
+                                    context.read<SessionsCubit>();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => MultiBlocProvider(
+                                      providers: [
+                                        BlocProvider.value(value: clientBloc),
+                                        BlocProvider.value(value: sessionsCubit),
+                                      ],
+                                      child: ClientProfilePage(entity: entity),
+                                    ),
+                                  ),
+                                );
+                              },
+                              pinned: isPinned,
+                              onPinToggle: () => _togglePin(entity),
+                              onDelete: () => _confirmDeleteClient(entity),
+                            );
+                          },
+                        ),
                       );
                     }
 

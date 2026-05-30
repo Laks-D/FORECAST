@@ -120,12 +120,16 @@ class _LandingScreenState extends State<LandingScreen> {
                 // tutor dashboard.
                 if (isTutor && isClient) {
                   final loginRole = LoginController.instance.lastLoginRole;
-                  final mode = loginRole == 'client'
-                      ? AppMode.client
-                      : AppMode.admin;
+                  AppMode mode;
+                  if (loginRole != null) {
+                    mode = loginRole == 'client' ? AppMode.client : AppMode.admin;
+                    context.read<AppModeCubit>().setMode(mode);
+                  } else {
+                    mode = context.read<AppModeCubit>().state.mode ?? AppMode.admin;
+                  }
+                  
                   AppModeConfig.isDualRole = true;
                   AppModeConfig.mode = mode;
-                  context.read<AppModeCubit>().setMode(mode);
                   return _buildDashboard(
                       user: user, appMode: mode, isDualRole: true);
                 }

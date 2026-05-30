@@ -228,11 +228,62 @@ class AuthRepository {
     final isNew = credential.additionalUserInfo?.isNewUser ?? false;
 
     if (!isNew) {
-      await FirebaseAuth.instance.signOut();
-      throw FirebaseAuthException(
-        code: 'email-already-in-use',
-        message: 'An account already exists for this Google profile. Please use the login screen.',
-      );
+      // User already has an account. Check if they need a new role added.
+      final snap = await firestoreDb.collection('users').doc(user.uid).get();
+      final raw = snap.data()?['roles'];
+      final currentRoles = raw is List ? raw.cast<String>().toList() : <String>[];
+      
+      final newRoles = _rolesFromInput(role);
+      final alreadyHasAll = newRoles.every(currentRoles.contains);
+      
+      if (alreadyHasAll) {
+        await FirebaseAuth.instance.signOut();
+        throw FirebaseAuthException(
+          code: 'email-already-in-use',
+          message: 'An account already exists for this Google profile. Please use the login screen.',
+        );
+      } else {
+        // Add the new role
+        final merged = {...currentRoles, ...newRoles}.toList();
+        await firestoreDb.collection('users').doc(user.uid).set(
+          {
+            'roles': merged,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true),
+        );
+        
+        // Add student profile if needed
+        if (newRoles.contains('client') && !currentRoles.contains('client')) {
+          final name = snap.data()?['fullName'] as String? ?? user.displayName?.trim() ?? '';
+          final nowIso = DateTime.now().toIso8601String();
+          await firestoreDb
+              .collection('users')
+              .doc(user.uid)
+              .collection('clients')
+              .doc(user.uid)
+              .set(
+            {
+              'id': user.uid,
+              'firebaseUid': user.uid,
+              'name': name,
+              'primaryContact': '',
+              'email': user.email ?? '',
+              'status': 'Active',
+              'timeline': [
+                {
+                  'id': 'creation_${DateTime.now().millisecondsSinceEpoch}',
+                  'type': 'Profile created',
+                  'createdAt': nowIso,
+                }
+              ],
+            },
+            SetOptions(merge: true),
+          );
+        }
+        await FirebaseAuth.instance.signOut();
+        return;
+      }
     }
 
     final name = user.displayName?.trim() ?? '';

@@ -37,15 +37,8 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
   String? _error;
 
   bool get _isTutor => widget.role == 'tutor';
-  bool get _isBoth => widget.role == 'both';
-  String get _roleLabel {
-    if (_isBoth) return 'Tutor + Student';
-    return _isTutor ? 'Tutor' : 'Student';
-  }
-  Color get _accentColor {
-    if (_isBoth) return const Color(0xFFFF6B9D);
-    return _isTutor ? const Color(0xFF6C63FF) : const Color(0xFF00C4B4);
-  }
+  String get _roleLabel => _isTutor ? 'Tutor' : 'Student';
+  Color get _accentColor => _isTutor ? const Color(0xFF6C63FF) : const Color(0xFF00C4B4);
 
   @override
   void dispose() {
@@ -95,11 +88,35 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
       SignupController.instance.isSignupInProgress = false;
       if (!mounted) return;
 
-      // ── Email already exists: offer to add the new role ──────────────────
-      if (e.code == 'email-already-in-use' && widget.role != 'both') {
-        setState(() => _loading = false);
-        await _showAddRoleDialog(_emailCtrl.text.trim());
-        return;
+      // ── Email already exists: attempt seamless role addition ───────────────
+      if (e.code == 'email-already-in-use') {
+        try {
+          await AuthRepository.instance.addRoleToExistingAccount(
+            email: _emailCtrl.text.trim(),
+            password: _passCtrl.text,
+            newRole: widget.role,
+          );
+          SignupController.instance.pendingSuccessMessage =
+              '${_isTutor ? "Tutor" : "Student"} role added! Please sign in.';
+          SignupController.instance.pendingLoginRole = widget.role;
+
+          if (!mounted) {
+            SignupController.instance.isSignupInProgress = false;
+            return;
+          }
+          Navigator.of(context).popUntil((route) => route.isFirst);
+          SignupController.instance.isSignupInProgress = false;
+          return;
+        } catch (_) {
+          // If the password was wrong, fallback to showing the dialog
+          if (!mounted) {
+            SignupController.instance.isSignupInProgress = false;
+            return;
+          }
+          setState(() => _loading = false);
+          await _showAddRoleDialog(_emailCtrl.text.trim());
+          return;
+        }
       }
 
       setState(() {
@@ -155,7 +172,7 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                   Text(
                     'An account already exists for $email. '
                     'It looks like you registered as a $existingLabel.\n\n'
-                    'Enter your existing password to also add the $roleLabel role to this account.',
+                    'Enter your existing password for this account to also add the $roleLabel role.',
                     style: const TextStyle(fontSize: 14),
                   ),
                   const SizedBox(height: 16),
@@ -339,11 +356,9 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                     borderRadius: BorderRadius.circular(14),
                   ),
                   child: Icon(
-                    _isBoth
-                        ? Icons.swap_horiz_rounded
-                        : (_isTutor
-                            ? Icons.person_add_rounded
-                            : Icons.school_rounded),
+                    _isTutor
+                        ? Icons.person_add_rounded
+                        : Icons.school_rounded,
                     color: _accentColor,
                     size: 26,
                   ),
@@ -376,11 +391,11 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                         (v == null || v.trim().isEmpty) ? 'Required' : null),
                 const SizedBox(height: 16),
 
-                _label(_isTutor || _isBoth ? 'Profession' : 'Grade / School'),
+                _label(_isTutor ? 'Profession' : 'Grade / School'),
                 const SizedBox(height: 6),
                 _field(context,
                     controller: _profCtrl,
-                    hint: (_isTutor || _isBoth)
+                    hint: _isTutor
                         ? 'e.g. Mathematics Teacher'
                         : 'e.g. Grade 10 / Delhi Public School'),
                 const SizedBox(height: 16),

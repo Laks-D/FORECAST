@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/bloc/client_event.dart';
+import '../../client/presentation/bloc/client_state.dart';
 import '../bloc/join_request_listener_cubit.dart';
 import '../join_request_model.dart';
 import '../join_request_service.dart';
@@ -57,20 +58,50 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
         onAccept: () async {
           await JoinRequestService.resolve(req.id, 'accepted');
           if (!parentCtx.mounted) return;
-          // Add student to the tutor's local client list so they appear immediately.
+
+          // Check if the client already exists in the local state.
+          final currentState = parentCtx.read<ClientBloc>().state;
           final phone = req.clientPhone.trim();
-          parentCtx.read<ClientBloc>().add(CreateClient(
-            name: req.clientName.isNotEmpty ? req.clientName : 'Student',
-            primaryContact: phone.isNotEmpty ? phone : '0000000000',
-            firebaseUid: req.clientFirebaseUid.isNotEmpty ? req.clientFirebaseUid : null,
-          ));
-          ScaffoldMessenger.of(parentCtx).showSnackBar(
-            SnackBar(
-              content: Text('✓ ${req.clientName} accepted'),
-              backgroundColor: const Color(0xFF22C55E),
-              duration: const Duration(seconds: 2),
-            ),
-          );
+          final normPhone = phone.replaceAll(RegExp(r'\D'), '');
+          
+          bool alreadyExists = false;
+          if (currentState is ClientLoaded) {
+            for (final c in currentState.entities) {
+              if (req.clientFirebaseUid.isNotEmpty && c.firebaseUid == req.clientFirebaseUid) {
+                alreadyExists = true;
+                break;
+              }
+              final cPhone = c.primaryContact.replaceAll(RegExp(r'\D'), '');
+              if (normPhone.isNotEmpty && cPhone == normPhone) {
+                alreadyExists = true;
+                break;
+              }
+            }
+          }
+
+          if (alreadyExists) {
+            ScaffoldMessenger.of(parentCtx).showSnackBar(
+              const SnackBar(
+                content: Text('Client has already been added to your account.'),
+                backgroundColor: Color(0xFFF59E0B), // Amber warning
+                duration: Duration(seconds: 3),
+              ),
+            );
+          } else {
+            // Add student to the tutor's local client list so they appear immediately.
+            parentCtx.read<ClientBloc>().add(CreateClient(
+              name: req.clientName.isNotEmpty ? req.clientName : 'Student',
+              primaryContact: phone.isNotEmpty ? phone : '0000000000',
+              firebaseUid: req.clientFirebaseUid.isNotEmpty ? req.clientFirebaseUid : null,
+            ));
+            ScaffoldMessenger.of(parentCtx).showSnackBar(
+              SnackBar(
+                content: Text('✓ ${req.clientName} accepted'),
+                backgroundColor: const Color(0xFF22C55E),
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
         },
         onReject: () async {
           await JoinRequestService.resolve(req.id, 'rejected');
