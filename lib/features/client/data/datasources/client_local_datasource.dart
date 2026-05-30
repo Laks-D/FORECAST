@@ -528,7 +528,14 @@ class ClientLocalDataSource {
     final deletedCol = await _collection(deleted: true);
 
     try {
-      final snap = await col.get();
+      final Query<Map<String, dynamic>> query;
+      if (AppModeConfig.isClient) {
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        query = col.where('firebaseUid', isEqualTo: uid);
+      } else {
+        query = col;
+      }
+      final snap = await query.get();
       _data
         ..clear()
         ..addAll(

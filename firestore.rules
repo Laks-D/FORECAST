@@ -55,8 +55,9 @@ service cloud.firestore {
         // Tutor (owner) has full control.
         allow read, write: if isUser(uid);
         // Enrolled student can read sessions where they are the client.
+        // We verify this by looking up the referenced client document and checking its firebaseUid.
         allow read: if isEnrolledWith(uid)
-          && resource.data.clientId == request.auth.uid;
+          && get(/databases/$(database)/documents/users/$(uid)/clients/$(resource.data.clientId)).data.firebaseUid == request.auth.uid;
       }
 
       match /deleted_sessions/{sessionId} {
@@ -64,14 +65,11 @@ service cloud.firestore {
       }
 
       // ── clients ────────────────────────────────────────────────────────
-      // Tutors manage their own client roster.
-      // Enrolled students can read their own profile doc inside the tutor's
-      // clients subcollection (users/{tutorUid}/clients/{studentUid}).
       match /clients/{clientId} {
         allow read, write: if isUser(uid);
         // Student reads their own client-profile doc inside a tutor's roster.
         allow read: if isEnrolledWith(uid)
-          && clientId == request.auth.uid;
+          && resource.data.firebaseUid == request.auth.uid;
       }
 
       match /deleted_clients/{clientId} {
