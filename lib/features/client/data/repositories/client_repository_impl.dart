@@ -28,6 +28,11 @@ class ClientRepositoryImpl implements ClientRepository {
   }
 
   @override
+  Future<void> permanentlyDeleteClient({required String entityId}) {
+    return localDataSource.permanentlyDeleteClient(entityId);
+  }
+
+  @override
   void addNote({
     required String entityId,
     required String note,

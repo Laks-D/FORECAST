@@ -107,7 +107,7 @@ class ClientProfilePage extends StatelessWidget {
     required Client entity,
   }) async {
     final chrome = AppChromeTheme.of(context);
-    const options = <String>['Active', 'Pending', 'Inactive'];
+    const options = <String>['Active', 'On Hold', 'Inactive', 'Pending'];
 
     final picked = await showModalBottomSheet<String>(
       context: context,

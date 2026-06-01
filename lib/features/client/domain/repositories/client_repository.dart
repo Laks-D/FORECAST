@@ -12,6 +12,9 @@ abstract class ClientRepository {
   /// Restore from deleted bucket.
   void restoreClient({required String entityId});
 
+  /// Hard-delete immediately from the deleted bucket. Cannot be undone.
+  Future<void> permanentlyDeleteClient({required String entityId});
+
   void addNote({
     required String entityId,
     required String note,

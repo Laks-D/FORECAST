@@ -93,12 +93,19 @@ class PushNotificationService {
   }
 
   Future<void> _saveToken({required String uid, required String token}) async {
-    await firestoreDb
-        .collection('users')
-        .doc(uid)
-        .collection('fcmTokens')
-        .doc(token)
-        .set(
+    final userRef = firestoreDb.collection('users').doc(uid);
+    final batch = firestoreDb.batch();
+
+    // Top-level field: read by Cloud Functions to dispatch FCM messages.
+    batch.set(
+      userRef,
+      {'fcmToken': token, 'fcmUpdatedAt': FieldValue.serverTimestamp()},
+      SetOptions(merge: true),
+    );
+
+    // Sub-collection: multi-device token storage (for future use).
+    batch.set(
+      userRef.collection('fcmTokens').doc(token),
       {
         'token': token,
         'platform': kIsWeb ? 'web' : defaultTargetPlatform.name,
@@ -106,5 +113,7 @@ class PushNotificationService {
       },
       SetOptions(merge: true),
     );
+
+    await batch.commit();
   }
 }

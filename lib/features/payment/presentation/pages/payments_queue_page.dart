@@ -30,6 +30,8 @@ class PaymentsQueuePage extends StatefulWidget {
 
 class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
   String _query = '';
+  // null = All; 'Paid', 'Unpaid', 'Overdue'
+  String? _filterStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +76,43 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                       },
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  // ── Filter pills ─────────────────────────────────────────
+                  SizedBox(
+                    height: 36,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        _FilterPill(
+                          label: 'All',
+                          selected: _filterStatus == null,
+                          onTap: () => setState(() => _filterStatus = null),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterPill(
+                          label: 'Paid',
+                          color: VibrantColors.pastelGreen,
+                          selected: _filterStatus == 'Paid',
+                          onTap: () => setState(() => _filterStatus = 'Paid'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterPill(
+                          label: 'Unpaid',
+                          color: VibrantColors.warmYellow,
+                          selected: _filterStatus == 'Unpaid',
+                          onTap: () => setState(() => _filterStatus = 'Unpaid'),
+                        ),
+                        const SizedBox(width: 8),
+                        _FilterPill(
+                          label: 'Overdue',
+                          color: const Color(0xFFEF4444),
+                          selected: _filterStatus == 'Overdue',
+                          onTap: () => setState(() => _filterStatus = 'Overdue'),
+                        ),
+                      ],
+                    ),
+                  ),
                   const SizedBox(height: 14),
                   Expanded(
                     child: BlocBuilder<ClientBloc, ClientState>(
@@ -113,8 +152,16 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                             amount.contains(_query);
                         }
 
-                        final payments = _extractPaidPayments(state.entities)
-                          .where(matchesQuery)
+                        final payments = _extractAllPayments(state.entities)
+                          .where((p) {
+                            // Filter by status tab
+                            if (_filterStatus != null &&
+                                p.paymentStatus != _filterStatus) {
+                              return false;
+                            }
+                            // Filter by search query
+                            return matchesQuery(p);
+                          })
                           .toList();
 
                         if (payments.isEmpty) {
@@ -237,22 +284,22 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                                       child: Padding(
                                         padding: const EdgeInsets.all(20),
                                         child: Row(
-                                          children: [
-                                            Container(
+                                          children: [                                             Container(
                                               width: 58,
                                               height: 58,
                                               decoration: BoxDecoration(
-                                                color: VibrantColors.pastelGreen.withOpacity(0.15),
+                                                color: _paymentStatusColor(payment.paymentStatus).withOpacity(0.15),
                                                 borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(color: VibrantColors.pastelGreen.withOpacity(0.2)),
+                                                border: Border.all(color: _paymentStatusColor(payment.paymentStatus).withOpacity(0.25)),
                                               ),
                                               alignment: Alignment.center,
-                                              child: const Icon(
-                                                Icons.payments_outlined,
-                                                color: VibrantColors.pastelGreen,
+                                              child: Icon(
+                                                _paymentStatusIcon(payment.paymentStatus),
+                                                color: _paymentStatusColor(payment.paymentStatus),
                                                 size: 28,
                                               ),
                                             ),
+
                                             const SizedBox(width: 18),
                                             Expanded(
                                               child: Column(
@@ -360,10 +407,14 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     }
 
     final totals = <int, double>{};
+    final paidTotals = <int, double>{};
     final currencies = <int, String>{};
     for (final p in payments) {
       final key = ymKey(p.paidAt);
       totals[key] = (totals[key] ?? 0) + p.amount;
+      if (p.paymentStatus == 'Paid') {
+        paidTotals[key] = (paidTotals[key] ?? 0) + p.amount;
+      }
       currencies[key] = p.currency;
     }
 
@@ -377,6 +428,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
           _MonthHeaderItem(
             label: monthLabel(p.paidAt),
             total: totals[key] ?? 0,
+            paidTotal: paidTotals[key] ?? 0,
             currency: currencies[key] ?? '',
           ),
         );
@@ -426,14 +478,23 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     return false;
   }
 
-  List<_PaymentVM> _extractPaidPayments(List<Client> entities) {
-    // Build per-payment VMs first (so paid-logic remains correct), then
-    // group by client + day for the Payment tab UI.
+  /// Returns ALL payment events as VMs, grouped by client + day.
+  /// Each VM has a `paymentStatus` of 'Paid', 'Unpaid', or 'Overdue'.
+  List<_PaymentVM> _extractAllPayments(List<Client> entities) {
+    final now = DateTime.now();
     final singles = <_PaymentSingleVM>[];
+
     for (final entity in entities) {
       for (final event in entity.timeline) {
         if (event.type != ClientTimelineEventType.payment) continue;
-        if (!_isPaymentPaid(client: entity, payment: event)) continue;
+
+        final isPaid = _isPaymentPaid(client: entity, payment: event);
+        final isOverdue = !isPaid && event.createdAt.isBefore(now);
+        final status = isPaid
+            ? 'Paid'
+            : isOverdue
+                ? 'Overdue'
+                : 'Unpaid';
 
         singles.add(
           _PaymentSingleVM(
@@ -444,15 +505,17 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
             paidAt: event.createdAt,
             note: event.note,
             currency: entity.currency ?? '',
+            paymentStatus: status,
           ),
         );
       }
     }
 
+    // Group by client + day + status so each combination gets its own card.
     final grouped = <String, _PaymentVM>{};
     for (final p in singles) {
       final dayKey = AppDateUtils.dateToStr(p.paidAt);
-      final key = '${p.entityId}::$dayKey';
+      final key = '${p.entityId}::$dayKey::${p.paymentStatus}';
 
       final existing = grouped[key];
       if (existing == null) {
@@ -465,6 +528,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
           note: p.note,
           paymentCount: 1,
           currency: p.currency,
+          paymentStatus: p.paymentStatus,
         );
         continue;
       }
@@ -473,7 +537,6 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
         amount: existing.amount + p.amount,
         paymentCount: existing.paymentCount + 1,
         note: _mergeNote(existing.note, p.note),
-        // keep the date stable; but ensure we sort properly if times differ
         paidAt: existing.paidAt.isAfter(p.paidAt) ? existing.paidAt : p.paidAt,
       );
     }
@@ -481,6 +544,28 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     final out = grouped.values.toList();
     out.sort((a, b) => b.paidAt.compareTo(a.paidAt));
     return out;
+  }
+
+  Color _paymentStatusColor(String status) {
+    switch (status) {
+      case 'Paid':
+        return VibrantColors.pastelGreen;
+      case 'Overdue':
+        return const Color(0xFFEF4444);
+      default:
+        return VibrantColors.warmYellow;
+    }
+  }
+
+  IconData _paymentStatusIcon(String status) {
+    switch (status) {
+      case 'Paid':
+        return Icons.check_circle_outline;
+      case 'Overdue':
+        return Icons.warning_amber_outlined;
+      default:
+        return Icons.schedule_outlined;
+    }
   }
 
   String? _mergeNote(String? a, String? b) {
@@ -509,6 +594,8 @@ class _PaymentVM {
   final DateTime paidAt;
   final int paymentCount;
   final String currency;
+  /// 'Paid', 'Unpaid', or 'Overdue'
+  final String paymentStatus;
 
   _PaymentVM({
     required this.entityId,
@@ -519,6 +606,7 @@ class _PaymentVM {
     required this.paidAt,
     required this.paymentCount,
     required this.currency,
+    this.paymentStatus = 'Paid',
   });
 
   _PaymentVM copyWith({
@@ -526,6 +614,7 @@ class _PaymentVM {
     String? note,
     DateTime? paidAt,
     int? paymentCount,
+    String? paymentStatus,
   }) {
     return _PaymentVM(
       entityId: entityId,
@@ -535,7 +624,8 @@ class _PaymentVM {
       note: note ?? this.note,
       paidAt: paidAt ?? this.paidAt,
       paymentCount: paymentCount ?? this.paymentCount,
-      currency: this.currency,
+      currency: currency,
+      paymentStatus: paymentStatus ?? this.paymentStatus,
     );
   }
 }
@@ -548,6 +638,7 @@ class _PaymentSingleVM {
   final String? note;
   final DateTime paidAt;
   final String currency;
+  final String paymentStatus;
 
   _PaymentSingleVM({
     required this.entityId,
@@ -557,6 +648,7 @@ class _PaymentSingleVM {
     required this.note,
     required this.paidAt,
     required this.currency,
+    this.paymentStatus = 'Unpaid',
   });
 }
 
@@ -567,10 +659,17 @@ abstract class _PaymentsListItem {
 }
 
 class _MonthHeaderItem extends _PaymentsListItem {
-  const _MonthHeaderItem({required this.label, required this.total, required this.currency});
+  const _MonthHeaderItem({
+    required this.label,
+    required this.total,
+    required this.paidTotal,
+    required this.currency,
+  });
 
   final String label;
   final double total;
+  /// Total of only 'Paid' entries for the monthly revenue summary.
+  final double paidTotal;
   final String currency;
 }
 
@@ -578,4 +677,56 @@ class _PaymentItem extends _PaymentsListItem {
   const _PaymentItem(this.payment);
 
   final _PaymentVM payment;
+}
+
+/* ================= FILTER PILL ================= */
+
+class _FilterPill extends StatelessWidget {
+  const _FilterPill({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.color,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final accentColor = color ?? scheme.primary;
+    final bg = selected
+        ? accentColor.withOpacity(0.18)
+        : scheme.surface;
+    final border = selected
+        ? accentColor.withOpacity(0.45)
+        : scheme.outlineVariant.withOpacity(0.5);
+    final fg = selected ? accentColor : scheme.onSurface.withOpacity(0.65);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: border),
+        ),
+        alignment: Alignment.center,
+        child: Text(
+          label,
+          style: TextStyle(
+            color: fg,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
+    );
+  }
 }

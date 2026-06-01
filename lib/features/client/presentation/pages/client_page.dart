@@ -21,6 +21,7 @@ import 'client_profile_page.dart';
 import 'client_registration_page.dart';
 import '../ui/invite_qr_page.dart';
 import '../ui/scan_invite_page.dart';
+import '../../../../features/settings/ui/deleted_clients_screen.dart';
 
 /// Common country-code suggestions for the autocomplete (without +, prefix shown in field).
 const _quickAddCodes = <String>[
@@ -475,6 +476,39 @@ class _ClientPageState extends State<ClientPage> {
                               color: onSurface,
                             ),
                           ),
+                        const SizedBox(width: 4),
+                        // Kebab menu — access deleted clients
+                        PopupMenuButton<String>(
+                          icon: Icon(Icons.more_vert, color: onSurface),
+                          tooltip: 'More options',
+                          onSelected: (value) {
+                            if (value == 'deleted') {
+                              final clientBloc = context.read<ClientBloc>();
+                              final sessionsCubit = context.read<SessionsCubit>();
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => MultiBlocProvider(
+                                    providers: [
+                                      BlocProvider.value(value: clientBloc),
+                                      BlocProvider.value(value: sessionsCubit),
+                                    ],
+                                    child: const DeletedClientsScreen(),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem<String>(
+                              value: 'deleted',
+                              child: ListTile(
+                                leading: Icon(Icons.delete_sweep_outlined),
+                                title: Text('Deleted clients'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ],
@@ -874,5 +908,6 @@ Color _clientStatusColor(String status) {
   if (s == 'active') return VibrantColors.pastelGreen;
   if (s == 'pending') return VibrantColors.warmYellow;
   if (s == 'inactive') return const Color(0xFF6B7280);
+  if (s == 'on hold') return const Color(0xFFF97316); // orange
   return VibrantColors.softBlue;
 }

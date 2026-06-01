@@ -25,6 +25,7 @@ import 'program_management_screen.dart';
 import 'profile/profile_details_screen.dart';
 import 'profile/client_profile_details_screen.dart';
 import '../../../core/services/notification_cubit.dart';
+import '../../../core/services/notification_scheduler.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
 import '../../../core/app/app_mode.dart';
@@ -266,6 +267,22 @@ class SettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
+                      _SectionTileDark(
+                        leading: Icons.podcasts_outlined,
+                        title: 'Test Push Notification',
+                        chevronColor: chevronColor,
+                        onTap: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Test notification scheduled! You should receive it in a few seconds.')),
+                          );
+                          await NotificationScheduler.scheduleNotification(
+                            title: 'Firebase Push Test',
+                            body: 'It works! The Cloud Functions are successfully sending push notifications.',
+                            sendAt: DateTime.now().add(const Duration(seconds: 5)),
+                            type: 'test',
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -332,7 +349,7 @@ class SettingsPageBody extends StatelessWidget {
       case DashboardTab.calendar:
         return Icons.calendar_month_outlined;
       case DashboardTab.people:
-        return Icons.group_outlined;
+        return AppModeConfig.isClient ? Icons.school_outlined : Icons.group_outlined;
       case DashboardTab.cards:
         return Icons.menu_book_outlined;
       case DashboardTab.home:
@@ -494,6 +511,22 @@ class _ClientSettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
+                      _SectionTileDark(
+                        leading: Icons.view_module_outlined,
+                        title: 'Module customization',
+                        chevronColor: chevronColor,
+                        onTap: () {
+                          final navCubit = context.read<NavModulesCubit>();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BlocProvider.value(
+                                value: navCubit,
+                                child: const ModuleCustomizationScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -538,6 +571,22 @@ class _ClientSettingsPageBody extends StatelessWidget {
                                 child: const NotificationSettingsPage(),
                               ),
                             ),
+                          );
+                        },
+                      ),
+                      _SectionTileDark(
+                        leading: Icons.podcasts_outlined,
+                        title: 'Test Push Notification',
+                        chevronColor: chevronColor,
+                        onTap: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Test notification scheduled! You should receive it in a few seconds.')),
+                          );
+                          await NotificationScheduler.scheduleNotification(
+                            title: 'Firebase Push Test',
+                            body: 'It works! The Cloud Functions are successfully sending push notifications.',
+                            sendAt: DateTime.now().add(const Duration(seconds: 5)),
+                            type: 'test',
                           );
                         },
                       ),

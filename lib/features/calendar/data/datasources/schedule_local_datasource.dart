@@ -12,7 +12,13 @@ class ScheduleLocalDataSource {
   final List<ScheduleSession> _sessions = [];
   final List<ScheduleSession> _deletedSessions = [];
 
-  CollectionReference<Map<String, dynamic>>? _sessionsCollection({bool deleted = false}) {
+  // Tracked subscriptions for the student session watcher so we can cancel
+  // them cleanly when enrollment changes (prevents stream leaks).
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _enrollmentSub;
+  final List<StreamSubscription<List<ScheduleSession>>> _tutorSubs = [];
+
+  CollectionReference<Map<String, dynamic>>? _sessionsCollection(
+      {bool deleted = false}) {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null || uid.trim().isEmpty) return null;
     final userDoc = firestoreDb.collection('users').doc(uid);
@@ -21,7 +27,7 @@ class ScheduleLocalDataSource {
 
   Stream<List<ScheduleSession>> watchSessions() {
     // Student mode: stream sessions from every enrolled tutor's collection
-    // where clientId matches the current student's UID.
+    // where clientId matches the current student's internal client doc id.
     if (AppModeConfig.isClient) {
       return _watchClientSessions();
     }
@@ -43,88 +49,168 @@ class ScheduleLocalDataSource {
     });
   }
 
-  Stream<List<ScheduleSession>> _watchSessionsForTutor(String tutorId, String uid) async* {
+  // ---------------------------------------------------------------------------
+  // Fix B: _watchSessionsForTutor — adds email/phone fallback when firebaseUid
+  //        is not present on the client record (manually-created students).
+  //        Also auto-patches firebaseUid on first successful email/phone match
+  //        so future lookups always use the fast path.
+  // ---------------------------------------------------------------------------
+  Stream<List<ScheduleSession>> _watchSessionsForTutor(
+      String tutorId, String uid) async* {
     try {
-      final clientSnap = await firestoreDb
+      // --- Fast path: look up by firebaseUid ---
+      final uidSnap = await firestoreDb
           .collection('users')
           .doc(tutorId)
           .collection('clients')
           .where('firebaseUid', isEqualTo: uid)
           .limit(1)
           .get();
-      
-      if (clientSnap.docs.isEmpty) {
-        yield const <ScheduleSession>[];
+
+      if (uidSnap.docs.isNotEmpty) {
+        final clientId = uidSnap.docs.first.id;
+        yield* _sessionsStreamForClient(tutorId, clientId);
         return;
       }
-      
-      // clientId is the document ID (e.g. random timestamp) used by the tutor
-      final clientId = clientSnap.docs.first.id;
 
-      yield* firestoreDb
-          .collection('users')
-          .doc(tutorId)
-          .collection('sessions')
-          .where('clientId', isEqualTo: clientId)
-          .snapshots()
-          .map((snap) => snap.docs.map((doc) {
-                final json = Map<String, dynamic>.from(doc.data());
-                json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
-                return ScheduleSession.fromJson(json);
-              }).toList(growable: false));
+      // --- Slow path: look up by email (tutor manually added student) ---
+      final user = FirebaseAuth.instance.currentUser;
+      final email = user?.email?.trim().toLowerCase();
+      if (email != null && email.isNotEmpty) {
+        final emailSnap = await firestoreDb
+            .collection('users')
+            .doc(tutorId)
+            .collection('clients')
+            .where('email', isEqualTo: email)
+            .limit(1)
+            .get();
+
+        if (emailSnap.docs.isNotEmpty) {
+          final clientDoc = emailSnap.docs.first;
+          final clientId = clientDoc.id;
+          // Auto-patch firebaseUid so next login uses the fast path.
+          // The Firestore rule allows this only when firebaseUid is absent/null
+          // and the caller is enrolled with this tutor.
+          unawaited(clientDoc.reference.update({'firebaseUid': uid}));
+          yield* _sessionsStreamForClient(tutorId, clientId);
+          return;
+        }
+      }
+
+      // --- Last resort: look up by phone number ---
+      final phone = user?.phoneNumber?.trim();
+      if (phone != null && phone.isNotEmpty) {
+        final phoneSnap = await firestoreDb
+            .collection('users')
+            .doc(tutorId)
+            .collection('clients')
+            .where('primaryContact', isEqualTo: phone)
+            .limit(1)
+            .get();
+
+        if (phoneSnap.docs.isNotEmpty) {
+          final clientDoc = phoneSnap.docs.first;
+          final clientId = clientDoc.id;
+          unawaited(clientDoc.reference.update({'firebaseUid': uid}));
+          yield* _sessionsStreamForClient(tutorId, clientId);
+          return;
+        }
+      }
+
+      // No match found — student has no client record with this tutor yet.
+      yield const <ScheduleSession>[];
     } catch (_) {
       yield const <ScheduleSession>[];
     }
   }
 
+  /// Streams sessions from a tutor's collection filtered by internal clientId.
+  Stream<List<ScheduleSession>> _sessionsStreamForClient(
+      String tutorId, String clientId) {
+    return firestoreDb
+        .collection('users')
+        .doc(tutorId)
+        .collection('sessions')
+        .where('clientId', isEqualTo: clientId)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) {
+              final json = Map<String, dynamic>.from(doc.data());
+              json['id'] = json['id'] ?? int.tryParse(doc.id) ?? 0;
+              return ScheduleSession.fromJson(json);
+            }).toList(growable: false));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Fix E: _watchClientSessions — replace the leaky asyncExpand+anonymous
+  //        StreamController pattern with explicit subscription tracking.
+  //        Old per-tutor subs are cancelled before new ones are created,
+  //        preventing double-emissions and memory leaks.
+  // ---------------------------------------------------------------------------
   Stream<List<ScheduleSession>> _watchClientSessions() async* {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    // Fix 9/edge-case 9: wait for auth to fully initialize on cold start.
+    final initialUser = await FirebaseAuth.instance.authStateChanges().first;
+    final uid = initialUser?.uid;
     if (uid == null || uid.trim().isEmpty) {
       yield const <ScheduleSession>[];
       return;
     }
 
-    final enrollmentStream = firestoreDb
+    final controller = StreamController<List<ScheduleSession>>();
+
+    _enrollmentSub = firestoreDb
         .collection('users')
         .doc(uid)
         .collection('enrollment')
         .where('status', isEqualTo: 'enrolled')
-        .snapshots();
-
-    // Use asyncExpand to switch to a new merged stream every time enrollment changes
-    yield* enrollmentStream.asyncExpand((snap) {
-      if (snap.docs.isEmpty) {
-        return Stream.value(const <ScheduleSession>[]);
-      }
-
-      final tutorIds = snap.docs.map((d) => d.id).toList();
-      final streams = tutorIds.map((tutorId) => _watchSessionsForTutor(tutorId, uid)).toList();
-
-      final merged = StreamController<List<ScheduleSession>>();
-      final latest = List<List<ScheduleSession>>.filled(streams.length, const []);
-      final subs = <StreamSubscription<List<ScheduleSession>>>[];
-
-      for (var i = 0; i < streams.length; i++) {
-        final idx = i;
-        subs.add(streams[idx].listen(
-          (items) {
-            latest[idx] = items;
-            if (!merged.isClosed) {
-              merged.add(latest.expand((l) => l).toList(growable: false));
-            }
-          },
-          onError: (_) {},
-        ));
-      }
-
-      merged.onCancel = () {
-        for (final s in subs) {
+        .snapshots()
+        .listen(
+      (snap) {
+        // Cancel all per-tutor subs from the previous enrollment snapshot.
+        for (final s in _tutorSubs) {
           s.cancel();
         }
-      };
+        _tutorSubs.clear();
 
-      return merged.stream;
-    });
+        if (snap.docs.isEmpty) {
+          if (!controller.isClosed) controller.add(const []);
+          return;
+        }
+
+        final tutorIds = snap.docs.map((d) => d.id).toList();
+        final latest = List<List<ScheduleSession>>.filled(
+            tutorIds.length, const [],
+            growable: false);
+
+        for (var i = 0; i < tutorIds.length; i++) {
+          final idx = i;
+          final sub = _watchSessionsForTutor(tutorIds[idx], uid).listen(
+            (items) {
+              latest[idx] = items;
+              if (!controller.isClosed) {
+                controller.add(
+                    latest.expand((l) => l).toList(growable: false));
+              }
+            },
+            onError: (_) {}, // individual tutor failures are non-fatal
+          );
+          _tutorSubs.add(sub);
+        }
+      },
+      onError: (_) {
+        if (!controller.isClosed) controller.add(const []);
+      },
+    );
+
+    controller.onCancel = () {
+      _enrollmentSub?.cancel();
+      _enrollmentSub = null;
+      for (final s in _tutorSubs) {
+        s.cancel();
+      }
+      _tutorSubs.clear();
+    };
+
+    yield* controller.stream;
   }
 
   Future<void> addSession(ScheduleSession session) async {
@@ -186,7 +272,8 @@ class ScheduleLocalDataSource {
     final toDelete = <ScheduleSession>[];
     for (final s in _sessions) {
       if (s.clientId != clientId) continue;
-      final derived = AppDateUtils.determineSessionStatus(s.status, s.date, s.time);
+      final derived =
+          AppDateUtils.determineSessionStatus(s.status, s.date, s.time);
       if (derived == 'Upcoming') {
         toDelete.add(s);
       }
@@ -206,14 +293,16 @@ class ScheduleLocalDataSource {
 
       final json = s.toJson();
       json['updatedAt'] = now;
-      batch.set(deletedCol.doc(s.id.toString()), json, SetOptions(merge: true));
+      batch.set(deletedCol.doc(s.id.toString()), json,
+          SetOptions(merge: true));
       batch.delete(sessionsCol.doc(s.id.toString()));
     }
 
     await batch.commit();
   }
 
-  Future<void> restoreDeletedUpcomingSessionsForClient(String clientId) async {
+  Future<void> restoreDeletedUpcomingSessionsForClient(
+      String clientId) async {
     if (clientId.trim().isEmpty) return;
 
     final deletedCol = _sessionsCollection(deleted: true);
@@ -221,7 +310,8 @@ class ScheduleLocalDataSource {
 
     if (_deletedSessions.isEmpty) {
       try {
-        final snap = await deletedCol.where('clientId', isEqualTo: clientId).get();
+        final snap =
+            await deletedCol.where('clientId', isEqualTo: clientId).get();
         _deletedSessions
           ..clear()
           ..addAll(
@@ -236,7 +326,8 @@ class ScheduleLocalDataSource {
       }
     }
 
-    final restore = _deletedSessions.where((s) => s.clientId == clientId).toList();
+    final restore =
+        _deletedSessions.where((s) => s.clientId == clientId).toList();
     if (restore.isEmpty) return;
 
     final sessionsCol = _sessionsCollection();
@@ -251,7 +342,8 @@ class ScheduleLocalDataSource {
 
       final json = s.toJson();
       json['updatedAt'] = now;
-      batch.set(sessionsCol.doc(s.id.toString()), json, SetOptions(merge: true));
+      batch.set(sessionsCol.doc(s.id.toString()), json,
+          SetOptions(merge: true));
       batch.delete(deletedCol.doc(s.id.toString()));
     }
 
@@ -259,8 +351,9 @@ class ScheduleLocalDataSource {
   }
 
   Future<void> loadFromStorage() async {
-    // Wait for Firebase Auth to complete its initial sync
-    // This prevents a race condition on cold startup where currentUser is temporarily null
+    // Wait for Firebase Auth to complete its initial sync.
+    // This prevents a race condition on cold startup where currentUser
+    // is temporarily null.
     await FirebaseAuth.instance.authStateChanges().first;
 
     // Client (student) mode: sessions come entirely from the real-time
@@ -306,6 +399,17 @@ class ScheduleLocalDataSource {
     } catch (_) {
       _deletedSessions.clear();
     }
+  }
+
+  /// Cancel all active streaming subscriptions. Call this when the datasource
+  /// is no longer needed (e.g., from SessionsCubit.close()).
+  Future<void> dispose() async {
+    await _enrollmentSub?.cancel();
+    _enrollmentSub = null;
+    for (final s in _tutorSubs) {
+      await s.cancel();
+    }
+    _tutorSubs.clear();
   }
 
   Future<void> _persistSession(ScheduleSession session) async {

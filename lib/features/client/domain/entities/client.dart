@@ -14,6 +14,7 @@ class Client {
     this.address,
     this.currency,
     required this.timeline,
+    this.deletedAt,
   });
 
   final String id;
@@ -28,6 +29,8 @@ class Client {
   final String? address;
   final String? currency;
   final List<ClientTimelineEvent> timeline;
+  /// Timestamp when the client was soft-deleted. Used for 30-day auto-purge.
+  final DateTime? deletedAt;
 
   /// Full display name including middle name if present.
   String get displayName {
@@ -63,7 +66,7 @@ class Client {
   String get status {
     // Canonical, user-editable statuses.
     // NOTE: We also support legacy stored statuses via normalization below.
-    const allowed = <String>{'Active', 'Pending', 'Inactive'};
+    const allowed = <String>{'Active', 'Pending', 'Inactive', 'On Hold'};
 
     String? normalize(String raw) {
       final s = raw.trim();
@@ -83,6 +86,7 @@ class Client {
       if (lower == 'active') return 'Active';
       if (lower == 'pending') return 'Pending';
       if (lower == 'inactive') return 'Inactive';
+      if (lower == 'on hold') return 'On Hold';
 
       // Unknown/unsupported status.
       return null;
@@ -127,6 +131,7 @@ class Client {
         if (address != null) 'address': address,
         if (currency != null) 'currency': currency,
         'timeline': timeline.map((e) => e.toJson()).toList(),
+        if (deletedAt != null) 'deletedAt': deletedAt!.toIso8601String(),
       };
 
   factory Client.fromJson(Map<String, dynamic> json) {
@@ -149,6 +154,9 @@ class Client {
                   ClientTimelineEvent.fromJson(e as Map<String, dynamic>))
               .toList() ??
           [],
+      deletedAt: json['deletedAt'] != null
+          ? DateTime.tryParse(json['deletedAt'] as String)
+          : null,
     );
   }
 }

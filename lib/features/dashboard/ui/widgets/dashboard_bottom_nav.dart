@@ -6,6 +6,7 @@ import '../../../navigation/bloc/nav_modules_cubit.dart';
 import '../../../navigation/bloc/nav_modules_state.dart';
 import '../../bloc/dashboard_cubit.dart';
 import '../../bloc/dashboard_state.dart';
+import '../../../../core/app/app_mode.dart';
 
 class DashboardBottomNav extends StatefulWidget {
   const DashboardBottomNav({super.key, required this.onTabSelected});
@@ -93,7 +94,7 @@ IconData _iconFor(DashboardTab tab) {
     case DashboardTab.calendar:
       return Icons.calendar_month_outlined;
     case DashboardTab.people:
-      return Icons.group_outlined;
+      return AppModeConfig.isClient ? Icons.school_outlined : Icons.group_outlined;
     case DashboardTab.cards:
       return Icons.menu_book_outlined;
     case DashboardTab.home:

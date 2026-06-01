@@ -59,11 +59,35 @@ class ClientLocalDataSource {
   void deleteClient(String entityId) {
     final idx = _data.indexWhere((e) => e.id == entityId);
     if (idx == -1) return;
-    final client = _data.removeAt(idx);
+    final original = _data.removeAt(idx);
+    // Stamp the deletion time for the 30-day auto-purge countdown.
+    final client = Client(
+      id: original.id,
+      firebaseUid: original.firebaseUid,
+      name: original.name,
+      middleName: original.middleName,
+      primaryContact: original.primaryContact,
+      countryCode: original.countryCode,
+      email: original.email,
+      gender: original.gender,
+      dateOfBirth: original.dateOfBirth,
+      address: original.address,
+      currency: original.currency,
+      timeline: original.timeline,
+      deletedAt: DateTime.now(),
+    );
     _deleted.add(client);
 
     unawaited(_persistClient(client, deleted: true));
     unawaited(_doc(entityId).then((ref) => ref?.delete()));
+  }
+
+  /// Hard-deletes a client that is already in the soft-deleted list.
+  /// Removes from Firestore immediately — cannot be undone.
+  Future<void> permanentlyDeleteClient(String entityId) async {
+    _deleted.removeWhere((e) => e.id == entityId);
+    final ref = await _doc(entityId, deleted: true);
+    await ref?.delete();
   }
 
   void restoreClient(String entityId) {
@@ -552,15 +576,54 @@ class ClientLocalDataSource {
     try {
       if (deletedCol != null) {
         final deletedSnap = await deletedCol.get();
+        final now = DateTime.now();
+        const purgeDays = 30;
+        final toHardDelete = <String>[];
+
         _deleted
           ..clear()
           ..addAll(
             deletedSnap.docs.map((doc) {
-                  final json = Map<String, dynamic>.from(doc.data());
-                  json['id'] = json['id'] ?? doc.id;
-                  return Client.fromJson(json);
-                }),
+              final json = Map<String, dynamic>.from(doc.data());
+              json['id'] = json['id'] ?? doc.id;
+              return Client.fromJson(json);
+            }),
           );
+
+        // Auto-purge: remove clients that have been deleted for > 30 days.
+        // Legacy records with no deletedAt are NOT immediately purged —
+        // they get a fresh 30-day window from now (patch deletedAt).
+        for (final client in List<Client>.from(_deleted)) {
+          if (client.deletedAt == null) {
+            // Legacy: stamp deletedAt = now so they get a proper window.
+            final patched = Client(
+              id: client.id,
+              firebaseUid: client.firebaseUid,
+              name: client.name,
+              middleName: client.middleName,
+              primaryContact: client.primaryContact,
+              countryCode: client.countryCode,
+              email: client.email,
+              gender: client.gender,
+              dateOfBirth: client.dateOfBirth,
+              address: client.address,
+              currency: client.currency,
+              timeline: client.timeline,
+              deletedAt: now,
+            );
+            final idx = _deleted.indexWhere((e) => e.id == client.id);
+            if (idx >= 0) _deleted[idx] = patched;
+            unawaited(_persistClient(patched, deleted: true));
+          } else if (now.difference(client.deletedAt!).inDays >= purgeDays) {
+            toHardDelete.add(client.id);
+            _deleted.removeWhere((e) => e.id == client.id);
+          }
+        }
+
+        // Fire-and-forget hard deletes for expired records.
+        for (final id in toHardDelete) {
+          unawaited(deletedCol.doc(id).delete());
+        }
       }
     } catch (_) {
       _deleted.clear();

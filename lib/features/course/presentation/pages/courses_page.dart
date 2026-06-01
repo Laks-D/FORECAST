@@ -175,13 +175,25 @@ class _CoursesPageState extends State<CoursesPage> {
 
                     return BlocBuilder<ClientBloc, ClientState>(
                       builder: (context, clientState) {
+                        // Fix D: Don't flash "No profile linked" while
+                        // ClientBloc is still loading. Only show the empty
+                        // state once both blocs have finished loading and
+                        // genuinely found nothing.
+                        if (clientState is ClientLoading) {
+                          return AppLoading(color: onSurface);
+                        }
+
                         final clients = switch (clientState) {
                           ClientLoaded(:final entities) => entities,
                           _ => const <Client>[],
                         };
 
                         // Client perspective requires a linked profile.
+                        // Only show the error once sessions have also settled.
                         if (AppModeConfig.isClient && clients.isEmpty) {
+                          if (sessionsState.isLoading) {
+                            return AppLoading(color: onSurface);
+                          }
                           return const Center(
                             child: AppEmptyState(
                               message: 'No profile linked to this account',
@@ -198,16 +210,22 @@ class _CoursesPageState extends State<CoursesPage> {
                             continue;
                           }
                           final rawName = (s.courseName ?? '').trim();
-                          if (rawName.isEmpty) continue;
-                          final key = '${s.clientId}::$rawName';
+                          // Fix G: Don't silently drop sessions without a
+                          // course name — show them under 'Uncategorized'
+                          // so the student can always see their schedule.
+                          final effectiveName =
+                              rawName.isEmpty ? 'Uncategorized' : rawName;
+                          final key = '${s.clientId}::$effectiveName';
 
                           final existing = itemsByKey[key];
                           if (existing == null) {
-                            final clientName = clientById[s.clientId]?.displayName ?? 'Client';
+                            final clientName =
+                                clientById[s.clientId]?.displayName ??
+                                    'Client';
                             itemsByKey[key] = _CourseSummary(
                               key: key,
                               clientId: s.clientId,
-                              courseName: rawName,
+                              courseName: effectiveName,
                               clientName: clientName,
                               latestDateStr: s.date,
                             );

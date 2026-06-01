@@ -5,6 +5,8 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../core/app/app_mode.dart';
+import '../../../core/app/student_enrollment_resolver.dart';
+import '../data/datasources/schedule_local_datasource.dart';
 import '../domain/entities/schedule_session.dart';
 import '../domain/repositories/schedule_repository.dart';
 
@@ -37,13 +39,18 @@ final class SessionsState extends Equatable {
 
 class SessionsCubit extends Cubit<SessionsState> {
   final ScheduleRepository repository;
+  final ScheduleLocalDataSource? _dataSource;
   StreamSubscription<List<ScheduleSession>>? _sub;
   StreamSubscription<User?>? _authSub;
 
-  SessionsCubit(this.repository)
-      : super(const SessionsState(isLoading: true, sessions: [])) {
+  SessionsCubit(this.repository, {ScheduleLocalDataSource? dataSource})
+      : _dataSource = dataSource,
+        super(const SessionsState(isLoading: true, sessions: [])) {
     _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
       if (user == null) {
+        // Fix C: invalidate enrollment cache on sign-out so the next
+        // user always gets a fresh lookup.
+        StudentEnrollmentResolver.invalidateCache();
         _sub?.cancel();
         emit(const SessionsState(isLoading: false, sessions: []));
       } else {
@@ -57,13 +64,13 @@ class SessionsCubit extends Cubit<SessionsState> {
     emit(state.copyWith(isLoading: true, error: null));
     await repository.loadFromStorage();
     _sub = repository.watchSessions().listen(
-      (items) => emit(state.copyWith(isLoading: false, sessions: items, error: null)),
+      (items) =>
+          emit(state.copyWith(isLoading: false, sessions: items, error: null)),
       onError: (e, __) => emit(
         state.copyWith(isLoading: false, error: e.toString()),
       ),
     );
   }
-
 
   Future<void> addSessions(List<ScheduleSession> sessions) {
     if (AppModeConfig.isClient) return Future.value();
@@ -104,6 +111,8 @@ class SessionsCubit extends Cubit<SessionsState> {
   Future<void> close() async {
     await _sub?.cancel();
     await _authSub?.cancel();
+    // Fix E: dispose the datasource's stream subscriptions cleanly.
+    await _dataSource?.dispose();
     return super.close();
   }
 }

@@ -49,9 +49,13 @@ service cloud.firestore {
       // ── sessions ──────────────────────────────────────────────────────
       match /sessions/{sessionId} {
         allow read, write: if isUser(uid);
-        // Enrolled student reads sessions where they are the client.
+        // Enrolled student reads their own sessions.
+        // The session doc's clientId is the internal client doc key
+        // (not the student's Firebase UID). We verify by checking that the
+        // client doc identified by clientId has the student's firebaseUid.
         allow read: if isEnrolledWith(uid)
-          && resource.data.clientId == request.auth.uid;
+          && exists(/databases/$(database)/documents/users/$(uid)/clients/$(resource.data.clientId))
+          && get(/databases/$(database)/documents/users/$(uid)/clients/$(resource.data.clientId)).data.firebaseUid == request.auth.uid;
       }
 
       match /deleted_sessions/{sessionId} {
@@ -62,8 +66,17 @@ service cloud.firestore {
       match /clients/{clientId} {
         allow read, write: if isUser(uid);
         // Enrolled student reads their own profile doc in the tutor's roster.
+        // Use resource.data.firebaseUid (not clientId doc-id) because the doc
+        // is keyed by an internal timestamp id, not the student's Firebase UID.
         allow read: if isEnrolledWith(uid)
-          && clientId == request.auth.uid;
+          && resource.data.firebaseUid == request.auth.uid;
+        // Enrolled student can self-patch their firebaseUid onto a client record
+        // that was manually created by the tutor (firebaseUid absent/null).
+        // Only the firebaseUid field may change; must match the caller's own UID.
+        allow update: if isEnrolledWith(uid)
+          && (!('firebaseUid' in resource.data) || resource.data.firebaseUid == null)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['firebaseUid'])
+          && request.resource.data.firebaseUid == request.auth.uid;
       }
 
       match /deleted_clients/{clientId} {
@@ -137,6 +150,23 @@ service cloud.firestore {
             .hasOnly(['status', 'resolvedAt']);
 
       allow delete: if false;
+    }
+
+    // ── Scheduled Notifications (server-side FCM dispatch queue) ───────────
+    // Flutter app writes notification docs here; Cloud Functions processes them.
+
+    match /scheduledNotifications/{notifId} {
+      // A signed-in user may create a notification for themselves only.
+      allow create: if signedIn()
+        && request.resource.data.userId == request.auth.uid;
+
+      // Only the owner can read their own scheduled notification.
+      allow read: if signedIn()
+        && resource.data.userId == request.auth.uid;
+
+      // Only Cloud Functions service account may update/delete.
+      // Client-side updates are not allowed.
+      allow update, delete: if false;
     }
   }
 }

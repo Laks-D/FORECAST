@@ -64,6 +64,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     on<RevertClientPaidFully>(_onRevertPaidFully);
     on<DeleteClient>(_onDeleteClient);
     on<RestoreClient>(_onRestoreClient);
+    on<PermanentlyDeleteClient>(_onPermanentlyDeleteClient);
   }
 
   @override
@@ -382,6 +383,15 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   ) {
     if (AppModeConfig.isClient) return;
     repository.restoreClient(entityId: event.entityId);
+    _reload(emit);
+  }
+
+  Future<void> _onPermanentlyDeleteClient(
+    PermanentlyDeleteClient event,
+    Emitter<ClientState> emit,
+  ) async {
+    if (AppModeConfig.isClient) return;
+    await repository.permanentlyDeleteClient(entityId: event.entityId);
     _reload(emit);
   }
 

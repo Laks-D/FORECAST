@@ -151,3 +151,8 @@ class RestoreClient extends ClientEvent {
   final String entityId;
   RestoreClient({required this.entityId});
 }
+
+class PermanentlyDeleteClient extends ClientEvent {
+  final String entityId;
+  PermanentlyDeleteClient({required this.entityId});
+}

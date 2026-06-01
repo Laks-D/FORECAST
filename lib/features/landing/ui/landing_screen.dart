@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../core/app/app_mode.dart';
 import '../../../core/app/app_mode_cubit.dart';
+import '../../../core/app/student_enrollment_resolver.dart';
 import '../../../core/auth/login_controller.dart';
 import '../../../core/auth/signup_controller.dart';
 import '../../../core/dev/dev_bootstrap.dart';
@@ -80,6 +81,9 @@ class _LandingScreenState extends State<LandingScreen> {
             // ── Not signed in ──────────────────────────────────────────────
             if (user == null) {
               _invalidateRolesCache();
+              // Fix C: clear enrollment cache so the next sign-in always
+              // re-fetches the correct tutor UID from Firestore.
+              StudentEnrollmentResolver.invalidateCache();
               // Bump generation so AuthGate is always a fresh instance and
               // its initState reliably reads any pending signup state.
               if (_previousUid != null) {
