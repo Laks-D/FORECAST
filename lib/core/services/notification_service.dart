@@ -499,7 +499,8 @@ class NotificationService {
   Future<void> _configureTimezone() async {
     try {
       tz.initializeTimeZones();
-      final String timeZoneName = await FlutterTimezone.getLocalTimezone();
+      final dynamic timeZoneInfo = await FlutterTimezone.getLocalTimezone();
+      final String timeZoneName = timeZoneInfo.toString();
       debugPrint('🌐 Device timezone: $timeZoneName');
       try {
         tz.setLocalLocation(tz.getLocation(timeZoneName));
