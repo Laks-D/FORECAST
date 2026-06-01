@@ -85,6 +85,7 @@ class UpdateClientDetails extends ClientEvent {
   final DateTime? dateOfBirth;
   final String? address;
   final String? currency;
+  final String? firebaseUid;
 
   UpdateClientDetails({
     required this.entityId,
@@ -97,6 +98,7 @@ class UpdateClientDetails extends ClientEvent {
     this.dateOfBirth,
     this.address,
     this.currency,
+    this.firebaseUid,
   });
 }
 

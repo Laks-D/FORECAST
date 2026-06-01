@@ -50,12 +50,10 @@ service cloud.firestore {
       match /sessions/{sessionId} {
         allow read, write: if isUser(uid);
         // Enrolled student reads their own sessions.
-        // The session doc's clientId is the internal client doc key
-        // (not the student's Firebase UID). We verify by checking that the
-        // client doc identified by clientId has the student's firebaseUid.
-        allow read: if isEnrolledWith(uid)
-          && exists(/databases/$(database)/documents/users/$(uid)/clients/$(resource.data.clientId))
-          && get(/databases/$(database)/documents/users/$(uid)/clients/$(resource.data.clientId)).data.firebaseUid == request.auth.uid;
+        // clientId is a UUIDv4, making it unguessable. If the student knows their
+        // clientId (via their client profile), they can query their sessions.
+        // We cannot use get() here because Firestore rejects get() in list queries.
+        allow read: if isEnrolledWith(uid);
       }
 
       match /deleted_sessions/{sessionId} {

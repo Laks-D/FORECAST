@@ -270,7 +270,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
         entityId: event.entityId,
         name: event.name ?? client.name,
         primaryContact: event.primaryContact ?? client.primaryContact,
-        firebaseUid: AppModeConfig.isClient ? _currentUserUidSafe() : client.firebaseUid,
+        firebaseUid: AppModeConfig.isClient ? _currentUserUidSafe() : (event.firebaseUid ?? client.firebaseUid),
         middleName: event.middleName ?? client.middleName,
         countryCode: event.countryCode ?? client.countryCode,
         email: AppModeConfig.isClient ? client.email : (event.email ?? client.email),

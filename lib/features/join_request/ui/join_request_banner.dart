@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../client/domain/entities/client.dart';
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/bloc/client_event.dart';
 import '../../client/presentation/bloc/client_state.dart';
@@ -65,24 +66,33 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
           final normPhone = phone.replaceAll(RegExp(r'\D'), '');
           
           bool alreadyExists = false;
+          Client? existingClient;
           if (currentState is ClientLoaded) {
             for (final c in currentState.entities) {
               if (req.clientFirebaseUid.isNotEmpty && c.firebaseUid == req.clientFirebaseUid) {
                 alreadyExists = true;
+                existingClient = c;
                 break;
               }
               final cPhone = c.primaryContact.replaceAll(RegExp(r'\D'), '');
               if (normPhone.isNotEmpty && cPhone == normPhone) {
                 alreadyExists = true;
+                existingClient = c;
                 break;
               }
             }
           }
 
           if (alreadyExists) {
+            if (existingClient != null && existingClient.firebaseUid != req.clientFirebaseUid && req.clientFirebaseUid.isNotEmpty) {
+               parentCtx.read<ClientBloc>().add(UpdateClientDetails(
+                  entityId: existingClient.id,
+                  firebaseUid: req.clientFirebaseUid,
+               ));
+            }
             ScaffoldMessenger.of(parentCtx).showSnackBar(
               const SnackBar(
-                content: Text('Client has already been added to your account.'),
+                content: Text('Client has already been added to your account. Profile linked.'),
                 backgroundColor: Color(0xFFF59E0B), // Amber warning
                 duration: Duration(seconds: 3),
               ),

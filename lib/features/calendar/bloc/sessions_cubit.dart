@@ -54,12 +54,12 @@ class SessionsCubit extends Cubit<SessionsState> {
         _sub?.cancel();
         emit(const SessionsState(isLoading: false, sessions: []));
       } else {
-        _init();
+        reinit();
       }
     });
   }
 
-  Future<void> _init() async {
+  Future<void> reinit() async {
     await _sub?.cancel();
     emit(state.copyWith(isLoading: true, error: null));
     await repository.loadFromStorage();

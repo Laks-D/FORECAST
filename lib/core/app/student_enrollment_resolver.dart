@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../firebase/firestore_db.dart';
 import 'app_mode.dart';
@@ -67,7 +68,7 @@ class StudentEnrollmentResolver {
           final tutorId = clientDoc.reference.parent.parent?.id;
 
           if (tutorId != null) {
-            await _enroll(uid, tutorId);
+            await _enroll(uid, tutorId, clientDoc.reference);
             _cachedForUid = uid;
             _cachedTutorUid = tutorId;
             return tutorId;
@@ -88,7 +89,7 @@ class StudentEnrollmentResolver {
           final tutorId = clientDoc.reference.parent.parent?.id;
 
           if (tutorId != null) {
-            await _enroll(uid, tutorId);
+            await _enroll(uid, tutorId, clientDoc.reference);
             _cachedForUid = uid;
             _cachedTutorUid = tutorId;
             return tutorId;
@@ -103,7 +104,7 @@ class StudentEnrollmentResolver {
     return uid;
   }
 
-  static Future<void> _enroll(String uid, String tutorId) async {
+  static Future<void> _enroll(String uid, String tutorId, [DocumentReference<Map<String, dynamic>>? clientDocRef]) async {
     await firestoreDb
         .collection('users')
         .doc(uid)
@@ -114,5 +115,11 @@ class StudentEnrollmentResolver {
       'tutorName': 'Tutor',
       'status': 'enrolled',
     });
+
+    if (clientDocRef != null) {
+      try {
+        await clientDocRef.update({'firebaseUid': uid});
+      } catch (_) {}
+    }
   }
 }

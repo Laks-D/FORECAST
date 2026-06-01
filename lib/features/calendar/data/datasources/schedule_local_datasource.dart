@@ -56,24 +56,34 @@ class ScheduleLocalDataSource {
   //        so future lookups always use the fast path.
   // ---------------------------------------------------------------------------
   Stream<List<ScheduleSession>> _watchSessionsForTutor(
-      String tutorId, String uid) async* {
-    try {
-      // --- Fast path: look up by firebaseUid ---
-      final uidSnap = await firestoreDb
-          .collection('users')
-          .doc(tutorId)
-          .collection('clients')
-          .where('firebaseUid', isEqualTo: uid)
-          .limit(1)
-          .get();
-
+      String tutorId, String uid) {
+    // We use snapshots() so that if the Tutor's app writes the client profile
+    // *after* the enrollment document triggers this stream (race condition),
+    // we still pick it up instantly.
+    return firestoreDb
+        .collection('users')
+        .doc(tutorId)
+        .collection('clients')
+        .where('firebaseUid', isEqualTo: uid)
+        .limit(1)
+        .snapshots()
+        .asyncExpand((uidSnap) {
       if (uidSnap.docs.isNotEmpty) {
         final clientId = uidSnap.docs.first.id;
-        yield* _sessionsStreamForClient(tutorId, clientId);
-        return;
+        return _sessionsStreamForClient(tutorId, clientId);
+      } else {
+        // If fast-path fails, fallback to checking email/phone via a one-off
+        // get() to see if we need to auto-patch. If we do patch, the
+        // snapshot listener above will trigger again natively!
+        return Stream.fromFuture(_attemptAutoPatch(tutorId, uid)).asyncExpand((_) {
+          return Stream.value(const <ScheduleSession>[]);
+        });
       }
+    });
+  }
 
-      // --- Slow path: look up by email (tutor manually added student) ---
+  Future<void> _attemptAutoPatch(String tutorId, String uid) async {
+    try {
       final user = FirebaseAuth.instance.currentUser;
       final email = user?.email?.trim().toLowerCase();
       if (email != null && email.isNotEmpty) {
@@ -86,18 +96,11 @@ class ScheduleLocalDataSource {
             .get();
 
         if (emailSnap.docs.isNotEmpty) {
-          final clientDoc = emailSnap.docs.first;
-          final clientId = clientDoc.id;
-          // Auto-patch firebaseUid so next login uses the fast path.
-          // The Firestore rule allows this only when firebaseUid is absent/null
-          // and the caller is enrolled with this tutor.
-          unawaited(clientDoc.reference.update({'firebaseUid': uid}));
-          yield* _sessionsStreamForClient(tutorId, clientId);
-          return;
+           unawaited(emailSnap.docs.first.reference.update({'firebaseUid': uid}));
+           return;
         }
       }
 
-      // --- Last resort: look up by phone number ---
       final phone = user?.phoneNumber?.trim();
       if (phone != null && phone.isNotEmpty) {
         final phoneSnap = await firestoreDb
@@ -109,19 +112,11 @@ class ScheduleLocalDataSource {
             .get();
 
         if (phoneSnap.docs.isNotEmpty) {
-          final clientDoc = phoneSnap.docs.first;
-          final clientId = clientDoc.id;
-          unawaited(clientDoc.reference.update({'firebaseUid': uid}));
-          yield* _sessionsStreamForClient(tutorId, clientId);
-          return;
+           unawaited(phoneSnap.docs.first.reference.update({'firebaseUid': uid}));
+           return;
         }
       }
-
-      // No match found — student has no client record with this tutor yet.
-      yield const <ScheduleSession>[];
-    } catch (_) {
-      yield const <ScheduleSession>[];
-    }
+    } catch (_) {}
   }
 
   /// Streams sessions from a tutor's collection filtered by internal clientId.
@@ -191,7 +186,16 @@ class ScheduleLocalDataSource {
                     latest.expand((l) => l).toList(growable: false));
               }
             },
-            onError: (_) {}, // individual tutor failures are non-fatal
+            onError: (e) {
+              // Even if a tutor stream fails, we must update the controller
+              // so the UI knows we finished attempting to load this stream.
+              // Otherwise, the SessionsCubit stays in isLoading = true forever.
+              latest[idx] = const [];
+              if (!controller.isClosed) {
+                controller.add(
+                    latest.expand((l) => l).toList(growable: false));
+              }
+            },
           );
           _tutorSubs.add(sub);
         }

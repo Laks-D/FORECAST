@@ -13,6 +13,7 @@ import '../../../core/di/service_locator.dart';
 import '../../../core/services/notification_cubit.dart';
 import '../../auth/repository/auth_repository.dart';
 import '../../auth/ui/auth_gate.dart';
+import '../../calendar/bloc/sessions_cubit.dart';
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/bloc/client_event.dart';
 import '../../dashboard/ui/dashboard_screen.dart';
@@ -182,10 +183,18 @@ class _LandingScreenState extends State<LandingScreen> {
       ],
       child: AppModeScope(
         mode: appMode,
-        child: DashboardScreen(
-          initialUserName: user.displayName,
-          initialUserEmail: user.email,
-          canSwitchMode: isDualRole,
+        child: Builder(
+          builder: (ctx) {
+            // Force re-init of singletons that rely on AppModeConfig
+            ctx.read<SessionsCubit>().reinit();
+            // Force reload of Client list for the specific mode/target
+            ctx.read<ClientBloc>().add(LoadClients());
+            return DashboardScreen(
+              initialUserName: user.displayName,
+              initialUserEmail: user.email,
+              canSwitchMode: isDualRole,
+            );
+          },
         ),
       ),
     );

@@ -466,11 +466,48 @@ class ClientLocalDataSource {
     final normPhone = primaryContact.replaceAll(RegExp(r'\D'), '');
     final normEmail = email?.trim().toLowerCase();
     
+    final deletedIdx = _deleted.indexWhere((c) {
+      if (firebaseUid != null && c.firebaseUid == firebaseUid) return true;
+      
+      final cPhone = c.primaryContact.replaceAll(RegExp(r'\D'), '');
+      final isDummyPhone = normPhone == '0000000000' || normPhone.isEmpty;
+      if (!isDummyPhone && cPhone == normPhone) return true;
+      
+      final cEmail = c.email?.trim().toLowerCase();
+      if (normEmail != null && normEmail.isNotEmpty && cEmail == normEmail) return true;
+      
+      return false;
+    });
+
+    if (deletedIdx >= 0) {
+      final existing = _deleted.removeAt(deletedIdx);
+      final updated = Client(
+        id: existing.id,
+        firebaseUid: firebaseUid ?? existing.firebaseUid,
+        name: existing.name,
+        middleName: existing.middleName,
+        primaryContact: existing.primaryContact,
+        countryCode: existing.countryCode,
+        email: existing.email,
+        gender: existing.gender,
+        dateOfBirth: existing.dateOfBirth,
+        address: existing.address,
+        currency: existing.currency,
+        timeline: existing.timeline,
+        deletedAt: null, // RESTORE!
+      );
+      _data.add(updated);
+      unawaited(_persistClient(updated));
+      unawaited(_doc(existing.id, deleted: true).then((ref) => ref?.delete()));
+      return;
+    }
+
     final existingIdx = _data.indexWhere((c) {
       if (firebaseUid != null && c.firebaseUid == firebaseUid) return true;
       
       final cPhone = c.primaryContact.replaceAll(RegExp(r'\D'), '');
-      if (normPhone.isNotEmpty && cPhone == normPhone) return true;
+      final isDummyPhone = normPhone == '0000000000' || normPhone.isEmpty;
+      if (!isDummyPhone && cPhone == normPhone) return true;
       
       final cEmail = c.email?.trim().toLowerCase();
       if (normEmail != null && normEmail.isNotEmpty && cEmail == normEmail) return true;

@@ -150,8 +150,8 @@ class Client {
       address: json['address'] as String?,
       currency: json['currency'] as String?,
       timeline: (json['timeline'] as List<dynamic>?)
-              ?.map((e) =>
-                  ClientTimelineEvent.fromJson(e as Map<String, dynamic>))
+              ?.map((e) => ClientTimelineEvent.fromJson(
+                  Map<String, dynamic>.from(e as Map)))
               .toList() ??
           [],
       deletedAt: json['deletedAt'] != null

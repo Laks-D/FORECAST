@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../client/presentation/bloc/client_bloc.dart';
 import '../../client/presentation/bloc/client_event.dart';
+import '../../landing/ui/landing_screen.dart';
 import '../join_request_service.dart';
 
 /// Client-side screen shown after submitting a join request.
@@ -291,8 +292,12 @@ class _AcceptedView extends StatelessWidget {
                   ),
                 ),
                 onPressed: () {
-                  context.read<ClientBloc>().add(LoadClients());
-                  Navigator.of(context).popUntil((r) => r.isFirst);
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(
+                      builder: (_) => const LandingScreen(),
+                    ),
+                    (route) => false,
+                  );
                 },
                 child: const Text(
                   'Go to Home',

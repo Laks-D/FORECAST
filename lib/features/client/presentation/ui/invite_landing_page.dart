@@ -26,6 +26,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
   String _requestPhone = '';
   bool _loading = true;
   bool _sending = false;
+  bool _alreadyLinked = false;
   String? _error;
 
   @override
@@ -46,6 +47,44 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
       final phoneFromUserDoc =
           ((userDoc?.data()?['phone'] as String?) ?? '').trim();
 
+      bool alreadyLinked = false;
+      if (user != null && widget.tutorId != null && widget.tutorId!.isNotEmpty) {
+        // Step 1: Check if the student has an enrollment ticket.
+        // This is safe and avoids permission-denied errors for brand new students.
+        final enrollmentDoc = await firestoreDb
+            .collection('users')
+            .doc(user.uid)
+            .collection('enrollment')
+            .doc(widget.tutorId)
+            .get();
+
+        if (enrollmentDoc.exists) {
+          // Step 2: The student is enrolled, so Firestore grants them read access to their own client profile.
+          // We query the tutor's workspace to see if the client profile still exists, or if the tutor deleted it.
+          try {
+            final existingClientQuery = await firestoreDb
+                .collection('users')
+                .doc(widget.tutorId)
+                .collection('clients')
+                .where('firebaseUid', isEqualTo: user.uid)
+                .limit(1)
+                .get();
+            alreadyLinked = existingClientQuery.docs.isNotEmpty;
+          } catch (e) {
+            // If the tutor soft-deleted the client, Firestore security rules might reject the query
+            // because the client profile doesn't exist anymore, triggering permission-denied.
+            // In this case, we treat them as NOT linked so they can request to join again.
+            if (e.toString().contains('permission-denied') || e.toString().contains('PERMISSION_DENIED')) {
+              alreadyLinked = false;
+            } else {
+              rethrow;
+            }
+          }
+        } else {
+          alreadyLinked = false;
+        }
+      }
+
       setState(() {
         _requestName = nameFromAuth.isNotEmpty
             ? nameFromAuth
@@ -53,6 +92,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
                 ? emailFromAuth.split('@').first
                 : 'Client');
         _requestPhone = phoneFromUserDoc;
+        _alreadyLinked = alreadyLinked;
         _loading = false;
       });
     } catch (e) {
@@ -128,19 +168,35 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
               'Request access to this class. Your tutor will accept or reject your request.',
             ),
             const SizedBox(height: 12),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: hasTutor && !_sending ? _sendJoinRequest : null,
-                child: _sending
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Request to Join'),
+            if (_alreadyLinked)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.amber.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                ),
+                child: const Text(
+                  'You are already enrolled under this tutor. Go to Home to see your courses and schedule.',
+                  style: TextStyle(color: Colors.amber, fontWeight: FontWeight.w600),
+                  textAlign: TextAlign.center,
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: hasTutor && !_sending ? _sendJoinRequest : null,
+                  child: _sending
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Request to Join'),
+                ),
               ),
-            ),
           ],
         ),
       ),
