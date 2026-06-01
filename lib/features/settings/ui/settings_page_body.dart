@@ -25,7 +25,7 @@ import 'program_management_screen.dart';
 import 'profile/profile_details_screen.dart';
 import 'profile/client_profile_details_screen.dart';
 import '../../../core/services/notification_cubit.dart';
-import '../../../core/services/notification_scheduler.dart';
+import '../../../core/services/notification_service.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
 import '../../../core/app/app_mode.dart';
@@ -269,17 +269,17 @@ class SettingsPageBody extends StatelessWidget {
                       ),
                       _SectionTileDark(
                         leading: Icons.podcasts_outlined,
-                        title: 'Test Push Notification',
+                        title: 'Test Local Notification',
                         chevronColor: chevronColor,
                         onTap: () async {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Test notification scheduled! You should receive it in a few seconds.')),
+                            const SnackBar(content: Text('Test notification triggered locally.')),
                           );
-                          await NotificationScheduler.scheduleNotification(
-                            title: 'Firebase Push Test',
-                            body: 'It works! The Cloud Functions are successfully sending push notifications.',
-                            sendAt: DateTime.now().add(const Duration(seconds: 5)),
-                            type: 'test',
+                          await NotificationService.instance.show(
+                            id: 9999,
+                            title: 'Local Notification Test',
+                            body: 'It works! Device-local notifications are fully operational.',
+                            payload: 'test',
                           );
                         },
                       ),
@@ -576,17 +576,17 @@ class _ClientSettingsPageBody extends StatelessWidget {
                       ),
                       _SectionTileDark(
                         leading: Icons.podcasts_outlined,
-                        title: 'Test Push Notification',
+                        title: 'Test Local Notification',
                         chevronColor: chevronColor,
                         onTap: () async {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Test notification scheduled! You should receive it in a few seconds.')),
+                            const SnackBar(content: Text('Test notification triggered locally.')),
                           );
-                          await NotificationScheduler.scheduleNotification(
-                            title: 'Firebase Push Test',
-                            body: 'It works! The Cloud Functions are successfully sending push notifications.',
-                            sendAt: DateTime.now().add(const Duration(seconds: 5)),
-                            type: 'test',
+                          await NotificationService.instance.show(
+                            id: 9999,
+                            title: 'Local Notification Test',
+                            body: 'It works! Device-local notifications are fully operational.',
+                            payload: 'test',
                           );
                         },
                       ),

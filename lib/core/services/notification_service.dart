@@ -36,6 +36,15 @@ class NotificationService {
   List<Client>? _queuedClients;
   List<ScheduleSession>? _queuedSessions;
 
+  // ─── Scheduling Preferences state to prevent config drift on deferred scheduler ───
+  bool _sessionRemindersEnabled = true;
+  int _sessionLeadMinutes = 5;
+  bool _paymentRemindersEnabled = true;
+  int _paymentHour = 8;
+  int _paymentMinute = 0;
+  int _paymentDaysBefore = 0;
+  bool _paymentOverdueDaily = true;
+
   // ─── Debounce timer (mirrors NI's 2-second debounce) ───
   Timer? _debounce;
 
@@ -116,18 +125,19 @@ class NotificationService {
     int paymentDaysBefore = 0,
     bool paymentOverdueDaily = true,
   }) {
+    _sessionRemindersEnabled = sessionRemindersEnabled;
+    _sessionLeadMinutes = sessionLeadMinutes;
+    _paymentRemindersEnabled = paymentRemindersEnabled;
+    _paymentHour = paymentHour;
+    _paymentMinute = paymentMinute;
+    _paymentDaysBefore = paymentDaysBefore;
+    _paymentOverdueDaily = paymentOverdueDaily;
+
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 2), () {
       _scheduleAllInternal(
         clients: clients,
         sessions: sessions,
-        sessionRemindersEnabled: sessionRemindersEnabled,
-        sessionLeadMinutes: sessionLeadMinutes,
-        paymentRemindersEnabled: paymentRemindersEnabled,
-        paymentHour: paymentHour,
-        paymentMinute: paymentMinute,
-        paymentDaysBefore: paymentDaysBefore,
-        paymentOverdueDaily: paymentOverdueDaily,
       );
     });
   }
@@ -193,13 +203,6 @@ class NotificationService {
   Future<void> _scheduleAllInternal({
     required List<Client> clients,
     required List<ScheduleSession> sessions,
-    required bool sessionRemindersEnabled,
-    required int sessionLeadMinutes,
-    required bool paymentRemindersEnabled,
-    required int paymentHour,
-    required int paymentMinute,
-    required int paymentDaysBefore,
-    required bool paymentOverdueDaily,
   }) async {
     if (_isScheduling) {
       _rescheduleQueued = true;
@@ -240,13 +243,13 @@ class NotificationService {
       final windowEnd = now.add(const Duration(days: 7));
 
       // ── Step 1: Payment daily digest ──
-      if (paymentRemindersEnabled) {
+      if (_paymentRemindersEnabled) {
         remaining -= await _schedulePaymentDigest(
           clients: clients,
           now: now,
-          paymentHour: paymentHour,
-          paymentMinute: paymentMinute,
-          paymentOverdueDaily: paymentOverdueDaily,
+          paymentHour: _paymentHour,
+          paymentMinute: _paymentMinute,
+          paymentOverdueDaily: _paymentOverdueDaily,
           budget: remaining,
         );
       }
@@ -255,7 +258,7 @@ class NotificationService {
       await _scheduleDailySummary(now: now, sessions: sessions);
 
       // ── Step 3: Session reminders ──
-      if (sessionRemindersEnabled) {
+      if (_sessionRemindersEnabled) {
         final upcoming = sessions.where((s) {
           final dt = _parseDateTime(s.date, s.time);
           return dt != null && dt.isAfter(now) && dt.isBefore(windowEnd);
@@ -292,12 +295,12 @@ class NotificationService {
           }
 
           // Lead-time reminder (user-configurable minutes before session).
-          final leadDuration = Duration(minutes: sessionLeadMinutes);
+          final leadDuration = Duration(minutes: _sessionLeadMinutes);
           final tMinus = dt.subtract(leadDuration);
           if (tMinus.isAfter(now) && remaining >= 1) {
-            final label = sessionLeadMinutes >= 60
-                ? '${sessionLeadMinutes ~/ 60}h'
-                : '${sessionLeadMinutes}m';
+            final label = _sessionLeadMinutes >= 60
+                ? '${_sessionLeadMinutes ~/ 60}h'
+                : '${_sessionLeadMinutes}m';
             await _scheduleExact(
               id: _safeId(session.id, 1),
               title: 'Session in $label',
@@ -327,13 +330,6 @@ class NotificationService {
         _scheduleAllInternal(
           clients: qClients,
           sessions: qSessions,
-          sessionRemindersEnabled: true,
-          sessionLeadMinutes: 5,
-          paymentRemindersEnabled: true,
-          paymentHour: 8,
-          paymentMinute: 0,
-          paymentDaysBefore: 0,
-          paymentOverdueDaily: true,
         );
       }
     }

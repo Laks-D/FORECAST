@@ -102,18 +102,36 @@ class NotificationCubit extends Cubit<NotificationState> {
 		final prefs = await NotificationStorage.loadPrefs();
 		final records = await NotificationStorage.loadRecords();
 
+		final sessionReminders = (prefs['sessionReminders'] as bool?) ?? state.sessionReminders;
+		final sessionLeadMinutes = (prefs['sessionLeadMinutes'] as int?) ?? state.sessionLeadMinutes;
+		final paymentReminders = (prefs['paymentReminders'] as bool?) ?? state.paymentReminders;
+		final paymentReminderHour = (prefs['paymentReminderHour'] as int?) ?? state.paymentReminderHour;
+		final paymentReminderMinute = (prefs['paymentReminderMinute'] as int?) ?? state.paymentReminderMinute;
+		final paymentDaysBefore = (prefs['paymentDaysBefore'] as int?) ?? state.paymentDaysBefore;
+		final paymentOverdueDaily = (prefs['paymentOverdueDaily'] as bool?) ?? state.paymentOverdueDaily;
+
 		emit(
 			state.copyWith(
 				loading: false,
-				sessionReminders: (prefs['sessionReminders'] as bool?) ?? state.sessionReminders,
-				sessionLeadMinutes: (prefs['sessionLeadMinutes'] as int?) ?? state.sessionLeadMinutes,
-				paymentReminders: (prefs['paymentReminders'] as bool?) ?? state.paymentReminders,
-				paymentReminderHour: (prefs['paymentReminderHour'] as int?) ?? state.paymentReminderHour,
-				paymentReminderMinute: (prefs['paymentReminderMinute'] as int?) ?? state.paymentReminderMinute,
-				paymentDaysBefore: (prefs['paymentDaysBefore'] as int?) ?? state.paymentDaysBefore,
-				paymentOverdueDaily: (prefs['paymentOverdueDaily'] as bool?) ?? state.paymentOverdueDaily,
+				sessionReminders: sessionReminders,
+				sessionLeadMinutes: sessionLeadMinutes,
+				paymentReminders: paymentReminders,
+				paymentReminderHour: paymentReminderHour,
+				paymentReminderMinute: paymentReminderMinute,
+				paymentDaysBefore: paymentDaysBefore,
+				paymentOverdueDaily: paymentOverdueDaily,
 				records: _sortNewestFirst(records),
 			),
+		);
+
+		NotificationOrchestrator.instance.updatePreferences(
+			sessionRemindersEnabled: sessionReminders,
+			sessionLeadMinutes: sessionLeadMinutes,
+			paymentRemindersEnabled: paymentReminders,
+			paymentHour: paymentReminderHour,
+			paymentMinute: paymentReminderMinute,
+			paymentDaysBefore: paymentDaysBefore,
+			paymentOverdueDaily: paymentOverdueDaily,
 		);
 	}
 
