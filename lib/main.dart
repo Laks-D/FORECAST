@@ -9,6 +9,8 @@ import 'core/app/app_mode.dart';
 import 'core/app/app_mode_cubit.dart';
 import 'core/firebase/firestore_db.dart';
 import 'core/services/notification_service.dart';
+import 'core/services/push_notification_service.dart';
+import 'core/services/notification_orchestrator.dart';
 import 'core/services/deep_link_service.dart';
 import 'core/profile/user_profile_cubit.dart';
 import 'design_system/theme/app_theme.dart';
@@ -58,6 +60,21 @@ Future<void> runConfiguredApp({AppMode? forcedMode}) async {
   await NotificationService.instance.init();
   DeepLinkService.instance.init();
   runApp(App(forcedMode: forcedMode));
+
+  // Initialise FCM and attach the local notification orchestrator AFTER
+  // runApp to prevent permission dialogs from causing a black screen.
+  // Mirrors NI's Future.delayed(500ms) pattern exactly.
+  Future.delayed(const Duration(milliseconds: 500), () async {
+    await PushNotificationService.instance.init();
+    // Attach orchestrator so local alarms auto-reschedule when data changes.
+    // Only for tutors — students receive FCM from the backend.
+    if (!AppModeConfig.isClient) {
+      NotificationOrchestrator.instance.attach(
+        sessionsCubit: sl(),
+        clientBloc: sl(),
+      );
+    }
+  });
 }
 
 class App extends StatelessWidget {

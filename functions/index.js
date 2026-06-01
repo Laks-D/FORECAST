@@ -1,178 +1,223 @@
-const functions = require("firebase-functions");
-const admin = require("firebase-admin");
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 
-// Only initialize once (handles hot-reload in emulator).
+// Only initialise once (safe for emulator hot-reload).
 if (!admin.apps.length) {
   admin.initializeApp();
 }
 
 const db = admin.firestore();
-const messaging = admin.messaging();
 
 // ---------------------------------------------------------------------------
-// Utility: send a single FCM message to a user's stored token.
+// Utility: look up a user's FCM token and send them a push notification.
+// Mirrors NI's sendNotificationToUser helper exactly.
 // ---------------------------------------------------------------------------
-async function sendFcmToUser(userId, title, body, data = {}) {
-  const userDoc = await db.collection("users").doc(userId).get();
-  const token = userDoc.data()?.fcmToken;
-  if (!token) {
-    console.log(`No FCM token for user ${userId}; skipping.`);
-    return;
-  }
-
-  const message = {
-    token,
-    notification: { title, body },
-    data: { ...data, click_action: "FLUTTER_NOTIFICATION_CLICK" },
-    android: {
-      priority: "high",
-      notification: { channelId: "session_reminders" },
-    },
-    apns: {
-      payload: {
-        aps: { alert: { title, body }, badge: 1, sound: "default" },
-      },
-    },
-  };
-
+async function sendNotificationToUser(userId, title, body, data) {
   try {
-    const result = await messaging.send(message);
-    console.log(`FCM sent to ${userId}: ${result}`);
-    return result;
-  } catch (err) {
-    if (
-      err.code === "messaging/registration-token-not-registered" ||
-      err.code === "messaging/invalid-registration-token"
-    ) {
-      // Remove stale token to avoid repeated failures.
-      await db.collection("users").doc(userId).update({ fcmToken: null });
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.data();
+
+    if (!userData || !userData.fcmToken) {
+      console.log('No FCM token found for user:', userId);
+      return;
     }
-    console.error(`FCM send failed for ${userId}:`, err.message);
-    throw err;
+
+    const message = {
+      notification: { title, body },
+      data: data || {},
+      token: userData.fcmToken,
+      android: {
+        notification: {
+          channelId: 'session_channel_v5',
+          priority: 'high',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+        },
+      },
+      apns: {
+        payload: {
+          aps: {
+            sound: 'default',
+            badge: 1,
+          },
+        },
+      },
+    };
+
+    const response = await admin.messaging().send(message);
+    console.log('Successfully sent message:', response);
+    return response;
+  } catch (error) {
+    // Remove stale tokens to prevent repeated failures.
+    if (
+      error.code === 'messaging/registration-token-not-registered' ||
+      error.code === 'messaging/invalid-registration-token'
+    ) {
+      await db.collection('users').doc(userId).update({ fcmToken: null });
+      console.log('Cleared stale FCM token for user:', userId);
+    }
+    console.error('Error sending message:', error);
+    throw error;
   }
 }
 
 // ---------------------------------------------------------------------------
 // FUNCTION 1: sendScheduledNotification
-// Fires immediately when a new scheduledNotifications/{id} doc is created.
-// If `sendAt` is in the future, it stores the doc and lets the Pub/Sub
-// ticker (processScheduledNotifications) handle it. If sendAt is now/past,
-// it sends immediately.
+// Firestore onCreate on scheduledNotifications/{notificationId}.
+// Fires immediately when a new notification doc is created.
+// If scheduledTime is in the future (> 30s), the Pub/Sub ticker handles it.
+// Mirrors NI's sendScheduledNotification function.
 // ---------------------------------------------------------------------------
 exports.sendScheduledNotification = functions.firestore
-  .document("scheduledNotifications/{id}")
+  .document('scheduledNotifications/{notificationId}')
   .onCreate(async (snap, context) => {
-    const data = snap.data();
-    const { userId, title, body, sendAt, type, payload } = data;
+    const notification = snap.data();
+    const { userId, title, body, scheduledTime, data, sent } = notification;
 
-    if (!userId || !title) {
-      console.log("Missing required fields; skipping.");
-      await snap.ref.update({ sent: false, error: "missing_fields" });
-      return;
+    // Skip if already processed.
+    if (sent) {
+      console.log('Notification already sent, skipping...');
+      return null;
     }
 
-    const now = Date.now();
-    const sendAtMs = sendAt?.toMillis?.() ?? now;
+    if (!userId || !title) {
+      console.log('Missing required fields; skipping.');
+      await snap.ref.update({ sent: false, error: 'missing_fields' });
+      return null;
+    }
 
-    // If sendAt is more than 30s in the future, let the Pub/Sub ticker handle it.
-    if (sendAtMs - now > 30_000) {
-      console.log(`Notification ${context.params.id} scheduled for future; skipping onCreate.`);
-      return;
+    // Check if it's time to send.
+    const now = admin.firestore.Timestamp.now();
+    const scheduleTime = scheduledTime;
+
+    if (scheduleTime && scheduleTime.toMillis() - now.toMillis() > 30_000) {
+      console.log('Notification scheduled for future; Pub/Sub ticker will handle it.');
+      return null;
     }
 
     // Send immediately.
     try {
-      await sendFcmToUser(userId, title, body, {
-        type: type ?? "general",
-        ...(payload ?? {}),
+      await sendNotificationToUser(userId, title, body, data || {});
+      await snap.ref.update({
+        sent: true,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      await snap.ref.update({ sent: true, sentAt: admin.firestore.FieldValue.serverTimestamp() });
-    } catch (err) {
-      await snap.ref.update({ sent: false, error: err.message });
+      console.log('Notification sent successfully');
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      await snap.ref.update({ sent: false, error: error.message });
     }
+
+    return null;
   });
 
 // ---------------------------------------------------------------------------
 // FUNCTION 2: processScheduledNotifications
 // Pub/Sub ticker: runs every 1 minute.
-// Polls for unsent notifications that are due.
+// Polls Firestore for any unsent notifications that are due.
+// Mirrors NI's processScheduledNotifications function.
 // ---------------------------------------------------------------------------
 exports.processScheduledNotifications = functions.pubsub
-  .schedule("every 1 minutes")
-  .timeZone("UTC")
-  .onRun(async () => {
+  .schedule('every 1 minutes')
+  .onRun(async (context) => {
     const now = admin.firestore.Timestamp.now();
 
-    const snap = await db
-      .collection("scheduledNotifications")
-      .where("sent", "==", false)
-      .where("sendAt", "<=", now)
-      .limit(100)
-      .get();
+    // Query for notifications that are due to be sent.
+    const query = db
+      .collection('scheduledNotifications')
+      .where('sent', '==', false)
+      .where('scheduledTime', '<=', now)
+      .limit(50);
 
-    if (snap.empty) {
-      console.log("No pending notifications.");
-      return;
+    const snapshot = await query.get();
+
+    if (snapshot.empty) {
+      console.log('No scheduled notifications to process');
+      return null;
     }
 
     const batch = db.batch();
-    const sends = [];
+    const notifications = [];
 
-    snap.forEach((doc) => {
-      const { userId, title, body, type, payload } = doc.data();
-      if (!userId || !title) {
-        // Mark as permanently failed.
-        batch.update(doc.ref, {
-          sent: false,
-          error: "missing_fields",
-          processedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-        return;
-      }
+    snapshot.forEach(doc => {
+      const notification = doc.data();
+      notifications.push({ id: doc.id, ...notification });
 
-      sends.push(
-        sendFcmToUser(userId, title, body, {
-          type: type ?? "general",
-          ...(payload ?? {}),
-        })
-          .then(() =>
-            batch.update(doc.ref, {
-              sent: true,
-              sentAt: admin.firestore.FieldValue.serverTimestamp(),
-            })
-          )
-          .catch((err) =>
-            batch.update(doc.ref, {
-              sent: false,
-              error: err.message,
-              processedAt: admin.firestore.FieldValue.serverTimestamp(),
-            })
-          )
-      );
+      // Mark as sent in batch.
+      batch.update(doc.ref, {
+        sent: true,
+        sentAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
     });
 
-    await Promise.allSettled(sends);
-    await batch.commit();
-    console.log(`Processed ${sends.length} notification(s).`);
+    // Send all notifications.
+    const promises = notifications.map(notification =>
+      sendNotificationToUser(
+        notification.userId,
+        notification.title,
+        notification.body,
+        notification.data || {}
+      )
+    );
+
+    try {
+      await Promise.allSettled(promises);
+      await batch.commit();
+      console.log(`Successfully processed ${notifications.length} scheduled notifications`);
+    } catch (error) {
+      console.error('Error processing scheduled notifications:', error);
+    }
+
+    return null;
   });
 
 // ---------------------------------------------------------------------------
-// FUNCTION 3: scheduleSessionReminders
+// FUNCTION 3: testNotification (HTTPS callable)
+// Manual test trigger. Sends an immediate push to the authenticated caller.
+// Mirrors NI's testNotification function.
+// ---------------------------------------------------------------------------
+exports.testNotification = functions.https.onCall(async (data, context) => {
+  // Verify user is authenticated.
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+      'unauthenticated',
+      'User must be authenticated'
+    );
+  }
+
+  const { title, body } = data;
+  const userId = context.auth.uid;
+
+  try {
+    await sendNotificationToUser(
+      userId,
+      title || 'Test Notification',
+      body || 'This is a test push notification from Cloud Functions!',
+      { type: 'test' }
+    );
+    return { success: true, message: 'Test notification sent successfully' };
+  } catch (error) {
+    console.error('Test notification failed:', error);
+    throw new functions.https.HttpsError('internal', 'Failed to send test notification');
+  }
+});
+
+// ---------------------------------------------------------------------------
+// FUNCTION 4: scheduleSessionReminders
 // Firestore onCreate on users/{tutorId}/sessions/{sessionId}.
-// Creates session reminder notifications (2-hour and 5-minute) for both
-// the tutor AND the enrolled student.
+// Auto-schedules 2-hour and 5-minute reminders for both tutor and student.
 // ---------------------------------------------------------------------------
 exports.scheduleSessionReminders = functions.firestore
-  .document("users/{tutorId}/sessions/{sessionId}")
+  .document('users/{tutorId}/sessions/{sessionId}')
   .onCreate(async (snap, context) => {
     const session = snap.data();
     const { tutorId } = context.params;
 
     // Parse session date + time into a JS Date.
-    const dateParts = session.date?.split("-"); // yyyy-MM-dd
-    const timeParts = session.time?.split(":"); // HH:mm
+    const dateParts = session.date && session.date.split('-'); // yyyy-MM-dd
+    const timeParts = session.time && session.time.split(':');  // HH:mm
     if (!dateParts || !timeParts || dateParts.length < 3 || timeParts.length < 2) {
-      console.log("Invalid date/time on session; skipping reminders.");
+      console.log('Invalid date/time on session; skipping reminders.');
       return;
     }
 
@@ -187,129 +232,109 @@ exports.scheduleSessionReminders = functions.firestore
     const now = Date.now();
 
     if (sessionMs <= now) {
-      console.log("Session is in the past; skipping reminders.");
+      console.log('Session is in the past; skipping reminders.');
       return;
     }
 
     const twoHourBefore = admin.firestore.Timestamp.fromMillis(sessionMs - 2 * 60 * 60 * 1000);
-    const fiveMinBefore = admin.firestore.Timestamp.fromMillis(sessionMs - 5 * 60 * 1000);
+    const fiveMinBefore  = admin.firestore.Timestamp.fromMillis(sessionMs - 5 * 60 * 1000);
 
     const batch = db.batch();
-
-    // --- Tutor reminder ---
-    const tutorPayload = {
-      type: "session_reminder",
+    const basePayload = {
+      type: 'session_reminder',
       sessionId: snap.id,
       tutorId,
-      clientId: session.clientId ?? "",
+      clientId: session.clientId || '',
     };
 
+    // --- Tutor reminders ---
     if (sessionMs - now > 2 * 60 * 60 * 1000) {
-      batch.set(db.collection("scheduledNotifications").doc(), {
+      batch.set(db.collection('scheduledNotifications').doc(), {
         userId: tutorId,
-        title: "Session in 2 hours",
-        body: `You have a session (No. ${session.sessionNo ?? "?"}) at ${session.time}.`,
-        sendAt: twoHourBefore,
+        title: 'Session in 2 hours',
+        body: `You have a session (No. ${session.sessionNo || '?'}) at ${session.time}.`,
+        scheduledTime: twoHourBefore,
         sent: false,
-        type: "session_reminder",
-        payload: tutorPayload,
+        data: basePayload,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
     if (sessionMs - now > 5 * 60 * 1000) {
-      batch.set(db.collection("scheduledNotifications").doc(), {
+      batch.set(db.collection('scheduledNotifications').doc(), {
         userId: tutorId,
-        title: "Session starting in 5 minutes",
-        body: `Your session (No. ${session.sessionNo ?? "?"}) starts soon.`,
-        sendAt: fiveMinBefore,
+        title: 'Session starting in 5 minutes',
+        body: `Your session (No. ${session.sessionNo || '?'}) starts very soon.`,
+        scheduledTime: fiveMinBefore,
         sent: false,
-        type: "session_reminder",
-        payload: tutorPayload,
+        data: basePayload,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
     }
 
-    // --- Student reminder (find enrolled student via client record) ---
+    // --- Student reminders (if enrolled student has a linked UID) ---
     if (session.clientId) {
-      const clientDoc = await db
-        .collection("users")
-        .doc(tutorId)
-        .collection("clients")
-        .doc(session.clientId)
-        .get();
+      try {
+        const clientDoc = await db
+          .collection('users')
+          .doc(tutorId)
+          .collection('clients')
+          .doc(session.clientId)
+          .get();
 
-      const studentUid = clientDoc.data()?.firebaseUid;
-      if (studentUid) {
-        const studentPayload = { ...tutorPayload, studentId: studentUid };
+        const studentUid = clientDoc.data() && clientDoc.data().firebaseUid;
+        if (studentUid) {
+          const studentPayload = { ...basePayload, studentId: studentUid };
 
-        if (sessionMs - now > 2 * 60 * 60 * 1000) {
-          batch.set(db.collection("scheduledNotifications").doc(), {
-            userId: studentUid,
-            title: "Session reminder — 2 hours",
-            body: `You have a class at ${session.time}. Get ready!`,
-            sendAt: twoHourBefore,
-            sent: false,
-            type: "session_reminder",
-            payload: studentPayload,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+          if (sessionMs - now > 2 * 60 * 60 * 1000) {
+            batch.set(db.collection('scheduledNotifications').doc(), {
+              userId: studentUid,
+              title: 'Session reminder — 2 hours',
+              body: `You have a class at ${session.time}. Get ready!`,
+              scheduledTime: twoHourBefore,
+              sent: false,
+              data: studentPayload,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+
+          if (sessionMs - now > 5 * 60 * 1000) {
+            batch.set(db.collection('scheduledNotifications').doc(), {
+              userId: studentUid,
+              title: 'Class starting in 5 minutes!',
+              body: `Your class starts at ${session.time}. Be ready!`,
+              scheduledTime: fiveMinBefore,
+              sent: false,
+              data: studentPayload,
+              createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            });
+          }
         }
-
-        if (sessionMs - now > 5 * 60 * 1000) {
-          batch.set(db.collection("scheduledNotifications").doc(), {
-            userId: studentUid,
-            title: "Class starting in 5 minutes!",
-            body: `Your class starts at ${session.time}. Be ready!`,
-            sendAt: fiveMinBefore,
-            sent: false,
-            type: "session_reminder",
-            payload: studentPayload,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-        }
+      } catch (err) {
+        console.error('Error looking up student UID for session reminders:', err);
       }
     }
 
     await batch.commit();
     console.log(`Scheduled reminders for session ${snap.id}.`);
+    return null;
   });
 
 // ---------------------------------------------------------------------------
-// FUNCTION 4: testNotification (HTTPS callable)
-// Manual test trigger for debugging. Sends an immediate FCM to the caller.
-// ---------------------------------------------------------------------------
-exports.testNotification = functions.https.onCall(async (data, context) => {
-  if (!context.auth) {
-    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
-  }
-  const userId = context.auth.uid;
-  const title = data.title ?? "Test Notification";
-  const body = data.body ?? "This is a test from Cloud Functions.";
-
-  try {
-    await sendFcmToUser(userId, title, body, { type: "test" });
-    return { success: true };
-  } catch (err) {
-    throw new functions.https.HttpsError("internal", err.message);
-  }
-});
-
-// ---------------------------------------------------------------------------
 // FUNCTION 5: schedulePaymentReminders
-// Firestore onCreate on users/{tutorId}/clients/{clientId}/timeline/{eventId}
-// Sends a payment-due reminder to the student 1 day before the payment date.
+// Firestore onUpdate on users/{tutorId}/clients/{clientId}.
+// Detects newly added payment timeline events and schedules reminders.
 // ---------------------------------------------------------------------------
 exports.schedulePaymentReminders = functions.firestore
-  .document("users/{tutorId}/clients/{clientId}")
+  .document('users/{tutorId}/clients/{clientId}')
   .onUpdate(async (change, context) => {
     const { tutorId, clientId } = context.params;
     const newData = change.after.data();
     const oldData = change.before.data();
 
-    // Detect newly-added payment timeline events.
-    const oldTimeline = oldData.timeline ?? [];
-    const newTimeline = newData.timeline ?? [];
+    // Detect newly-added payment events.
+    const oldTimeline = oldData.timeline || [];
+    const newTimeline = newData.timeline || [];
     if (newTimeline.length <= oldTimeline.length) return; // no new events
 
     const newEvents = newTimeline.slice(oldTimeline.length);
@@ -318,48 +343,49 @@ exports.schedulePaymentReminders = functions.firestore
     const batch = db.batch();
 
     for (const event of newEvents) {
-      if (event.type !== "payment") continue;
+      if (event.type !== 'payment') continue;
 
-      const paymentDate = event.createdAt?.toDate?.();
+      const paymentDate = event.createdAt && event.createdAt.toDate
+        ? event.createdAt.toDate()
+        : null;
       if (!paymentDate) continue;
 
       const now = Date.now();
       const oneDayBefore = new Date(paymentDate.getTime() - 24 * 60 * 60 * 1000);
-      if (oneDayBefore.getTime() <= now) continue; // payment already due/past
+      if (oneDayBefore.getTime() <= now) continue; // already past
 
       const payload = {
-        type: "payment_reminder",
+        type: 'payment_reminder',
         clientId,
         tutorId,
-        paymentId: event.id ?? "",
+        paymentId: event.id || '',
       };
 
-      // Tutor reminder
-      batch.set(db.collection("scheduledNotifications").doc(), {
+      // Tutor reminder.
+      batch.set(db.collection('scheduledNotifications').doc(), {
         userId: tutorId,
-        title: "Payment due tomorrow",
-        body: `Payment of ${newData.currency ?? ""}${event.amount ?? "?"} for ${newData.name ?? "client"} is due tomorrow.`,
-        sendAt: admin.firestore.Timestamp.fromDate(oneDayBefore),
+        title: 'Payment due tomorrow',
+        body: `Payment of ${newData.currency || ''}${event.amount || '?'} for ${newData.name || 'client'} is due tomorrow.`,
+        scheduledTime: admin.firestore.Timestamp.fromDate(oneDayBefore),
         sent: false,
-        type: "payment_reminder",
-        payload,
+        data: payload,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Student reminder
+      // Student reminder.
       if (studentUid) {
-        batch.set(db.collection("scheduledNotifications").doc(), {
+        batch.set(db.collection('scheduledNotifications').doc(), {
           userId: studentUid,
-          title: "Payment due tomorrow",
-          body: `Your payment of ${newData.currency ?? ""}${event.amount ?? "?"} is due tomorrow.`,
-          sendAt: admin.firestore.Timestamp.fromDate(oneDayBefore),
+          title: 'Payment due tomorrow',
+          body: `Your payment of ${newData.currency || ''}${event.amount || '?'} is due tomorrow.`,
+          scheduledTime: admin.firestore.Timestamp.fromDate(oneDayBefore),
           sent: false,
-          type: "payment_reminder",
-          payload: { ...payload, studentId: studentUid },
+          data: { ...payload, studentId: studentUid },
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
         });
       }
     }
 
     await batch.commit();
+    return null;
   });

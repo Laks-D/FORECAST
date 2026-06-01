@@ -3,14 +3,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../core/firebase/firestore_db.dart';
 
 /// Flutter-side helper that writes `scheduledNotifications` docs to Firestore.
-/// Cloud Functions pick these up and dispatch the actual FCM messages.
+/// Cloud Functions (sendScheduledNotification + processScheduledNotifications)
+/// pick these up and dispatch actual FCM push messages.
 ///
-/// Usage:
-///   await NotificationScheduler.scheduleSessionReminder(
-///     sessionId: '123',
-///     sessionDate: DateTime(2026, 6, 5, 10, 0),
-///     clientName: 'Arjun',
-///   );
+/// Field name: `scheduledTime` — matches both the NI app and the updated
+/// functions/index.js Pub/Sub query.
 class NotificationScheduler {
   NotificationScheduler._();
 
@@ -20,23 +17,25 @@ class NotificationScheduler {
   static String? get _uid => FirebaseAuth.instance.currentUser?.uid;
 
   // ---------------------------------------------------------------------------
-  // Session reminder: creates 2-hour and 5-minute notification docs.
-  // Cloud Functions' scheduleSessionReminders trigger does this automatically
-  // on session create; this method is the Flutter-side fallback for cases
-  // where a session is created or rescheduled outside of Firestore triggers.
+  // Session reminder
+  // Writes 2-hour and lead-time notification docs.
+  // Cloud Functions also do this automatically on session create — this is the
+  // Flutter-side fallback for cases where sessions are rescheduled or created
+  // outside of Firestore triggers (e.g., bulk imports).
   // ---------------------------------------------------------------------------
   static Future<void> scheduleSessionReminder({
     required String sessionId,
     required DateTime sessionDate,
     String? clientName,
     String? tutorName,
+    int leadMinutes = 5,
   }) async {
     final uid = _uid;
     if (uid == null) return;
 
     final now = DateTime.now();
     final twoHourBefore = sessionDate.subtract(const Duration(hours: 2));
-    final fiveMinBefore = sessionDate.subtract(const Duration(minutes: 5));
+    final leadBefore = sessionDate.subtract(Duration(minutes: leadMinutes));
 
     final batch = firestoreDb.batch();
 
@@ -47,25 +46,26 @@ class NotificationScheduler {
         'body': clientName != null
             ? 'Session with $clientName at ${_formatTime(sessionDate)}.'
             : 'You have a session at ${_formatTime(sessionDate)}.',
-        'sendAt': Timestamp.fromDate(twoHourBefore),
+        'scheduledTime': Timestamp.fromDate(twoHourBefore),
         'sent': false,
-        'type': 'session_reminder',
-        'payload': {'sessionId': sessionId},
+        'data': {'type': 'session_reminder', 'sessionId': sessionId},
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
 
-    if (fiveMinBefore.isAfter(now)) {
+    if (leadBefore.isAfter(now)) {
+      final label = leadMinutes >= 60
+          ? '${leadMinutes ~/ 60} hour${leadMinutes >= 120 ? 's' : ''}'
+          : '$leadMinutes minutes';
       batch.set(_col.doc(), {
         'userId': uid,
-        'title': 'Session starting in 5 minutes',
+        'title': 'Session in $label',
         'body': clientName != null
             ? 'Session with $clientName is about to start!'
-            : 'Your session starts in 5 minutes!',
-        'sendAt': Timestamp.fromDate(fiveMinBefore),
+            : 'Your session starts in $label!',
+        'scheduledTime': Timestamp.fromDate(leadBefore),
         'sent': false,
-        'type': 'session_reminder',
-        'payload': {'sessionId': sessionId},
+        'data': {'type': 'session_reminder', 'sessionId': sessionId},
         'createdAt': FieldValue.serverTimestamp(),
       });
     }
@@ -74,7 +74,8 @@ class NotificationScheduler {
   }
 
   // ---------------------------------------------------------------------------
-  // Payment reminder: notifies the user 1 day before a payment is due.
+  // Payment reminder
+  // Notifies [daysBefore] days before a payment is due at [hour]:[minute].
   // ---------------------------------------------------------------------------
   static Future<void> schedulePaymentReminder({
     required String clientId,
@@ -83,23 +84,29 @@ class NotificationScheduler {
     required double amount,
     String? currency,
     String? paymentId,
+    int daysBefore = 1,
+    int hour = 9,
+    int minute = 0,
   }) async {
     final uid = _uid;
     if (uid == null) return;
 
     final now = DateTime.now();
-    final oneDayBefore = paymentDue.subtract(const Duration(days: 1));
-    if (!oneDayBefore.isAfter(now)) return; // already past
+    final triggerDate = paymentDue.subtract(Duration(days: daysBefore));
+    final triggerDateTime = DateTime(
+        triggerDate.year, triggerDate.month, triggerDate.day, hour, minute);
+    if (!triggerDateTime.isAfter(now)) return;
 
     final cur = currency ?? '';
     await _col.add({
       'userId': uid,
-      'title': 'Payment due tomorrow',
-      'body': 'Payment of $cur${amount.toStringAsFixed(0)} for $clientName is due tomorrow.',
-      'sendAt': Timestamp.fromDate(oneDayBefore),
+      'title': daysBefore == 0 ? 'Payment due today' : 'Payment due tomorrow',
+      'body':
+          'Payment of $cur${amount.toStringAsFixed(0)} for $clientName is due ${daysBefore == 0 ? 'today' : 'tomorrow'}.',
+      'scheduledTime': Timestamp.fromDate(triggerDateTime),
       'sent': false,
-      'type': 'payment_reminder',
-      'payload': {
+      'data': {
+        'type': 'payment_reminder',
         'clientId': clientId,
         if (paymentId != null) 'paymentId': paymentId,
       },
@@ -108,14 +115,14 @@ class NotificationScheduler {
   }
 
   // ---------------------------------------------------------------------------
-  // Generic one-off notification.
+  // Generic one-off notification (used by "Test Push Notification" button).
   // ---------------------------------------------------------------------------
   static Future<void> scheduleNotification({
     required String title,
     required String body,
     required DateTime sendAt,
     String type = 'general',
-    Map<String, dynamic> payload = const {},
+    Map<String, dynamic> data = const {},
   }) async {
     final uid = _uid;
     if (uid == null) return;
@@ -127,16 +134,16 @@ class NotificationScheduler {
       'userId': uid,
       'title': title,
       'body': body,
-      'sendAt': Timestamp.fromDate(sendAt),
+      'scheduledTime': Timestamp.fromDate(sendAt),
       'sent': false,
-      'type': type,
-      'payload': payload,
+      'data': {'type': type, ...data},
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
 
   // ---------------------------------------------------------------------------
-  // Cancel pending notifications for a session (e.g., when session is deleted).
+  // Cancel pending notifications for a session (call when session is deleted
+  // or rescheduled).
   // ---------------------------------------------------------------------------
   static Future<void> cancelSessionNotifications(String sessionId) async {
     final uid = _uid;
@@ -145,7 +152,7 @@ class NotificationScheduler {
     final snap = await _col
         .where('userId', isEqualTo: uid)
         .where('sent', isEqualTo: false)
-        .where('payload.sessionId', isEqualTo: sessionId)
+        .where('data.sessionId', isEqualTo: sessionId)
         .get();
 
     final batch = firestoreDb.batch();
@@ -157,14 +164,8 @@ class NotificationScheduler {
   }
 
   // ---------------------------------------------------------------------------
-  // Store/update the FCM token for this device.
-  // Called from NotificationCubit when the token is obtained/refreshed.
+  // Helpers
   // ---------------------------------------------------------------------------
-  static Future<void> saveFcmToken(String token) async {
-    final uid = _uid;
-    if (uid == null) return;
-    await firestoreDb.collection('users').doc(uid).update({'fcmToken': token});
-  }
 
   static String _formatTime(DateTime dt) {
     final h = dt.hour.toString().padLeft(2, '0');

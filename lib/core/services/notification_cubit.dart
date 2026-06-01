@@ -6,6 +6,7 @@ import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'notification_storage.dart';
+import 'notification_orchestrator.dart';
 
 final class NotificationState extends Equatable {
 	const NotificationState({
@@ -140,31 +141,43 @@ class NotificationCubit extends Cubit<NotificationState> {
 	Future<void> toggleSessionReminders(bool enabled) async {
 		emit(state.copyWith(sessionReminders: enabled));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+			sessionRemindersEnabled: enabled);
 	}
 
 	Future<void> setSessionLeadMinutes(int minutes) async {
 		emit(state.copyWith(sessionLeadMinutes: minutes));
 		await _persistPrefs();
+		NotificationOrchestrator.instance
+				.updatePreferences(sessionLeadMinutes: minutes);
 	}
 
 	Future<void> togglePaymentReminders(bool enabled) async {
 		emit(state.copyWith(paymentReminders: enabled));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+				paymentRemindersEnabled: enabled);
 	}
 
 	Future<void> setPaymentReminderTime(int hour, int minute) async {
 		emit(state.copyWith(paymentReminderHour: hour, paymentReminderMinute: minute));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+				paymentHour: hour, paymentMinute: minute);
 	}
 
 	Future<void> setPaymentDaysBefore(int days) async {
 		emit(state.copyWith(paymentDaysBefore: days));
 		await _persistPrefs();
+		NotificationOrchestrator.instance
+				.updatePreferences(paymentDaysBefore: days);
 	}
 
 	Future<void> togglePaymentOverdueDaily(bool enabled) async {
 		emit(state.copyWith(paymentOverdueDaily: enabled));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+				paymentOverdueDaily: enabled);
 	}
 
 	/* ─────── Records API (used by NotificationsPage) ─────── */
