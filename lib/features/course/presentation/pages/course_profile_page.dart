@@ -67,7 +67,7 @@ class CourseProfilePage extends StatelessWidget {
             _SectionCard(
               title: 'Tutor info',
               child: FutureBuilder<Map<String, String>>(
-                future: _getTutorInfo(isClientMode),
+                future: _getTutorInfo(isClientMode, client?.tutorId),
                 builder: (context, snap) {
                   final data = snap.data ?? {};
                   final tutorName = data['name'] ?? '';
@@ -216,7 +216,7 @@ class CourseProfilePage extends StatelessWidget {
     );
   }
 
-  Future<Map<String, String>> _getTutorInfo(bool isClientMode) async {
+  Future<Map<String, String>> _getTutorInfo(bool isClientMode, String? passedTutorId) async {
     if (!isClientMode) {
       final profile = await SignupProfileStorage.getProfile();
       return {
@@ -225,34 +225,18 @@ class CourseProfilePage extends StatelessWidget {
       };
     }
 
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid == null) return {};
-
-    final snap = await firestoreDb
-        .collection('users')
-        .doc(uid)
-        .collection('enrollment')
-        .limit(1)
-        .get();
-
-    if (snap.docs.isEmpty) return {};
-
-    final data = snap.docs.first.data();
-    final tutorId = data['tutorId'] as String?;
-    final tutorName = data['tutorName'] as String?;
-
-    if (tutorId == null) return {};
+    if (passedTutorId == null) return {};
 
     try {
-      final tutorDoc = await firestoreDb.collection('users').doc(tutorId).get();
+      final tutorDoc = await firestoreDb.collection('users').doc(passedTutorId).get();
       final tData = tutorDoc.data();
       return {
-        'name': (tutorName ?? tData?['displayName'] ?? '').trim(),
+        'name': (tData?['fullName'] ?? tData?['displayName'] ?? 'Tutor').trim(),
         'email': (tData?['email'] ?? '').trim(),
       };
     } catch (_) {
       return {
-        'name': (tutorName ?? '').trim(),
+        'name': 'Tutor',
         'email': '',
       };
     }

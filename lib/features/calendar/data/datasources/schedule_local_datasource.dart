@@ -166,12 +166,16 @@ class ScheduleLocalDataSource {
         }
         _tutorSubs.clear();
 
-        if (snap.docs.isEmpty) {
+        final tutorIds = snap.docs.map((d) => d.id).toList();
+        if (AppModeConfig.isDualRole && !tutorIds.contains(uid)) {
+          tutorIds.add(uid!);
+        }
+
+        if (tutorIds.isEmpty) {
           if (!controller.isClosed) controller.add(const []);
           return;
         }
 
-        final tutorIds = snap.docs.map((d) => d.id).toList();
         final latest = List<List<ScheduleSession>>.filled(
             tutorIds.length, const [],
             growable: false);

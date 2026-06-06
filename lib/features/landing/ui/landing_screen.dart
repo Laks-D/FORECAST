@@ -106,56 +106,66 @@ class _LandingScreenState extends State<LandingScreen> {
             _previousUid = user.uid;
 
             // ── Role check → dashboard ─────────────────────────────────────
-            return FutureBuilder<List<String>>(
-              future: _getRolesFuture(user.uid),
-              builder: (context, rolesSnap) {
-                if (rolesSnap.connectionState == ConnectionState.waiting) {
-                  return const _Spinner();
-                }
+            return BlocBuilder<AppModeCubit, AppModeState>(
+              builder: (context, modeState) {
+                return FutureBuilder<List<String>>(
+                  future: _getRolesFuture(user.uid),
+                  builder: (context, rolesSnap) {
+                    if (rolesSnap.connectionState == ConnectionState.waiting) {
+                      return const _Spinner();
+                    }
 
-                final roles = rolesSnap.data ?? [];
+                    final roles = rolesSnap.data ?? [];
 
-                final isTutor = roles.contains('tutor');
-                final isClient =
-                    roles.contains('client') || roles.contains('student');
+                    final isTutor = roles.contains('tutor');
+                    final isClient =
+                        roles.contains('client') || roles.contains('student');
 
-                // Dual-role: route to the dashboard that matches the login tab
-                // used this session. If no login happened yet this session
-                // (e.g., app restarted while already signed in), fall back to
-                // tutor dashboard.
-                if (isTutor && isClient) {
-                  final loginRole = LoginController.instance.lastLoginRole;
-                  AppMode mode;
-                  if (loginRole != null) {
-                    mode = loginRole == 'client' ? AppMode.client : AppMode.admin;
-                    context.read<AppModeCubit>().setMode(mode);
-                  } else {
-                    mode = context.read<AppModeCubit>().state.mode ?? AppMode.admin;
-                  }
-                  
-                  AppModeConfig.isDualRole = true;
-                  AppModeConfig.mode = mode;
-                  return _buildDashboard(
-                      user: user, appMode: mode, isDualRole: true);
-                }
+                    // Dual-role: route to the dashboard that matches the login tab
+                    // used this session. If no login happened yet this session
+                    // (e.g., app restarted while already signed in), fall back to
+                    // tutor dashboard.
+                    if (isTutor && isClient) {
+                      final loginRole = LoginController.instance.lastLoginRole;
+                      AppMode mode = modeState.mode ?? AppMode.admin;
+                      if (loginRole != null) {
+                        final expectedMode = loginRole == 'client' ? AppMode.client : AppMode.admin;
+                        LoginController.instance.lastLoginRole = null;
+                        if (mode != expectedMode) {
+                          mode = expectedMode;
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (context.mounted) {
+                              context.read<AppModeCubit>().setMode(expectedMode);
+                            }
+                          });
+                        }
+                      }
+                      
+                      AppModeConfig.isDualRole = true;
+                      AppModeConfig.mode = mode;
+                      return _buildDashboard(
+                          user: user, appMode: mode, isDualRole: true);
+                    }
 
-                AppModeConfig.isDualRole = false;
+                    AppModeConfig.isDualRole = false;
 
-                if (isTutor) {
-                  AppModeConfig.mode = AppMode.admin;
-                  return _buildDashboard(
-                      user: user, appMode: AppMode.admin, isDualRole: false);
-                }
+                    if (isTutor) {
+                      AppModeConfig.mode = AppMode.admin;
+                      return _buildDashboard(
+                          user: user, appMode: AppMode.admin, isDualRole: false);
+                    }
 
-                if (isClient) {
-                  AppModeConfig.mode = AppMode.client;
-                  return _buildDashboard(
-                      user: user, appMode: AppMode.client, isDualRole: false);
-                }
+                    if (isClient) {
+                      AppModeConfig.mode = AppMode.client;
+                      return _buildDashboard(
+                          user: user, appMode: AppMode.client, isDualRole: false);
+                    }
 
-                // No role found — role write may have failed during signup.
-                // Auto-sign-out after a short delay.
-                return _RolelessScreen(onSignOut: _invalidateRolesCache);
+                    // No role found — role write may have failed during signup.
+                    // Auto-sign-out after a short delay.
+                    return _RolelessScreen(onSignOut: _invalidateRolesCache);
+                  },
+                );
               },
             );
           },

@@ -1,0 +1,113 @@
+================================================================================
+                         GENERIC APP — PURPOSE & OVERVIEW
+================================================================================
+
+WHAT IS THIS APP?
+-----------------
+A two-sided tutoring management platform that connects individual tutors with
+their students. It serves as a lightweight CRM + scheduler + payment tracker
+for tutors, paired with a student-facing view of their own sessions and profile.
+
+
+WHO IS IT FOR?
+--------------
+1. TUTORS
+   Independent tutors/coaches who need to manage their students, schedule
+   classes, and track payments — all in one place.
+
+2. STUDENTS (Clients)
+   Students enrolled under a tutor who want to view their upcoming sessions,
+   payment history, and personal profile.
+
+3. DUAL-ROLE USERS
+   A person can be both a tutor AND a student simultaneously (e.g. a senior
+   student who also teaches). They sign up for both roles and switch between
+   dashboards by signing out and signing in through the respective tab.
+
+
+ROLES & ACCESS
+--------------
+- Tutor-only account  → sees tutor dashboard only
+- Student-only account → sees student dashboard only
+- Both roles          → can log in via either tab; sees that role's dashboard
+
+Roles are stored as an array in Firestore: ['tutor'], ['client'], or both.
+A user can add a second role later by signing up again with the same email
+and verifying their existing password.
+
+
+WHAT TUTORS CAN DO
+------------------
+- Manage a student roster (add manually or via QR code invite)
+- Schedule sessions/classes per student (date, time, course name)
+- Track payments per student (log, mark paid/unpaid, reschedule, mark fully paid)
+- Add notes to student profiles
+- View a calendar of all upcoming sessions
+- Generate and share a QR code invite link for students to scan
+- Accept or reject join requests from students who scanned the QR
+- View and edit their own profile (name, profession, settings)
+
+
+WHAT STUDENTS CAN DO
+--------------------
+- Scan a tutor's QR code to send a join request
+- Wait for tutor approval (real-time status updates)
+- View their scheduled sessions in a calendar (streamed live from tutor's data)
+- View their own profile and payment history
+- View courses/classes assigned to them
+
+
+HOW STUDENTS JOIN A TUTOR
+--------------------------
+1. Tutor generates a QR code (valid for 15 minutes) from their dashboard.
+2. Student scans the QR with the app.
+3. A join request is created in Firestore under /join_requests.
+4. Tutor sees the pending request and accepts or rejects it.
+5. On acceptance, an enrollment record is created under the student's account.
+6. From that point, the student can see all sessions the tutor has created
+   for them in real time.
+
+
+DATA STORED (FIRESTORE STRUCTURE)
+----------------------------------
+/users/{uid}
+    - roles: ['tutor'] | ['client'] | ['tutor', 'client']
+    - displayName, email, phone, profession, etc.
+
+    /sessions/{sessionId}       ← Tutor's scheduled classes (per student)
+    /clients/{clientId}         ← Tutor's student roster
+    /enrollment/{tutorId}       ← Student's enrolled tutors
+    /settings/app               ← User app preferences
+    /fcmTokens/{token}          ← Push notification tokens
+
+/join_requests/{requestId}
+    - tutorId, clientFirebaseUid, status (pending → accepted/rejected/expired)
+
+/usernames/{usernameKey}
+    - uid, email (for username-based login lookup)
+
+
+AUTHENTICATION
+--------------
+- Email + password signup
+- Google Sign-In
+- Login tab determines which role's dashboard loads
+- Forgot password supported
+- "Add role later" — same email + password verification merges the new role
+
+
+TECHNOLOGY STACK
+----------------
+- Flutter (iOS + Android + Web)
+- Firebase Auth (email/password + Google)
+- Cloud Firestore (real-time database)
+- Firebase Cloud Messaging (push notifications)
+- Firebase Hosting (invite web landing page at /join)
+
+
+NO ORGANISATIONS
+----------------
+There is no organisation, multi-tenant, or admin hierarchy in this app.
+It is strictly a direct 1-to-many relationship:
+    ONE tutor ← manages → MANY students
+================================================================================

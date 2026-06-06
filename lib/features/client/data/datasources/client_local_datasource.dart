@@ -589,20 +589,25 @@ class ClientLocalDataSource {
     final deletedCol = await _collection(deleted: true);
 
     try {
-      final Query<Map<String, dynamic>> query;
+      final QuerySnapshot<Map<String, dynamic>> snap;
       if (AppModeConfig.isClient) {
         final uid = FirebaseAuth.instance.currentUser?.uid;
-        query = col.where('firebaseUid', isEqualTo: uid);
+        snap = await firestoreDb
+            .collectionGroup('clients')
+            .where('firebaseUid', isEqualTo: uid)
+            .get();
       } else {
-        query = col;
+        snap = await col.get();
       }
-      final snap = await query.get();
       _data
         ..clear()
         ..addAll(
           snap.docs.map((doc) {
             final json = Map<String, dynamic>.from(doc.data());
             json['id'] = json['id'] ?? doc.id;
+            if (doc.reference.parent.parent != null) {
+              json['tutorId'] = doc.reference.parent.parent!.id;
+            }
             return Client.fromJson(json);
           }),
         );
