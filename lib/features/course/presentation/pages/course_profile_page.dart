@@ -29,6 +29,17 @@ class CourseProfilePage extends StatelessWidget {
     final chrome = AppChromeTheme.of(context);
     final isClientMode = AppModeScope.isClient(context);
 
+    final clientState = context.watch<ClientBloc>().state;
+    Client? client;
+    if (clientState is ClientLoaded) {
+      for (final c in clientState.entities) {
+        if (c.id == clientId) {
+          client = c;
+          break;
+        }
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(courseName),
@@ -40,27 +51,13 @@ class CourseProfilePage extends StatelessWidget {
           children: [
             _SectionCard(
               title: 'Course details',
-              child: BlocBuilder<ClientBloc, ClientState>(
-                builder: (context, state) {
-                  Client? client;
-                  if (state is ClientLoaded) {
-                    for (final c in state.entities) {
-                      if (c.id == clientId) {
-                        client = c;
-                        break;
-                      }
-                    }
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _kv(context, 'Course', courseName, chrome),
-                      const SizedBox(height: 8),
-                      _kv(context, 'Client', client?.displayName ?? 'Client', chrome),
-                    ],
-                  );
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _kv(context, 'Course', courseName, chrome),
+                  const SizedBox(height: 8),
+                  _kv(context, 'Client', client?.displayName ?? 'Client', chrome),
+                ],
               ),
             ),
             const SizedBox(height: 12),
