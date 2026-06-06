@@ -24,6 +24,7 @@ class InviteLandingPage extends StatefulWidget {
 class _InviteLandingPageState extends State<InviteLandingPage> {
   String _requestName = 'Client';
   String _requestPhone = '';
+  String _requestEmail = '';
   bool _loading = true;
   bool _sending = false;
   bool _alreadyLinked = false;
@@ -92,6 +93,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
                 ? emailFromAuth.split('@').first
                 : 'Client');
         _requestPhone = phoneFromUserDoc;
+        _requestEmail = emailFromAuth;
         _alreadyLinked = alreadyLinked;
         _loading = false;
       });
@@ -223,6 +225,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
         clientFirebaseUid: user.uid,
         clientName: _requestName,
         clientPhone: _requestPhone,
+        clientEmail: _requestEmail,
       );
 
       if (!mounted) return;

@@ -27,7 +27,6 @@ class ScheduleGenerator {
     int startSessionNo = 1,
     int customDays = 1,
     SessionDuration? duration,
-    ProgramType? programType,
     String? courseName,
     String? programEnrollmentId,
   }) {
@@ -64,7 +63,6 @@ class ScheduleGenerator {
           time: timeRange,
           date: AppDateUtils.dateToStr(cursor),
           duration: duration,
-          programType: programType,
           courseName: courseName,
           programEnrollmentId: programEnrollmentId,
         ),

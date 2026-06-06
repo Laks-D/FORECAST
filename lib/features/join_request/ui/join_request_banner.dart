@@ -101,7 +101,8 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
             // Add student to the tutor's local client list so they appear immediately.
             parentCtx.read<ClientBloc>().add(CreateClient(
               name: req.clientName.isNotEmpty ? req.clientName : 'Student',
-              primaryContact: phone.isNotEmpty ? phone : '0000000000',
+              primaryContact: phone.isNotEmpty ? phone : (req.clientEmail.isNotEmpty ? req.clientEmail : ''),
+              email: req.clientEmail.isNotEmpty ? req.clientEmail : null,
               firebaseUid: req.clientFirebaseUid.isNotEmpty ? req.clientFirebaseUid : null,
             ));
             ScaffoldMessenger.of(parentCtx).showSnackBar(

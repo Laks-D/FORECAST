@@ -211,10 +211,10 @@ class _CoursesPageState extends State<CoursesPage> {
                           }
                           final rawName = (s.courseName ?? '').trim();
                           // Fix G: Don't silently drop sessions without a
-                          // course name — show them under 'Uncategorized'
+                          // course name — show them under 'General Sessions'
                           // so the student can always see their schedule.
                           final effectiveName =
-                              rawName.isEmpty ? 'Uncategorized' : rawName;
+                              rawName.isEmpty ? 'General Sessions' : rawName;
                           final key = '${s.clientId}::$effectiveName';
 
                           final existing = itemsByKey[key];

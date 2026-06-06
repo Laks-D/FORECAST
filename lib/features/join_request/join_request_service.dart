@@ -32,6 +32,7 @@ class JoinRequestService {
     required String clientFirebaseUid,
     required String clientName,
     required String clientPhone,
+    required String clientEmail,
   }) async {
     final ref = firestoreDb.collection(_kCollection).doc();
     await ref.set({
@@ -39,6 +40,7 @@ class JoinRequestService {
       'clientFirebaseUid': clientFirebaseUid,
       'clientName': clientName,
       'clientPhone': clientPhone,
+      'clientEmail': clientEmail,
       'status': 'pending',
       'createdAt': FieldValue.serverTimestamp(),
       'resolvedAt': null,

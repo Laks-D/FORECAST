@@ -52,19 +52,36 @@ class StudentEnrollmentResolver {
       }
     }
 
-    // --- Fallback: collectionGroup query by email then phone ---
-    // Used for students who were manually added by a tutor (no QR flow).
+    // --- Fallback: collectionGroup query by firebaseUid, then email, then phone ---
     try {
+      final orphanSnapUid = await firestoreDb
+          .collectionGroup('clients')
+          .where('firebaseUid', isEqualTo: uid)
+          .limit(1)
+          .get();
+
+      if (orphanSnapUid.docs.isNotEmpty) {
+        final clientDoc = orphanSnapUid.docs.first;
+        final tutorId = clientDoc.reference.parent.parent?.id;
+
+        if (tutorId != null) {
+          await _enroll(uid, tutorId, clientDoc.reference);
+          _cachedForUid = uid;
+          _cachedTutorUid = tutorId;
+          return tutorId;
+        }
+      }
+
       final email = user?.email?.trim().toLowerCase();
       if (email != null && email.isNotEmpty) {
-        final orphanSnap = await firestoreDb
+        final orphanSnapEmail = await firestoreDb
             .collectionGroup('clients')
             .where('email', isEqualTo: email)
             .limit(1)
             .get();
 
-        if (orphanSnap.docs.isNotEmpty) {
-          final clientDoc = orphanSnap.docs.first;
+        if (orphanSnapEmail.docs.isNotEmpty) {
+          final clientDoc = orphanSnapEmail.docs.first;
           final tutorId = clientDoc.reference.parent.parent?.id;
 
           if (tutorId != null) {
@@ -78,14 +95,14 @@ class StudentEnrollmentResolver {
 
       final phone = user?.phoneNumber?.trim();
       if (phone != null && phone.isNotEmpty) {
-        final orphanSnap = await firestoreDb
+        final orphanSnapPhone = await firestoreDb
             .collectionGroup('clients')
             .where('primaryContact', isEqualTo: phone)
             .limit(1)
             .get();
 
-        if (orphanSnap.docs.isNotEmpty) {
-          final clientDoc = orphanSnap.docs.first;
+        if (orphanSnapPhone.docs.isNotEmpty) {
+          final clientDoc = orphanSnapPhone.docs.first;
           final tutorId = clientDoc.reference.parent.parent?.id;
 
           if (tutorId != null) {

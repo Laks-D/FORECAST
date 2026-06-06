@@ -47,7 +47,9 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   int _startTimeMinutes = 10 * 60;
   int _customDays = 1;
   List<RegisteredProgram> _registeredPrograms = const [];
-  String? _programName;
+  
+  final _courseNameController = TextEditingController();
+  
   SessionDuration? _duration;
   int? _customDurationMinutes;
 
@@ -72,11 +74,13 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     if (!mounted) return;
     setState(() {
       _registeredPrograms = programs;
-      final containsSelected = _registeredPrograms.any((p) => p.name == _programName);
-      if (_programName != null && !containsSelected) {
-        _programName = null;
-      }
     });
+  }
+
+  @override
+  void dispose() {
+    _courseNameController.dispose();
+    super.dispose();
   }
 
   int? _parseDurationMinutes(String label) {
@@ -114,26 +118,20 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   }
 
   void _applyProgramTemplate(String? selectedName) {
-    if (selectedName == null) {
-      setState(() => _programName = null);
-      return;
-    }
+    if (selectedName == null) return;
 
     final selected = _registeredPrograms.cast<RegisteredProgram?>().firstWhere(
           (p) => p?.name == selectedName,
           orElse: () => null,
         );
 
-    if (selected == null) {
-      setState(() => _programName = selectedName);
-      return;
-    }
+    if (selected == null) return;
 
     final parsedMinutes = _parseDurationMinutes(selected.classDuration);
     final mappedDuration = parsedMinutes != null ? _durationFromMinutes(parsedMinutes) : null;
 
     setState(() {
-      _programName = selected.name;
+      _courseNameController.text = selected.name;
       if (selected.frequency.isNotEmpty) {
         _frequency = selected.frequency;
       }
@@ -189,7 +187,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
       monthlyDate: _monthlyDate,
       clientId: _clientId!,
       startSessionNo: maxSessionNo + 1,
-      courseName: _programName,
+      courseName: _courseNameController.text.trim().isEmpty ? null : _courseNameController.text.trim(),
       duration: _duration,
       customDays: _customDays,
     );
@@ -220,7 +218,6 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
 
     final isClientMode = AppModeScope.isClient(context);
 
-    final selectedProgram = _registeredPrograms.any((p) => p.name == _programName) ? _programName : null;
     final startLabel = AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes);
 
     Future<void> pickStartTime() async {
@@ -355,19 +352,36 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                       ),
                       const SizedBox(height: 12),
                       _SearchableSelectField<String>(
-                        label: 'Program',
-                        value: selectedProgram,
-                        displayValue: selectedProgram ?? 'Select',
+                        label: 'Program Template (Optional)',
+                        value: null, // Always allow selecting a template
+                        displayValue: 'Select to auto-fill',
                         enabled: _registeredPrograms.isNotEmpty,
-                        options: _registeredPrograms
-                            .map(
-                              (program) => _OptionItem(
-                                value: program.name,
-                                label: program.name,
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _applyProgramTemplate,
+                        options: [
+                          const _OptionItem(value: '', label: 'Clear'),
+                          ..._registeredPrograms.map(
+                            (program) => _OptionItem(
+                              value: program.name,
+                              label: program.name,
+                            ),
+                          )
+                        ],
+                        onChanged: (v) {
+                          if (v == null || v.isEmpty) return;
+                          _applyProgramTemplate(v);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _courseNameController,
+                        decoration: InputDecoration(
+                          labelText: 'Course Name (Optional)',
+                          hintText: 'e.g. Mathematics 101',
+                          filled: true,
+                          fillColor: scheme.surfaceContainerHighest,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(

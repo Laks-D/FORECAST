@@ -9,6 +9,7 @@ class JoinRequestModel {
     required this.clientFirebaseUid,
     required this.clientName,
     required this.clientPhone,
+    required this.clientEmail,
     required this.status,
     required this.createdAt,
   });
@@ -18,6 +19,7 @@ class JoinRequestModel {
   final String clientFirebaseUid;
   final String clientName;
   final String clientPhone;
+  final String clientEmail;
 
   /// `pending` | `accepted` | `rejected`
   final String status;
@@ -33,6 +35,7 @@ class JoinRequestModel {
       clientFirebaseUid: (data['clientFirebaseUid'] as String?) ?? '',
       clientName: (data['clientName'] as String?) ?? 'Unknown',
       clientPhone: (data['clientPhone'] as String?) ?? '',
+      clientEmail: (data['clientEmail'] as String?) ?? '',
       status: (data['status'] as String?) ?? 'pending',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
@@ -43,6 +46,7 @@ class JoinRequestModel {
         'clientFirebaseUid': clientFirebaseUid,
         'clientName': clientName,
         'clientPhone': clientPhone,
+        'clientEmail': clientEmail,
         'status': status,
         'createdAt': FieldValue.serverTimestamp(),
       };

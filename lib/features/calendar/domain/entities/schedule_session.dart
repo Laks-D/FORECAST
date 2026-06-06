@@ -1,38 +1,4 @@
-enum ProgramType {
-  gbp,
-  payanam,
-  ninertia,
-  becoming,
-  happyHuddle,
-  oneToOneLifeCoaching,
-}
-
-enum SessionDuration {
-  halfHour,
-  oneHour,
-  twoHours,
-  threeHours,
-  wholeDay,
-}
-
-extension ProgramTypeExtension on ProgramType {
-  String get displayName {
-    switch (this) {
-      case ProgramType.gbp:
-        return 'GBP';
-      case ProgramType.payanam:
-        return 'Payanam';
-      case ProgramType.ninertia:
-        return 'Ninertia';
-      case ProgramType.becoming:
-        return 'Becoming';
-      case ProgramType.happyHuddle:
-        return 'Happy Huddle';
-      case ProgramType.oneToOneLifeCoaching:
-        return '1:1 Life Coaching';
-    }
-  }
-}
+// Removed legacy ProgramType enum
 
 extension SessionDurationExtension on SessionDuration {
   String get displayName {
@@ -80,7 +46,6 @@ class ScheduleSession {
 
   final int? rating;
   final String? comments;
-  final ProgramType? programType;
   final String? courseName;
   final SessionDuration? duration;
   final String? programEnrollmentId;
@@ -97,7 +62,6 @@ class ScheduleSession {
     this.read = false,
     this.notifiedTwoHour = false,
     this.notifiedFiveMin = false,
-    this.programType,
     this.courseName,
     this.duration,
     this.programEnrollmentId,
@@ -126,7 +90,6 @@ class ScheduleSession {
       read: read ?? this.read,
       notifiedTwoHour: notifiedTwoHour ?? this.notifiedTwoHour,
       notifiedFiveMin: notifiedFiveMin ?? this.notifiedFiveMin,
-      programType: programType,
       courseName: courseName,
       duration: duration ?? this.duration,
       programEnrollmentId: programEnrollmentId,
@@ -147,7 +110,6 @@ class ScheduleSession {
         'read': read,
         'notifiedTwoHour': notifiedTwoHour,
         'notifiedFiveMin': notifiedFiveMin,
-        if (programType != null) 'programType': programType!.name,
         if (courseName != null) 'courseName': courseName,
         if (duration != null) 'duration': duration!.name,
         if (programEnrollmentId != null)
@@ -167,13 +129,7 @@ class ScheduleSession {
       read: (json['read'] as bool?) ?? false,
       notifiedTwoHour: (json['notifiedTwoHour'] as bool?) ?? false,
       notifiedFiveMin: (json['notifiedFiveMin'] as bool?) ?? false,
-      programType: json['programType'] != null
-          ? ProgramType.values.firstWhere(
-              (e) => e.name == json['programType'],
-              orElse: () => ProgramType.gbp,
-            )
-          : null,
-      courseName: json['courseName'] as String?,
+      courseName: (json['courseName'] as String?) ?? _mapLegacyProgramType(json['programType'] as String?),
       duration: json['duration'] != null
           ? SessionDuration.values.firstWhere(
               (e) => e.name == json['duration'],
@@ -182,5 +138,25 @@ class ScheduleSession {
           : null,
       programEnrollmentId: json['programEnrollmentId'] as String?,
     );
+  }
+
+  static String? _mapLegacyProgramType(String? legacyName) {
+    if (legacyName == null) return null;
+    switch (legacyName) {
+      case 'gbp':
+        return 'GBP';
+      case 'payanam':
+        return 'Payanam';
+      case 'ninertia':
+        return 'Ninertia';
+      case 'becoming':
+        return 'Becoming';
+      case 'happyHuddle':
+        return 'Happy Huddle';
+      case 'oneToOneLifeCoaching':
+        return '1:1 Life Coaching';
+      default:
+        return legacyName;
+    }
   }
 }
