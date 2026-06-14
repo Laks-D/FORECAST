@@ -13,6 +13,7 @@ import '../../../payment/domain/repositories/payment_repository.dart';
 import '../../../payment/data/firestore_payment_repository.dart';
 import '../../domain/entities/client_event.dart';
 import '../client_event_repository.dart';
+import '../../../audit/audit_service.dart';
 
 /// Firestore-backed client datasource.
 class ClientLocalDataSource {
@@ -100,6 +101,12 @@ class ClientLocalDataSource {
 
     unawaited(_persistClient(client, deleted: true));
     unawaited(_doc(entityId).then((ref) => ref?.delete()));
+    AuditService.instance.log(
+      action: 'delete',
+      entity: 'client',
+      entityId: entityId,
+      before: {'name': original.name},
+    );
   }
 
   /// Hard-deletes a client that is already in the soft-deleted list.
@@ -198,6 +205,13 @@ class ClientLocalDataSource {
       amount: amount,
       dueDate: due,
       note: note,
+    );
+    // Phase 8 audit.
+    AuditService.instance.log(
+      action: 'create',
+      entity: 'payment',
+      entityId: paymentId,
+      after: {'clientId': entityId, 'amount': amount, 'dueDate': due.toIso8601String()},
     );
   }
 
@@ -731,6 +745,12 @@ class ClientLocalDataSource {
     _data.add(client);
 
     unawaited(_persistClient(client));
+    AuditService.instance.log(
+      action: 'create',
+      entity: 'client',
+      entityId: client.id,
+      after: {'name': name, if (firebaseUid != null) 'firebaseUid': firebaseUid},
+    );
   }
 
   /* ================= PERSISTENCE ================= */

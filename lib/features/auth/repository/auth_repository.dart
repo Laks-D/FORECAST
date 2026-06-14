@@ -5,6 +5,7 @@ import '../../../core/auth/google_auth.dart';
 import '../../../core/firebase/firestore_db.dart';
 import '../../../core/storage/admin_profile_storage.dart';
 import '../data/username_repository.dart';
+import '../../audit/audit_service.dart';
 
 /// All Firebase Auth + Firestore calls for the auth flow.
 ///
@@ -199,6 +200,8 @@ class AuthRepository {
       {'lastLoginAt': FieldValue.serverTimestamp()},
       SetOptions(merge: true),
     ).ignore();
+    AuditService.instance.log(
+        action: 'login', entity: 'user', entityId: user.uid);
     return user;
   }
 

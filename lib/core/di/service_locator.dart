@@ -39,6 +39,7 @@ import '../../features/payment/data/firestore_payment_repository.dart';
 import '../../features/client/data/client_event_repository.dart';
 import '../../features/course/data/program_repository.dart';
 import '../../features/calendar/data/recurrence_rule_repository.dart';
+import '../../features/audit/audit_log_repository.dart';
 import '../../features/auth/data/username_repository.dart';
 import '../../features/notifications/data/fcm_token_repository.dart';
 import '../../features/notifications/data/notification_record_repository.dart';
@@ -160,6 +161,9 @@ Future<void> setupServiceLocator() async {
   );
   sl.registerLazySingleton<RecurrenceRuleRepository>(
     () => FirestoreRecurrenceRuleRepository(),
+  );
+  sl.registerLazySingleton<AuditLogRepository>(
+    () => FirestoreAuditLogRepository(),
   );
   sl.registerLazySingleton<UsernameRepository>(
     () => FirestoreUsernameRepository(),
