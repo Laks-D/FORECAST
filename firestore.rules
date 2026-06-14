@@ -81,6 +81,16 @@ service cloud.firestore {
         allow read, write: if isUser(uid);
       }
 
+      // ── payments ───────────────────────────────────────────────────────
+      // First-class payment ledger (replaces embedded client timeline[]).
+      // Tutor (owner) has full access. Enrolled student may read only their
+      // own payments, scoped by the denormalized firebaseUid field.
+      match /payments/{paymentId} {
+        allow read, write: if isUser(uid);
+        allow read: if isEnrolledWith(uid)
+          && resource.data.firebaseUid == request.auth.uid;
+      }
+
       // ── enrollment ─────────────────────────────────────────────────────
       // Written by:
       //   a) The TUTOR when they accept a join request (tutorId == doc key).

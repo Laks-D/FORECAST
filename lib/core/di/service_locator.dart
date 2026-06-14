@@ -33,6 +33,10 @@ import '../../features/calendar/bloc/sessions_cubit.dart';
 /* ================= NAVIGATION – PRESENTATION ================= */
 import '../../features/navigation/bloc/nav_modules_cubit.dart';
 
+/* ================= SCHEMA MIGRATION – NEW REPOSITORIES ================= */
+import '../../features/payment/domain/repositories/payment_repository.dart';
+import '../../features/payment/data/firestore_payment_repository.dart';
+
 final GetIt sl = GetIt.instance;
 
 bool _isSetup = false;
@@ -134,6 +138,13 @@ Future<void> setupServiceLocator() async {
   // when opening routes / bottom sheets.
   sl.registerLazySingleton<NavModulesCubit>(
     () => NavModulesCubit(),
+  );
+
+  /* ================= SCHEMA MIGRATION – NEW REPOSITORIES ================= */
+  // Additive: registered for new read/dual-write paths. Existing features are
+  // unaffected until they are explicitly switched over.
+  sl.registerLazySingleton<PaymentRepository>(
+    () => FirestorePaymentRepository(),
   );
 
   _isSetup = true;
