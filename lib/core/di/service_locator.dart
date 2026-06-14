@@ -37,6 +37,7 @@ import '../../features/navigation/bloc/nav_modules_cubit.dart';
 import '../../features/payment/domain/repositories/payment_repository.dart';
 import '../../features/payment/data/firestore_payment_repository.dart';
 import '../../features/client/data/client_event_repository.dart';
+import '../../features/course/data/program_repository.dart';
 import '../../features/auth/data/username_repository.dart';
 import '../../features/notifications/data/fcm_token_repository.dart';
 import '../../features/notifications/data/notification_record_repository.dart';
@@ -152,6 +153,9 @@ Future<void> setupServiceLocator() async {
   );
   sl.registerLazySingleton<ClientEventRepository>(
     () => FirestoreClientEventRepository(),
+  );
+  sl.registerLazySingleton<ProgramRepository>(
+    () => FirestoreProgramRepository(),
   );
   sl.registerLazySingleton<UsernameRepository>(
     () => FirestoreUsernameRepository(),

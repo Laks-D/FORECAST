@@ -1,4 +1,10 @@
+import 'dart:async';
+
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../services/user_firestore_sync.dart';
+import '../../features/course/data/program_repository.dart';
+import '../../features/course/domain/entities/program.dart';
 
 class RegisteredProgram {
   const RegisteredProgram({
@@ -59,6 +65,32 @@ class ProgramCatalogStorage {
     await UserFirestoreSync.instance.patchSettingsNow({
       _settingsKey: cleaned.map((p) => p.toJson()).toList(growable: false),
     });
+    // Phase 5 dual-write: mirror into the programs sub-collection (settings
+    // array stays the read source). Guarded.
+    unawaited(_mirrorToProgramsCollection(cleaned));
+  }
+
+  static Future<void> _mirrorToProgramsCollection(
+      List<RegisteredProgram> programs) async {
+    try {
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (uid.isEmpty) return;
+      final mapped = programs
+          .map((p) => Program(
+                programId: Program.slug(p.name),
+                tutorId: uid,
+                name: p.name,
+                description: p.description,
+                frequency: p.frequency,
+                numberOfClasses: p.numberOfClasses,
+                classDuration: p.classDuration,
+                customDays: p.customDays,
+              ))
+          .toList(growable: false);
+      await FirestoreProgramRepository().replaceAll(mapped);
+    } catch (_) {
+      // Non-critical mirror.
+    }
   }
 
   static List<Map<String, dynamic>> toJsonList(List<RegisteredProgram> programs) {

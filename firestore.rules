@@ -99,6 +99,25 @@ service cloud.firestore {
           && resource.data.firebaseUid == request.auth.uid;
       }
 
+      // ── programs ───────────────────────────────────────────────────────
+      // Tutor-only class templates (no student access).
+      match /programs/{programId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── recurrence_rules ───────────────────────────────────────────────
+      // Tutor-only recurring-session definitions.
+      match /recurrence_rules/{ruleId} {
+        allow read, write: if isUser(uid);
+      }
+
+      // ── audit_log ──────────────────────────────────────────────────────
+      // Append-only action log. Owner may create + read; never mutate/delete.
+      match /audit_log/{logId} {
+        allow read, create: if isUser(uid);
+        allow update, delete: if false;
+      }
+
       // ── enrollment ─────────────────────────────────────────────────────
       // Written by:
       //   a) The TUTOR when they accept a join request (tutorId == doc key).
