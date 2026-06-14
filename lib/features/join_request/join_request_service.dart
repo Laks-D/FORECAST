@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../core/firebase/firestore_db.dart';
+import 'enrollment_payload.dart';
 import 'join_request_model.dart';
 
 /// Service for all Firestore operations on the `join_requests` collection.
@@ -115,10 +116,13 @@ class JoinRequestService {
         .collection('enrollment')
         .doc(tutorId)
         .set({
-      'tutorId': tutorId,
-      'tutorName': tutorName,
-      'status': 'enrolled',
-      'joinRequestId': docId,
+      ...buildEnrollmentPayload(
+        tutorId: tutorId,
+        studentUid: studentUid,
+        tutorName: tutorName,
+        source: 'qr',
+        joinRequestId: docId,
+      ),
       'enrolledAt': FieldValue.serverTimestamp(),
     });
   }

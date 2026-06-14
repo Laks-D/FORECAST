@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../firebase/firestore_db.dart';
+import '../../features/join_request/enrollment_payload.dart';
 import 'app_mode.dart';
 
 class StudentEnrollmentResolver {
@@ -128,9 +129,13 @@ class StudentEnrollmentResolver {
         .collection('enrollment')
         .doc(tutorId)
         .set({
-      'tutorId': tutorId,
-      'tutorName': 'Tutor',
-      'status': 'enrolled',
+      ...buildEnrollmentPayload(
+        tutorId: tutorId,
+        studentUid: uid,
+        tutorName: 'Tutor',
+        source: 'orphan_match',
+      ),
+      'enrolledAt': FieldValue.serverTimestamp(),
     });
 
     if (clientDocRef != null) {
