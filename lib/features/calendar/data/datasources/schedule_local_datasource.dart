@@ -57,29 +57,43 @@ class ScheduleLocalDataSource {
   // ---------------------------------------------------------------------------
   Stream<List<ScheduleSession>> _watchSessionsForTutor(
       String tutorId, String uid) {
-    // We use snapshots() so that if the Tutor's app writes the client profile
-    // *after* the enrollment document triggers this stream (race condition),
-    // we still pick it up instantly.
-    return firestoreDb
-        .collection('users')
-        .doc(tutorId)
-        .collection('clients')
-        .where('firebaseUid', isEqualTo: uid)
-        .limit(1)
-        .snapshots()
-        .asyncExpand((uidSnap) {
-      if (uidSnap.docs.isNotEmpty) {
-        final clientId = uidSnap.docs.first.id;
-        return _sessionsStreamForClient(tutorId, clientId);
-      } else {
-        // If fast-path fails, fallback to checking email/phone via a one-off
-        // get() to see if we need to auto-patch. If we do patch, the
-        // snapshot listener above will trigger again natively!
-        return Stream.fromFuture(_attemptAutoPatch(tutorId, uid)).asyncExpand((_) {
-          return Stream.value(const <ScheduleSession>[]);
+    StreamController<List<ScheduleSession>>? controller;
+    StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? clientSub;
+    StreamSubscription<List<ScheduleSession>>? sessionsSub;
+
+    controller = StreamController<List<ScheduleSession>>(
+      onListen: () {
+        clientSub = firestoreDb
+            .collection('users')
+            .doc(tutorId)
+            .collection('clients')
+            .where('firebaseUid', isEqualTo: uid)
+            .limit(1)
+            .snapshots()
+            .listen((uidSnap) {
+          if (uidSnap.docs.isNotEmpty) {
+            final clientId = uidSnap.docs.first.id;
+            sessionsSub?.cancel();
+            sessionsSub = _sessionsStreamForClient(tutorId, clientId).listen(
+              (sessions) {
+                if (!controller!.isClosed) controller!.add(sessions);
+              },
+            );
+          } else {
+            sessionsSub?.cancel();
+            _attemptAutoPatch(tutorId, uid).then((_) {
+              if (!controller!.isClosed) controller!.add(const <ScheduleSession>[]);
+            });
+          }
         });
-      }
-    });
+      },
+      onCancel: () {
+        clientSub?.cancel();
+        sessionsSub?.cancel();
+      },
+    );
+
+    return controller.stream;
   }
 
   Future<void> _attemptAutoPatch(String tutorId, String uid) async {

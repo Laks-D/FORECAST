@@ -1,5 +1,12 @@
 // Removed legacy ProgramType enum
 
+enum SessionDuration {
+  halfHour,
+  oneHour,
+  twoHours,
+  threeHours,
+  wholeDay,
+}
 extension SessionDurationExtension on SessionDuration {
   String get displayName {
     switch (this) {
