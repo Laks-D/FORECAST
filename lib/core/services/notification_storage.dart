@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'user_firestore_sync.dart';
+import '../../features/notifications/data/notification_record_repository.dart';
 
 /// Types of in-app notifications.
 enum AppNotificationType { sessionReminder, paymentReminder, general }
@@ -103,6 +106,19 @@ class NotificationStorage {
   static Future<void> saveRecords(List<AppNotification> records) async {
     final json = records.map((e) => e.toJson()).toList(growable: false);
     await UserFirestoreSync.instance.patchSettingsNow({_recordsKey: json});
+    // Dual-write to the notifications sub-collection (additive; settings array
+    // remains the read source until the UI is switched over). Guarded.
+    unawaited(_mirrorToSubcollection(records));
+  }
+
+  static Future<void> _mirrorToSubcollection(
+      List<AppNotification> records) async {
+    try {
+      if (records.isEmpty) return;
+      await FirestoreNotificationRecordRepository().upsertAll(records);
+    } catch (_) {
+      // Non-critical mirror.
+    }
   }
 
   static Future<void> clearRecords() async {

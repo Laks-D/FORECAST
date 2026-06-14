@@ -38,6 +38,7 @@ import '../../features/payment/domain/repositories/payment_repository.dart';
 import '../../features/payment/data/firestore_payment_repository.dart';
 import '../../features/auth/data/username_repository.dart';
 import '../../features/notifications/data/fcm_token_repository.dart';
+import '../../features/notifications/data/notification_record_repository.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -153,6 +154,9 @@ Future<void> setupServiceLocator() async {
   );
   sl.registerLazySingleton<FcmTokenRepository>(
     () => FirestoreFcmTokenRepository(),
+  );
+  sl.registerLazySingleton<NotificationRecordRepository>(
+    () => FirestoreNotificationRecordRepository(),
   );
 
   _isSetup = true;
