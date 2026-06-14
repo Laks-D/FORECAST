@@ -19,6 +19,7 @@ import '../../client/presentation/bloc/client_event.dart';
 import '../../dashboard/ui/dashboard_screen.dart';
 import '../../join_request/bloc/join_request_listener_cubit.dart';
 import '../../navigation/bloc/nav_modules_cubit.dart';
+import '../../notifications/data/fcm_token_service.dart';
 
 class LandingScreen extends StatefulWidget {
   const LandingScreen({super.key});
@@ -85,6 +86,8 @@ class _LandingScreenState extends State<LandingScreen> {
               // Fix C: clear enrollment cache so the next sign-in always
               // re-fetches the correct tutor UID from Firestore.
               StudentEnrollmentResolver.invalidateCache();
+              // Forget the FCM-registered uid so the next user re-registers.
+              FcmTokenService.instance.reset();
               // Bump generation so AuthGate is always a fresh instance and
               // its initState reliably reads any pending signup state.
               if (_previousUid != null) {
@@ -104,6 +107,9 @@ class _LandingScreenState extends State<LandingScreen> {
               _invalidateRolesCache();
             }
             _previousUid = user.uid;
+
+            // Register this device's FCM token (guarded; deduped per uid).
+            FcmTokenService.instance.registerCurrentDevice();
 
             // ── Role check → dashboard ─────────────────────────────────────
             return BlocBuilder<AppModeCubit, AppModeState>(

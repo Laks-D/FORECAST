@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/auth/google_auth.dart';
 import '../../../core/firebase/firestore_db.dart';
 import '../../../core/storage/admin_profile_storage.dart';
+import '../data/username_repository.dart';
 
 /// All Firebase Auth + Firestore calls for the auth flow.
 ///
@@ -80,6 +81,10 @@ class AuthRepository {
       userName: fullName.trim(),
       userEmail: email.trim(),
     );
+
+    // Claim a username -> uid mapping (guarded; never blocks signup).
+    await FirestoreUsernameRepository()
+        .register(uid: user.uid, username: email.split('@').first);
 
     await FirebaseAuth.instance.signOut();
   }
@@ -330,6 +335,14 @@ class AuthRepository {
     }
 
     await AdminProfileStorage.save(userName: name, userEmail: email);
+
+    // Claim a username -> uid mapping (guarded; never blocks signup).
+    final unameSeed = email.split('@').first;
+    await FirestoreUsernameRepository().register(
+      uid: user.uid,
+      username: unameSeed.isNotEmpty ? unameSeed : name,
+    );
+
     await FirebaseAuth.instance.signOut();
   }
 

@@ -36,6 +36,8 @@ import '../../features/navigation/bloc/nav_modules_cubit.dart';
 /* ================= SCHEMA MIGRATION – NEW REPOSITORIES ================= */
 import '../../features/payment/domain/repositories/payment_repository.dart';
 import '../../features/payment/data/firestore_payment_repository.dart';
+import '../../features/auth/data/username_repository.dart';
+import '../../features/notifications/data/fcm_token_repository.dart';
 
 final GetIt sl = GetIt.instance;
 
@@ -145,6 +147,12 @@ Future<void> setupServiceLocator() async {
   // unaffected until they are explicitly switched over.
   sl.registerLazySingleton<PaymentRepository>(
     () => FirestorePaymentRepository(),
+  );
+  sl.registerLazySingleton<UsernameRepository>(
+    () => FirestoreUsernameRepository(),
+  );
+  sl.registerLazySingleton<FcmTokenRepository>(
+    () => FirestoreFcmTokenRepository(),
   );
 
   _isSetup = true;
