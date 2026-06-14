@@ -11,17 +11,25 @@ import '../../../../core/firebase/firestore_db.dart';
 import '../../../payment/domain/entities/payment.dart';
 import '../../../payment/domain/repositories/payment_repository.dart';
 import '../../../payment/data/firestore_payment_repository.dart';
+import '../../domain/entities/client_event.dart';
+import '../client_event_repository.dart';
 
 /// Firestore-backed client datasource.
 class ClientLocalDataSource {
-  ClientLocalDataSource({PaymentRepository? payments})
-      : _payments = payments ?? FirestorePaymentRepository();
+  ClientLocalDataSource({
+    PaymentRepository? payments,
+    ClientEventRepository? events,
+  })  : _payments = payments ?? FirestorePaymentRepository(),
+        _events = events ?? FirestoreClientEventRepository();
 
   /// Phase 3 dual-write target. The legacy client `timeline[]` remains the
   /// source of truth for reads; every payment lifecycle event is additionally
   /// mirrored into the first-class `payments` sub-collection. Guarded so a
   /// mirror failure never affects the existing flow.
   final PaymentRepository _payments;
+
+  /// Phase 4 dual-write target for notes + status changes (not payments).
+  final ClientEventRepository _events;
 
   /// Monotonic counter to guarantee unique IDs even in tight loops.
   static int _idSeq = 0;
@@ -115,15 +123,52 @@ class ClientLocalDataSource {
   void addNote(String entityId, String note, {DateTime? createdAt}) {
     final entity = _data.firstWhere((e) => e.id == entityId);
 
+    final eventId = _nextId();
+    final at = createdAt ?? DateTime.now();
     entity.timeline.add(
       ClientTimelineEvent.note(
-        id: _nextId(),
+        id: eventId,
         note: note,
-        createdAt: createdAt ?? DateTime.now(),
+        createdAt: at,
       ),
     );
 
     unawaited(_persistClient(entity));
+    // Phase 4 dual-write: mirror the note into client_events.
+    _mirrorClientEvent(
+      eventId: eventId,
+      entity: entity,
+      type: ClientEventType.note,
+      note: note,
+      at: at,
+    );
+  }
+
+  /* ================= CLIENT_EVENTS DUAL-WRITE (Phase 4) ================= */
+
+  void _mirrorClientEvent({
+    required String eventId,
+    required Client entity,
+    required ClientEventType type,
+    String? note,
+    String? status,
+    required DateTime at,
+  }) {
+    try {
+      if (AppModeConfig.isClient) return;
+      final tutorUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (tutorUid.isEmpty) return;
+      unawaited(_events.add(ClientEvent(
+        eventId: eventId,
+        clientId: entity.id,
+        tutorId: tutorUid,
+        firebaseUid: entity.firebaseUid,
+        type: type,
+        note: note,
+        status: status,
+        createdAt: at,
+      )));
+    } catch (_) {}
   }
 
   void addPayment({
@@ -211,11 +256,13 @@ class ClientLocalDataSource {
   }) {
     final entity = _data.firstWhere((e) => e.id == entityId);
 
+    final eventId = _nextId();
+    final at = createdAt ?? DateTime.now();
     entity.timeline.add(
       ClientTimelineEvent.statusChange(
-        id: _nextId(),
+        id: eventId,
         status: status,
-        createdAt: createdAt ?? DateTime.now(),
+        createdAt: at,
         refId: refId,
       ),
     );
@@ -223,6 +270,18 @@ class ClientLocalDataSource {
     unawaited(_persistClient(entity));
     // Phase 3 dual-write: mirror payment-status changes onto the payment doc.
     _mirrorPaymentStatus(refId, status);
+    // Phase 4 dual-write: mirror genuine client status changes (Active /
+    // Inactive / On Hold / Pending) into client_events. Payment statuses are
+    // handled by the payments mirror above, not here.
+    if (!_paymentStatuses.contains(status.trim().toLowerCase())) {
+      _mirrorClientEvent(
+        eventId: eventId,
+        entity: entity,
+        type: ClientEventType.statusChanged,
+        status: status,
+        at: at,
+      );
+    }
   }
 
   void clearPaymentStatusesForDate({

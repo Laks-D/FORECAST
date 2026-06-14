@@ -91,6 +91,14 @@ service cloud.firestore {
           && resource.data.firebaseUid == request.auth.uid;
       }
 
+      // ── client_events ──────────────────────────────────────────────────
+      // Notes / status changes (non-payment). Same access shape as payments.
+      match /client_events/{eventId} {
+        allow read, write: if isUser(uid);
+        allow read: if isEnrolledWith(uid)
+          && resource.data.firebaseUid == request.auth.uid;
+      }
+
       // ── enrollment ─────────────────────────────────────────────────────
       // Written by:
       //   a) The TUTOR when they accept a join request (tutorId == doc key).
