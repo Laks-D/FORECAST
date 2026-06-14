@@ -8,9 +8,21 @@ import '../../domain/entities/client_timeline_event.dart';
 import '../../../../core/app/app_mode.dart';
 import '../../../../core/app/student_enrollment_resolver.dart';
 import '../../../../core/firebase/firestore_db.dart';
+import '../../../payment/domain/entities/payment.dart';
+import '../../../payment/domain/repositories/payment_repository.dart';
+import '../../../payment/data/firestore_payment_repository.dart';
 
 /// Firestore-backed client datasource.
 class ClientLocalDataSource {
+  ClientLocalDataSource({PaymentRepository? payments})
+      : _payments = payments ?? FirestorePaymentRepository();
+
+  /// Phase 3 dual-write target. The legacy client `timeline[]` remains the
+  /// source of truth for reads; every payment lifecycle event is additionally
+  /// mirrored into the first-class `payments` sub-collection. Guarded so a
+  /// mirror failure never affects the existing flow.
+  final PaymentRepository _payments;
+
   /// Monotonic counter to guarantee unique IDs even in tight loops.
   static int _idSeq = 0;
 
@@ -122,16 +134,73 @@ class ClientLocalDataSource {
   }) {
     final entity = _data.firstWhere((e) => e.id == entityId);
 
+    final paymentId = _nextId();
+    final due = scheduledAt ?? DateTime.now();
     entity.timeline.add(
       ClientTimelineEvent.payment(
-        id: _nextId(),
+        id: paymentId,
         amount: amount,
         note: note,
-        createdAt: scheduledAt ?? DateTime.now(),
+        createdAt: due,
       ),
     );
 
     unawaited(_persistClient(entity));
+    // Phase 3 dual-write: mirror into the payments sub-collection.
+    _mirrorPaymentAdd(
+      paymentId: paymentId,
+      entity: entity,
+      amount: amount,
+      dueDate: due,
+      note: note,
+    );
+  }
+
+  /* ================= PAYMENTS DUAL-WRITE (Phase 3) ================= */
+
+  void _mirrorPaymentAdd({
+    required String paymentId,
+    required Client entity,
+    required double amount,
+    required DateTime dueDate,
+    String? note,
+  }) {
+    try {
+      if (AppModeConfig.isClient) return; // only the tutor owns the ledger
+      final tutorUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (tutorUid.isEmpty) return;
+      unawaited(_payments.add(Payment(
+        paymentId: paymentId,
+        tutorId: tutorUid,
+        clientId: entity.id,
+        firebaseUid: entity.firebaseUid,
+        amount: amount,
+        currency: entity.currency,
+        status: PaymentStatus.unpaid,
+        dueDate: dueDate,
+        note: note,
+      )));
+    } catch (_) {
+      // Non-critical mirror.
+    }
+  }
+
+  static const _paymentStatuses = {
+    'paid',
+    'unpaid',
+    'will pay later',
+    'paid fully',
+  };
+
+  void _mirrorPaymentStatus(String? paymentId, String status) {
+    try {
+      if (paymentId == null || paymentId.isEmpty) return;
+      if (AppModeConfig.isClient) return;
+      // Only mirror genuine payment-status changes (client status changes like
+      // Active/Inactive also flow through here but carry no payment refId match).
+      if (!_paymentStatuses.contains(status.trim().toLowerCase())) return;
+      unawaited(_payments.setStatus(paymentId, PaymentStatus.fromName(status)));
+    } catch (_) {}
   }
 
   void addStatusChange({
@@ -152,6 +221,8 @@ class ClientLocalDataSource {
     );
 
     unawaited(_persistClient(entity));
+    // Phase 3 dual-write: mirror payment-status changes onto the payment doc.
+    _mirrorPaymentStatus(refId, status);
   }
 
   void clearPaymentStatusesForDate({
@@ -242,6 +313,41 @@ class ClientLocalDataSource {
     }
 
     unawaited(_persistClient(entity));
+    // Phase 3 dual-write: mirror the rescheduled due date + status.
+    _mirrorPaymentReschedule(
+      paymentId: paymentId,
+      entity: entity,
+      amount: old.amount ?? 0,
+      newDue: newDay,
+      paid: hadPaidMarker,
+      note: old.note,
+    );
+  }
+
+  void _mirrorPaymentReschedule({
+    required String paymentId,
+    required Client entity,
+    required double amount,
+    required DateTime newDue,
+    required bool paid,
+    String? note,
+  }) {
+    try {
+      if (AppModeConfig.isClient) return;
+      final tutorUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      if (tutorUid.isEmpty) return;
+      unawaited(_payments.update(Payment(
+        paymentId: paymentId,
+        tutorId: tutorUid,
+        clientId: entity.id,
+        firebaseUid: entity.firebaseUid,
+        amount: amount,
+        currency: entity.currency,
+        status: paid ? PaymentStatus.paid : PaymentStatus.unpaid,
+        dueDate: newDue,
+        note: note,
+      )));
+    } catch (_) {}
   }
 
   void revertPaidFully({required String entityId}) {
