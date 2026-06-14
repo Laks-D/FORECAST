@@ -57,6 +57,13 @@ class ScheduleSession {
   final SessionDuration? duration;
   final String? programEnrollmentId;
 
+  /// Schema-migration additions (Phase 6). Both nullable + backward-compatible:
+  /// older docs without them parse fine.
+  /// - [programId]: link to the `programs` template this session came from.
+  /// - [recurrenceId]: groups all sessions generated from one recurrence rule.
+  final String? programId;
+  final String? recurrenceId;
+
   ScheduleSession({
     required this.id,
     required this.clientId,
@@ -72,7 +79,13 @@ class ScheduleSession {
     this.courseName,
     this.duration,
     this.programEnrollmentId,
+    this.programId,
+    this.recurrenceId,
   });
+
+  /// Resolved duration in minutes (from the [duration] enum), or null.
+  int? get durationMins =>
+      duration == null ? null : (duration!.hours * 60).round();
 
   ScheduleSession copyWith({
     bool? notifiedTwoHour,
@@ -84,6 +97,8 @@ class ScheduleSession {
     int? rating,
     String? comments,
     SessionDuration? duration,
+    String? programId,
+    String? recurrenceId,
   }) {
     return ScheduleSession(
       id: id,
@@ -100,6 +115,8 @@ class ScheduleSession {
       courseName: courseName,
       duration: duration ?? this.duration,
       programEnrollmentId: programEnrollmentId,
+      programId: programId ?? this.programId,
+      recurrenceId: recurrenceId ?? this.recurrenceId,
     );
   }
 
@@ -121,6 +138,8 @@ class ScheduleSession {
         if (duration != null) 'duration': duration!.name,
         if (programEnrollmentId != null)
           'programEnrollmentId': programEnrollmentId,
+        if (programId != null) 'programId': programId,
+        if (recurrenceId != null) 'recurrenceId': recurrenceId,
       };
 
   factory ScheduleSession.fromJson(Map<String, dynamic> json) {
@@ -144,6 +163,8 @@ class ScheduleSession {
             )
           : null,
       programEnrollmentId: json['programEnrollmentId'] as String?,
+      programId: json['programId'] as String?,
+      recurrenceId: json['recurrenceId'] as String?,
     );
   }
 
