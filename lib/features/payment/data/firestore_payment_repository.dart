@@ -55,6 +55,30 @@ class FirestorePaymentRepository implements PaymentRepository {
   }
 
   @override
+  Future<List<Payment>> getForStudent(String firebaseUid) async {
+    final col = await _col();
+    if (col == null) return const [];
+    final snap = await col.where('firebaseUid', isEqualTo: firebaseUid).get();
+    final list = _map(snap);
+    list.sort((a, b) => b.dueDate.compareTo(a.dueDate));
+    return list;
+  }
+
+  @override
+  Stream<List<Payment>> watchForStudent(String firebaseUid) async* {
+    final col = await _col();
+    if (col == null) {
+      yield const [];
+      return;
+    }
+    yield* col.where('firebaseUid', isEqualTo: firebaseUid).snapshots().map((s) {
+      final list = _map(s);
+      list.sort((a, b) => b.dueDate.compareTo(a.dueDate));
+      return list;
+    });
+  }
+
+  @override
   Future<List<Payment>> getAll() async {
     final col = await _col();
     if (col == null) return const [];

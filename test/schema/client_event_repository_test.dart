@@ -66,6 +66,27 @@ void main() {
           ['old', 'new']);
     });
 
+    test('getForStudent filters by firebaseUid (rule-correct student read)', () async {
+      await repo.add(ClientEvent(
+          eventId: 'e1',
+          clientId: 'c1',
+          tutorId: 'tutor1',
+          firebaseUid: 'studentA',
+          type: ClientEventType.note,
+          note: 'mine',
+          createdAt: DateTime(2026, 1, 1)));
+      await repo.add(ClientEvent(
+          eventId: 'e2',
+          clientId: 'c2',
+          tutorId: 'tutor1',
+          firebaseUid: 'studentB',
+          type: ClientEventType.note,
+          createdAt: DateTime(2026, 1, 1)));
+      final mine = await repo.getForStudent('studentA');
+      expect(mine.length, 1);
+      expect(mine.first.eventId, 'e1');
+    });
+
     test('delete + null uid no-op', () async {
       await repo.add(_e('e1', 'c1'));
       await repo.delete('e1');

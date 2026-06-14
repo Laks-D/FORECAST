@@ -6,8 +6,14 @@ import '../domain/entities/client_event.dart';
 /// Abstraction over the `client_events` sub-collection (notes / status changes
 /// / profile-created). Payments are NOT stored here.
 abstract class ClientEventRepository {
+  /// TUTOR-side read (owner): filter by clientId.
   Future<List<ClientEvent>> getForClient(String clientId);
   Stream<List<ClientEvent>> watchForClient(String clientId);
+
+  /// STUDENT-side read: must filter by `firebaseUid` to satisfy the rule that
+  /// scopes an enrolled student's read by their own denormalized uid.
+  Future<List<ClientEvent>> getForStudent(String firebaseUid);
+
   Future<void> add(ClientEvent event);
   Future<void> delete(String eventId);
 }
@@ -55,6 +61,13 @@ class FirestoreClientEventRepository implements ClientEventRepository {
   }
 
   @override
+  Future<List<ClientEvent>> getForStudent(String firebaseUid) async {
+    final col = await _col();
+    if (col == null) return const [];
+    return _map(await col.where('firebaseUid', isEqualTo: firebaseUid).get());
+  }
+
+  @override
   Future<void> add(ClientEvent event) async {
     final col = await _col();
     if (col == null) return;
@@ -86,6 +99,14 @@ class InMemoryClientEventRepository implements ClientEventRepository {
   @override
   Stream<List<ClientEvent>> watchForClient(String clientId) async* {
     yield await getForClient(clientId);
+  }
+
+  @override
+  Future<List<ClientEvent>> getForStudent(String firebaseUid) async {
+    final list =
+        _store.values.where((e) => e.firebaseUid == firebaseUid).toList();
+    list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return list;
   }
 
   @override

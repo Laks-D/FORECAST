@@ -29,6 +29,20 @@ class InMemoryPaymentRepository implements PaymentRepository {
   }
 
   @override
+  Future<List<Payment>> getForStudent(String firebaseUid) async {
+    final list =
+        _store.values.where((p) => p.firebaseUid == firebaseUid).toList();
+    list.sort((a, b) => b.dueDate.compareTo(a.dueDate));
+    return list;
+  }
+
+  @override
+  Stream<List<Payment>> watchForStudent(String firebaseUid) async* {
+    yield await getForStudent(firebaseUid);
+    yield* _controller.stream.asyncMap((_) => getForStudent(firebaseUid));
+  }
+
+  @override
   Future<List<Payment>> getAll() async {
     final list = _store.values.toList();
     list.sort((a, b) => a.dueDate.compareTo(b.dueDate));

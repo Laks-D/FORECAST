@@ -104,6 +104,29 @@ void main() {
       expect(await nullRepo.getAll(), isEmpty);
     });
 
+    test('getForStudent filters by firebaseUid (rule-correct student read)', () async {
+      await repo.add(Payment(
+          paymentId: 'p1',
+          tutorId: 'tutor1',
+          clientId: 'c1',
+          firebaseUid: 'studentA',
+          amount: 50,
+          status: PaymentStatus.unpaid,
+          dueDate: DateTime(2026, 1, 1)));
+      await repo.add(Payment(
+          paymentId: 'p2',
+          tutorId: 'tutor1',
+          clientId: 'c2',
+          firebaseUid: 'studentB',
+          amount: 50,
+          status: PaymentStatus.unpaid,
+          dueDate: DateTime(2026, 1, 1)));
+      final mine = await repo.getForStudent('studentA');
+      expect(mine.length, 1);
+      expect(mine.first.paymentId, 'p1');
+      expect(await repo.getForStudent('nobody'), isEmpty);
+    });
+
     test('watchForClient streams updates', () async {
       final emissions = <int>[];
       final sub = repo.watchForClient('c1').listen((l) => emissions.add(l.length));
