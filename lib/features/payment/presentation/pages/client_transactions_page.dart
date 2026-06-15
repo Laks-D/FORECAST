@@ -10,12 +10,13 @@ import 'package:snow/design_system/widgets/app_empty_state.dart';
 import 'package:snow/design_system/widgets/app_loading.dart';
 
 import '../../../client/domain/entities/client.dart';
-import '../../../client/domain/entities/client_timeline_event.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/presentation/pages/client_profile_page.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../domain/entities/payment.dart';
+import '../../domain/repositories/payment_repository.dart';
 
 class ClientTransactionsPage extends StatelessWidget {
   const ClientTransactionsPage({
@@ -107,70 +108,83 @@ class ClientTransactionsPage extends StatelessWidget {
               }
 
               final currency = client.currency ?? defaultCurrency;
+              final paymentRepository = context.read<ClientBloc>().paymentRepository;
 
-              final payments = _extractPayments(client);
-              final listItems = _buildMonthGroupedItems(payments);
+              return StreamBuilder<List<Payment>>(
+                stream: AppModeScope.isClient(context)
+                    ? paymentRepository.watchForStudent(client.firebaseUid ?? '')
+                    : paymentRepository.watchForClient(client.id),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return AppLoading(color: onSurface);
+                  }
 
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _HeaderCard(client: client),
-                  const SizedBox(height: 14),
-                  Expanded(
-                    child: payments.isEmpty
-                        ? const Center(
-                            child: AppEmptyState(
-                              message: 'No transactions yet',
-                              icon: Icons.receipt_long_outlined,
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: EdgeInsets.zero,
-                            itemCount: listItems.length,
-                            itemBuilder: (context, index) {
-                              final item = listItems[index];
-                              if (item is _MonthHeaderItem) {
-                                return Padding(
-                                  padding:
-                                      const EdgeInsets.fromLTRB(2, 2, 2, 10),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          item.label,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall
-                                              ?.copyWith(
-                                                color: AppChromeTheme.of(context)
-                                                    .mutedColor,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                      ),
-                                      Text(
-                                        '${currency}${item.total.toStringAsFixed(0)}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w900,
+                  final payments = snapshot.data!.where((p) => p.status == PaymentStatus.paid).toList();
+                  payments.sort((a, b) => b.dueDate.compareTo(a.dueDate));
+                  final listItems = _buildMonthGroupedItems(payments);
+
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _HeaderCard(client: client),
+                      const SizedBox(height: 14),
+                      Expanded(
+                        child: payments.isEmpty
+                            ? const Center(
+                                child: AppEmptyState(
+                                  message: 'No transactions yet',
+                                  icon: Icons.receipt_long_outlined,
+                                ),
+                              )
+                            : ListView.builder(
+                                padding: EdgeInsets.zero,
+                                itemCount: listItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = listItems[index];
+                                  if (item is _MonthHeaderItem) {
+                                    return Padding(
+                                      padding:
+                                          const EdgeInsets.fromLTRB(2, 2, 2, 10),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              item.label,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall
+                                                  ?.copyWith(
+                                                    color: AppChromeTheme.of(context)
+                                                        .mutedColor,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
                                             ),
+                                          ),
+                                          Text(
+                                            '${currency}${item.total.toStringAsFixed(0)}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  ),
-                                );
-                              }
+                                    );
+                                  }
 
-                              final p = (item as _PaymentItem).payment;
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: _TransactionCard(payment: p, currency: currency),
-                              );
-                            },
-                          ),
-                  ),
-                ],
+                                  final p = (item as _PaymentItem).payment;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: _TransactionCard(payment: p, currency: currency),
+                                  );
+                                },
+                              ),
+                      ),
+                    ],
+                  );
+                },
               );
             },
           ),
@@ -187,59 +201,7 @@ class ClientTransactionsPage extends StatelessWidget {
     return null;
   }
 
-  List<_PaymentVM> _extractPayments(Client client) {
-    bool isPaymentPaid(ClientTimelineEvent payment) {
-      final dateKey = AppDateUtils.dateToStr(payment.createdAt);
-
-      final hasMultiplePaymentsThatDay = client.timeline
-              .where((e) =>
-                  e.type == ClientTimelineEventType.payment &&
-                  AppDateUtils.dateToStr(e.createdAt) == dateKey)
-              .length >
-          1;
-
-      // Prefer payment-specific status changes.
-      for (final e in client.timeline.reversed) {
-        if (e.type != ClientTimelineEventType.statusChanged) continue;
-        if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-        if (e.refId != payment.id) continue;
-        final s = e.status?.trim();
-        if (s == 'Paid' || s == 'Paid fully') return true;
-      }
-
-      // Fallback to legacy date-based status changes (no refId).
-      // If there are multiple payments that day, legacy status changes would
-      // incorrectly affect all of them.
-      if (!hasMultiplePaymentsThatDay) {
-        for (final e in client.timeline.reversed) {
-          if (e.type != ClientTimelineEventType.statusChanged) continue;
-          if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-          if (e.refId != null) continue;
-          final s = e.status?.trim();
-          if (s == 'Paid' || s == 'Paid fully') return true;
-        }
-      }
-
-      return false;
-    }
-
-    final out = <_PaymentVM>[];
-    for (final e in client.timeline) {
-      if (e.type != ClientTimelineEventType.payment) continue;
-      if (!isPaymentPaid(e)) continue;
-      out.add(
-        _PaymentVM(
-          amount: e.amount ?? 0,
-          note: e.note,
-          date: e.createdAt,
-        ),
-      );
-    }
-    out.sort((a, b) => b.date.compareTo(a.date));
-    return out;
-  }
-
-  List<_PaymentsListItem> _buildMonthGroupedItems(List<_PaymentVM> payments) {
+  List<_PaymentsListItem> _buildMonthGroupedItems(List<Payment> payments) {
     int ymKey(DateTime d) => d.year * 100 + d.month;
 
     String monthLabel(DateTime d) {
@@ -262,19 +224,19 @@ class ClientTransactionsPage extends StatelessWidget {
 
     final totals = <int, double>{};
     for (final p in payments) {
-      final key = ymKey(p.date);
+      final key = ymKey(p.dueDate);
       totals[key] = (totals[key] ?? 0) + p.amount;
     }
 
     final items = <_PaymentsListItem>[];
     int? lastKey;
     for (final p in payments) {
-      final key = ymKey(p.date);
+      final key = ymKey(p.dueDate);
       if (lastKey != key) {
         lastKey = key;
         items.add(
           _MonthHeaderItem(
-            label: monthLabel(p.date),
+            label: monthLabel(p.dueDate),
             total: totals[key] ?? 0,
           ),
         );
@@ -299,7 +261,7 @@ class _MonthHeaderItem extends _PaymentsListItem {
 class _PaymentItem extends _PaymentsListItem {
   const _PaymentItem(this.payment);
 
-  final _PaymentVM payment;
+  final Payment payment;
 }
 
 class _HeaderCard extends StatelessWidget {
@@ -365,7 +327,7 @@ class _HeaderCard extends StatelessWidget {
 class _TransactionCard extends StatelessWidget {
   const _TransactionCard({required this.payment, required this.currency});
 
-  final _PaymentVM payment;
+  final Payment payment;
   final String currency;
 
   @override
@@ -408,7 +370,7 @@ class _TransactionCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    _formatDate(payment.date),
+                    _formatDate(payment.dueDate),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: chrome.mutedColor,
                           fontWeight: FontWeight.w600,
@@ -435,12 +397,4 @@ class _TransactionCard extends StatelessWidget {
   }
 
   static String _formatDate(DateTime dt) => AppDateUtils.displayDate(dt);
-}
-
-class _PaymentVM {
-  _PaymentVM({required this.amount, required this.note, required this.date});
-
-  final double amount;
-  final String? note;
-  final DateTime date;
 }

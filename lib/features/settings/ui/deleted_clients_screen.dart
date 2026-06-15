@@ -28,10 +28,17 @@ class DeletedClientsScreen extends StatelessWidget {
         elevation: 0,
         title: const Text('Deleted Clients'),
       ),
-      body: BlocBuilder<ClientBloc, ClientState>(
-        builder: (context, _) {
-          final deleted =
-              context.read<ClientBloc>().repository.getDeletedClients();
+      body: FutureBuilder<List<Client>>(
+        future: context.read<ClientBloc>().repository.getDeletedClients(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          
+          final deleted = snapshot.data ?? const [];
 
           if (deleted.isEmpty) {
             return Center(

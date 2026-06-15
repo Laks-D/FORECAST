@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../client/presentation/bloc/client_bloc.dart';
+import '../../../client/presentation/bloc/client_state.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/di/service_locator.dart';
@@ -9,9 +12,10 @@ import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../client/domain/entities/client.dart';
-import '../../../client/domain/usecases/get_clients_usecase.dart';
+
 import '../../bloc/sessions_cubit.dart';
 import '../../domain/entities/schedule_session.dart';
+import '../../domain/entities/recurrence_rule.dart';
 import '../../domain/services/schedule_generator.dart';
 
 class ScheduleSessionsSheet extends StatefulWidget {
@@ -59,7 +63,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   @override
   void initState() {
     super.initState();
-    _clients = sl<GetClientsUseCase>().execute();
+    _clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
     _clientId = widget.presetClientId;
     if (widget.initialCount != null) {
       _sessionCount = widget.initialCount!.clamp(1, 60);
@@ -205,7 +209,31 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     if (_draft.isEmpty) return;
     if (_clashIds.isNotEmpty) return;
 
-    await cubit.addSessions(_draft);
+    if (_sessionCount > 1) {
+      final recurrenceId = 'rr_${DateTime.now().millisecondsSinceEpoch}';
+      
+      // Update draft sessions to have this recurrenceId
+      final linkedDraft = _draft.map((s) => s.copyWith(recurrenceId: recurrenceId)).toList();
+      
+      final rule = RecurrenceRule(
+        recurrenceId: recurrenceId,
+        tutorId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        clientId: _clientId!,
+        programId: null, // We could map `_courseNameController.text` if it matched a program, but simpler to leave null
+        frequency: _frequency.toLowerCase(),
+        interval: 1,
+        byWeekday: _frequency == 'Weekly' ? [_weeklyDay] : const [],
+        startDate: DateTime.parse(linkedDraft.first.date),
+        endDate: DateTime.parse(linkedDraft.last.date),
+        time: linkedDraft.first.time,
+      );
+      
+      // I need to import RecurrenceRule and FirebaseAuth.
+      await cubit.addRecurringSessions(rule, linkedDraft);
+    } else {
+      await cubit.addSessions(_draft);
+    }
+    
     if (!mounted) return;
     Navigator.of(context).pop();
   }

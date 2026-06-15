@@ -8,7 +8,7 @@ import 'package:flutter/foundation.dart'
 ///
 /// Example:
 /// ```dart
-/// import 'firebase_options_prod.dart';
+/// import 'firebase_options.dart';
 /// // ...
 /// await Firebase.initializeApp(
 ///   options: DefaultFirebaseOptions.currentPlatform,
@@ -30,10 +30,7 @@ class DefaultFirebaseOptions {
           'you can reconfigure this by running the FlutterFire CLI again.',
         );
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -47,31 +44,39 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions web = FirebaseOptions(
-    apiKey: 'AIzaSyBg2ts_e1SDsP4c4VHhFchV8t2dWXcp7JE',
-    appId: '1:936056592369:web:425c1ddea0460004861650',
-    messagingSenderId: '936056592369',
-    projectId: 'genericapp-prod',
-    authDomain: 'genericapp-prod.firebaseapp.com',
-    storageBucket: 'genericapp-prod.firebasestorage.app',
-    measurementId: 'G-HC53YDG4WF',
+    apiKey: 'AIzaSyDBAX_CHFBmAqT4-NyJw0VFfs9Z8GYLJnY',
+    appId: '1:25215427677:web:6d89faaf6ed1851e5c19b4',
+    messagingSenderId: '25215427677',
+    projectId: 'snow-appifybiz',
+    authDomain: 'snow-appifybiz.firebaseapp.com',
+    storageBucket: 'snow-appifybiz.firebasestorage.app',
+    measurementId: 'G-Z6HHLVYTWC',
   );
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyD1Fh0dAbxs8Lj_asG0Ui2aM937ZfshBhM',
-    appId: '1:936056592369:android:6ec8d1e1e298fde6861650',
-    messagingSenderId: '936056592369',
-    projectId: 'genericapp-prod',
-    storageBucket: 'genericapp-prod.firebasestorage.app',
+    apiKey: 'AIzaSyCKAFV6Qulh_x746-byURZfSZFvTKf2HFI',
+    appId: '1:25215427677:android:2175a60a4e9a86c35c19b4',
+    messagingSenderId: '25215427677',
+    projectId: 'snow-appifybiz',
+    storageBucket: 'snow-appifybiz.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAXj884grWTR_esXYrBXTTO3EqNY0fc4nE',
-    appId: '1:936056592369:ios:9eef809a9cd1b669861650',
-    messagingSenderId: '936056592369',
-    projectId: 'genericapp-prod',
-    storageBucket: 'genericapp-prod.firebasestorage.app',
-    iosClientId: '936056592369-7aau6ckpp7sf9t052cuubasusgglp12p.apps.googleusercontent.com',
+    apiKey: 'AIzaSyCWEMK833XuDhcswSzuyLZbSTT-S7QHpi8',
+    appId: '1:25215427677:ios:60095104ce4e6c485c19b4',
+    messagingSenderId: '25215427677',
+    projectId: 'snow-appifybiz',
+    storageBucket: 'snow-appifybiz.firebasestorage.app',
     iosBundleId: 'com.snow.app',
   );
 
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyDBAX_CHFBmAqT4-NyJw0VFfs9Z8GYLJnY',
+    appId: '1:25215427677:web:d3e41dc761b6f27d5c19b4',
+    messagingSenderId: '25215427677',
+    projectId: 'snow-appifybiz',
+    authDomain: 'snow-appifybiz.firebaseapp.com',
+    storageBucket: 'snow-appifybiz.firebasestorage.app',
+    measurementId: 'G-ZGHEDZ5GMX',
+  );
 }
