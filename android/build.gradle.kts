@@ -3,6 +3,7 @@ allprojects {
         google()
         mavenCentral()
     }
+    extra["firebase_bom_version"] = "33.8.0"
 }
 
 // Some Flutter plugins (notably some FlutterFire modules) still hard-code an
