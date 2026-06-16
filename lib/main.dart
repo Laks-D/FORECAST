@@ -14,17 +14,11 @@ import 'core/services/deep_link_service.dart';
 import 'core/profile/user_profile_cubit.dart';
 import 'design_system/theme/app_theme.dart';
 import 'design_system/theme/app_chrome_theme.dart';
-// Flavour-aware Firebase options.
-// Run dev:  flutter run
-// Run prod: flutter run --dart-define=FLAVOR=prod
-import 'firebase_options_dev.dart' as dev_options;
-import 'firebase_options_prod.dart' as prod_options;
+import 'firebase_options.dart';
 import 'features/landing/ui/landing_screen.dart';
 import 'features/calendar/bloc/sessions_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_state.dart';
-
-const _flavor = String.fromEnvironment('FLAVOR', defaultValue: 'dev');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -35,11 +29,9 @@ Future<void> runConfiguredApp({AppMode? forcedMode}) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (forcedMode != null) AppModeConfig.mode = forcedMode;
   await Firebase.initializeApp(
-    options: _flavor == 'prod'
-        ? prod_options.DefaultFirebaseOptions.currentPlatform
-        : dev_options.DefaultFirebaseOptions.currentPlatform,
+    options: DefaultFirebaseOptions.currentPlatform,
   );
-  debugPrint('🔥 Firebase started — flavor: $_flavor');
+  debugPrint('🔥 Firebase started successfully!');
 
   if (kIsWeb) {
     firestoreDb.settings = const Settings(

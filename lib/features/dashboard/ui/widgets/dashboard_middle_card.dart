@@ -7,7 +7,8 @@ import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../calendar/domain/entities/schedule_session.dart';
-import '../../../client/domain/usecases/get_clients_usecase.dart';
+import '../../../client/presentation/bloc/client_bloc.dart';
+import '../../../client/presentation/bloc/client_state.dart';
 import '../../../../core/utils/date_utils.dart';
 
 class DashboardMiddleCard extends StatelessWidget {
@@ -27,8 +28,9 @@ class DashboardMiddleCard extends StatelessWidget {
               final availableH = constraints.maxHeight;
               final cardH = ((availableH - 32) / 3).clamp(78.0, 180.0);
 
-              final clients = sl<GetClientsUseCase>().execute();
-              final clientNames = {for (final c in clients) c.id: c.name};
+              final clientState = context.read<ClientBloc>().state;
+              final clients = clientState is ClientLoaded ? clientState.entities : const [];
+              final clientNames = <String, String>{for (final c in clients) c.id: c.name};
 
           return Column(
             mainAxisAlignment: MainAxisAlignment.start,

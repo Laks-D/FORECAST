@@ -1,3 +1,5 @@
+extra["firebase_bom_version"] = "33.8.0"
+
 allprojects {
     repositories {
         google()

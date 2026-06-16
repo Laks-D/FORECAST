@@ -1,4 +1,3 @@
-import 'client_timeline_event.dart';
 
 class Client {
   const Client({
@@ -14,7 +13,8 @@ class Client {
     this.dateOfBirth,
     this.address,
     this.currency,
-    required this.timeline,
+    required this.status,
+    this.pinned = false,
     this.deletedAt,
   });
 
@@ -30,7 +30,9 @@ class Client {
   final DateTime? dateOfBirth;
   final String? address;
   final String? currency;
-  final List<ClientTimelineEvent> timeline;
+  final String status;
+  final bool pinned;
+
   /// Timestamp when the client was soft-deleted. Used for 30-day auto-purge.
   final DateTime? deletedAt;
 
@@ -49,74 +51,7 @@ class Client {
     return '$code $primaryContact';
   }
 
-  /* ================= PAYMENTS ================= */
 
-  /// Filters the timeline for payment-specific events.
-    List<ClientTimelineEvent> get payments =>
-      timeline.where((e) => e.type == ClientTimelineEventType.payment).toList();
-
-  /// Calculates total volume of payments processed.
-  double get outstandingAmount =>
-      payments.fold(0, (sum, e) => sum + (e.amount ?? 0));
-
-  /* ================= STATUS ================= */
-
-  /// Client status is user-controlled.
-  ///
-  /// The system must not automatically change status based on payments/schedule.
-  /// We only honor explicit manual status changes made by the user.
-  String get status {
-    // Canonical, user-editable statuses.
-    // NOTE: We also support legacy stored statuses via normalization below.
-    const allowed = <String>{'Active', 'Pending', 'Inactive', 'On Hold'};
-
-    String? normalize(String raw) {
-      final s = raw.trim();
-      if (s.isEmpty) return null;
-      final lower = s.toLowerCase();
-
-      // Legacy mapping:
-      // - "Overdue" is now displayed as "Pending".
-      if (lower == 'overdue') return 'Pending';
-
-      // Legacy mapping:
-      // - "Upcoming" used to be a client status; it is no longer user-editable.
-      //   Treat it as "Pending".
-      if (lower == 'upcoming') return 'Pending';
-
-      // Accept canonical values (case-insensitive).
-      if (lower == 'active') return 'Active';
-      if (lower == 'pending') return 'Pending';
-      if (lower == 'inactive') return 'Inactive';
-      if (lower == 'on hold') return 'On Hold';
-
-      // Unknown/unsupported status.
-      return null;
-    }
-
-    DateTime? latestManualAt;
-    String? latestManualStatus;
-    for (final e in timeline) {
-      if (e.type != ClientTimelineEventType.statusChanged) continue;
-      final raw = e.status;
-      if (raw == null) continue;
-      final s = normalize(raw);
-      if (s == null) continue;
-      if (!allowed.contains(s)) continue;
-      if (latestManualAt == null || e.createdAt.isAfter(latestManualAt)) {
-        latestManualAt = e.createdAt;
-        latestManualStatus = s;
-      }
-    }
-
-    return (latestManualStatus != null && latestManualStatus.trim().isNotEmpty)
-        ? latestManualStatus.trim()
-      : 'Pending';
-  }
-
-  /// Returns the timestamp of the most recent event in the timeline.
-  DateTime? get lastActivityAt =>
-      timeline.isEmpty ? null : timeline.last.createdAt;
 
   /* ================= SERIALIZATION ================= */
 
@@ -132,7 +67,8 @@ class Client {
         if (dateOfBirth != null) 'dateOfBirth': dateOfBirth!.toIso8601String(),
         if (address != null) 'address': address,
         if (currency != null) 'currency': currency,
-        'timeline': timeline.map((e) => e.toJson()).toList(),
+        'status': status,
+        'pinned': pinned,
         if (deletedAt != null) 'deletedAt': deletedAt!.toIso8601String(),
       };
 
@@ -152,11 +88,8 @@ class Client {
           : null,
       address: json['address'] as String?,
       currency: json['currency'] as String?,
-      timeline: (json['timeline'] as List<dynamic>?)
-              ?.map((e) => ClientTimelineEvent.fromJson(
-                  Map<String, dynamic>.from(e as Map)))
-              .toList() ??
-          [],
+      status: (json['status'] as String?) ?? 'Pending',
+      pinned: (json['pinned'] as bool?) ?? false,
       deletedAt: json['deletedAt'] != null
           ? DateTime.tryParse(json['deletedAt'] as String)
           : null,

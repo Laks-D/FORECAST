@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../domain/entities/client_event.dart' as domain;
+import '../../../payment/domain/entities/payment.dart';
+import '../../../client/presentation/bloc/client_bloc.dart';
+import 'package:flutter/material.dart';
 
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
@@ -411,25 +414,44 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                 padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
                 child: Column(
                   children: [
-                    row(
-                      'Last Activity',
-                      Text(
-                        _formatDate(widget.entity.lastActivityAt),
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodyMedium
-                            ?.copyWith(color: chrome.textColor),
-                      ),
+                    StreamBuilder<List<domain.ClientEvent>>(
+                      stream: context.read<ClientBloc>().clientEventRepository.watchForClient(widget.entity.id),
+                      builder: (context, eventSnap) {
+                        final lastActivityAt = eventSnap.data?.isNotEmpty == true ? eventSnap.data!.first.createdAt : null;
+                        return row(
+                          'Last Activity',
+                          Text(
+                            _formatDate(lastActivityAt),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(color: chrome.textColor),
+                          ),
+                        );
+                      }
                     ),
-                    row(
-                      'Total Payments',
-                      Text(
-                        _money(widget.entity.outstandingAmount, currency),
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: chrome.textColor,
-                              fontWeight: FontWeight.w800,
-                            ),
-                      ),
+                    StreamBuilder<List<Payment>>(
+                      stream: context.read<ClientBloc>().paymentRepository.watchForClient(widget.entity.id),
+                      builder: (context, paySnap) {
+                        final payments = paySnap.data ?? [];
+                        final now = DateTime.now();
+                        double outstanding = 0;
+                        for (final p in payments) {
+                           if (p.status != PaymentStatus.paid && p.dueDate.isBefore(now)) {
+                              outstanding += p.amount;
+                           }
+                        }
+                        return row(
+                          'Total Payments',
+                          Text(
+                            _money(outstanding, currency),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: chrome.textColor,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                          ),
+                        );
+                      }
                     ),
                   ],
                 ),

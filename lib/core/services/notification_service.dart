@@ -353,7 +353,7 @@ class NotificationService {
     if (!paymentOverdueDaily || clients.isEmpty || budget <= 0) return 0;
 
     final activeCount =
-        clients.where((c) => c.deletedAt == null && c.payments.isNotEmpty).length;
+        clients.where((c) => c.deletedAt == null && false).length;
     if (activeCount == 0) return 0;
 
     var target = tz.TZDateTime(

@@ -10,13 +10,13 @@ import 'package:snow/design_system/widgets/app_loading.dart';
 import 'package:snow/design_system/widgets/app_search_field.dart';
 
 import '../../../client/domain/entities/client.dart';
-import '../../../client/domain/entities/client_timeline_event.dart';
 import 'package:snow/design_system/theme/app_chrome_theme.dart';
 import 'package:snow/design_system/theme/app_visual_style.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/presentation/bloc/client_event.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
+import '../../domain/entities/payment.dart';
 import 'client_transactions_page.dart';
 
 class PaymentsQueuePage extends StatefulWidget {
@@ -42,6 +42,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     final bgColor = scheme.surface;
     final onSurface = scheme.onSurface;
     final isClient = AppModeScope.isClient(context);
+    final paymentRepository = context.read<ClientBloc>().paymentRepository;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -121,257 +122,273 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                           return AppLoading(color: onSurface);
                         }
 
-                        if (state.entities.isEmpty) {
-                          return Center(
-                            child: AppEmptyState(
-                              message: isClient
-                                  ? 'No profile linked to this account'
-                                  : 'No payments found',
-                              icon: isClient
-                                  ? Icons.person_outline
-                                  : Icons.payments_outlined,
-                            ),
-                          );
-                        }
-
-                        bool matchesQuery(_PaymentVM p) {
-                          if (_query.isEmpty) return true;
-
-                          if (!isClient) {
-                          return p.customerName
-                              .toLowerCase()
-                              .contains(_query) ||
-                            p.contact.contains(_query);
-                          }
-
-                          final note = (p.note ?? '').toLowerCase();
-                          final date = _formatDate(p.paidAt).toLowerCase();
-                          final amount = p.amount.toStringAsFixed(0);
-                          return note.contains(_query) ||
-                            date.contains(_query) ||
-                            amount.contains(_query);
-                        }
-
-                        final payments = _extractAllPayments(state.entities)
-                          .where((p) {
-                            // Filter by status tab
-                            if (_filterStatus != null &&
-                                p.paymentStatus != _filterStatus) {
-                              return false;
+                        return StreamBuilder<List<Payment>>(
+                          stream: paymentRepository.watchAll(),
+                          builder: (context, snapshot) {
+                            if (!snapshot.hasData) {
+                              return AppLoading(color: onSurface);
                             }
-                            // Filter by search query
-                            return matchesQuery(p);
-                          })
-                          .toList();
+                            
+                            var rawPayments = snapshot.data!;
+                            
+                            if (isClient) {
+                               final uid = context.read<ClientBloc>().state is ClientLoaded 
+                                  ? (context.read<ClientBloc>().state as ClientLoaded).entities.firstOrNull?.firebaseUid 
+                                  : null;
+                               rawPayments = rawPayments.where((p) => p.firebaseUid == uid).toList();
+                            }
+                            
+                            if (rawPayments.isEmpty && state.entities.isEmpty) {
+                              return Center(
+                                child: AppEmptyState(
+                                  message: isClient
+                                      ? 'No profile linked to this account'
+                                      : 'No payments found',
+                                  icon: isClient
+                                      ? Icons.person_outline
+                                      : Icons.payments_outlined,
+                                ),
+                              );
+                            }
 
-                        if (payments.isEmpty) {
-                          return const Center(
-                            child: AppEmptyState(
-                              message: 'No payments found',
-                              icon: Icons.payments_outlined,
-                            ),
-                          );
-                        }
+                            final mappedPayments = _mapPayments(rawPayments, state.entities);
 
-                        final listItems = _buildMonthGroupedItems(payments);
+                            bool matchesQuery(_PaymentVM p) {
+                              if (_query.isEmpty) return true;
 
-                        return RefreshIndicator(
-                          onRefresh: () async {
-                            context.read<ClientBloc>().add(LoadClients());
-                            // Wait a short duration to let the bloc state update
-                            await Future.delayed(const Duration(milliseconds: 800));
-                          },
-                          child: ListView.builder(
-                            padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-                            itemCount: listItems.length,
-                            itemBuilder: (context, index) {
-                              final item = listItems[index];
-                              if (item is _MonthHeaderItem) {
-                                return Padding(
-                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          item.label,
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleSmall
-                                              ?.copyWith(
-                                                color: chrome.mutedColor,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                        ),
-                                      ),
-                                      Text(
-                                        '${item.currency}${item.total.toStringAsFixed(0)}',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .titleSmall
-                                            ?.copyWith(
-                                              color: chrome.textColor,
-                                              fontWeight: FontWeight.w900,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                );
+                              if (!isClient) {
+                              return p.customerName
+                                  .toLowerCase()
+                                  .contains(_query) ||
+                                p.contact.toLowerCase().contains(_query);
                               }
 
-                              final payment = (item as _PaymentItem).payment;
-                              final subtitle = () {
-                                final rawNote = (payment.note ?? '').trim();
+                              final note = (p.note ?? '').toLowerCase();
+                              final date = _formatDate(p.paidAt).toLowerCase();
+                              final amount = p.amount.toStringAsFixed(0);
+                              return note.contains(_query) ||
+                                date.contains(_query) ||
+                                amount.contains(_query);
+                            }
 
-                                if (payment.paymentCount <= 1) {
-                                  if (rawNote.isEmpty) return '';
-                                  return rawNote;
+                            final payments = mappedPayments
+                              .where((p) {
+                                // Filter by status tab
+                                if (_filterStatus != null &&
+                                    p.paymentStatus != _filterStatus) {
+                                  return false;
                                 }
+                                // Filter by search query
+                                return matchesQuery(p);
+                              })
+                              .toList();
 
-                                if (rawNote.isEmpty || rawNote == 'Multiple payments') {
-                                  return '${payment.paymentCount} payments';
-                                }
+                            if (payments.isEmpty) {
+                              return const Center(
+                                child: AppEmptyState(
+                                  message: 'No payments found',
+                                  icon: Icons.payments_outlined,
+                                ),
+                              );
+                            }
 
-                                return '${payment.paymentCount} payments • $rawNote';
-                              }();
+                            final listItems = _buildMonthGroupedItems(payments);
 
-                              final cardColor = visual.neumorphism
-                                  ? scheme.surface
-                                  : chrome.surfaceColor;
-                              final shadows = visual.neumorphism
-                                  ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
-                                  : <BoxShadow>[
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.08),
-                                        blurRadius: 18,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ];
-
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 14),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: cardColor,
-                                    borderRadius: BorderRadius.circular(28),
-                                    border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-                                    boxShadow: shadows,
-                                  ),
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkWell(
-                                      onTap: () {
-                                        final entity = state.entities.firstWhere(
-                                          (e) => e.id == payment.entityId,
-                                        );
-
-                                        final clientBloc = context.read<ClientBloc>();
-                                        final sessionsCubit = context.read<SessionsCubit>();
-
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                            builder: (_) => MultiBlocProvider(
-                                              providers: [
-                                                BlocProvider.value(value: clientBloc),
-                                                BlocProvider.value(value: sessionsCubit),
-                                              ],
-                                              child: ClientTransactionsPage(clientId: entity.id),
+                            return RefreshIndicator(
+                              onRefresh: () async {
+                                context.read<ClientBloc>().add(LoadClients());
+                                // Wait a short duration to let the bloc state update
+                                await Future.delayed(const Duration(milliseconds: 800));
+                              },
+                              child: ListView.builder(
+                                padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                                itemCount: listItems.length,
+                                itemBuilder: (context, index) {
+                                  final item = listItems[index];
+                                  if (item is _MonthHeaderItem) {
+                                    return Padding(
+                                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 10),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              item.label,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .titleSmall
+                                                  ?.copyWith(
+                                                    color: chrome.mutedColor,
+                                                    fontWeight: FontWeight.w800,
+                                                  ),
                                             ),
                                           ),
-                                        );
-                                      },
-                                      borderRadius: BorderRadius.circular(28),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(20),
-                                        child: Row(
-                                          children: [                                             Container(
-                                              width: 58,
-                                              height: 58,
-                                              decoration: BoxDecoration(
-                                                color: _paymentStatusColor(payment.paymentStatus).withOpacity(0.15),
-                                                borderRadius: BorderRadius.circular(20),
-                                                border: Border.all(color: _paymentStatusColor(payment.paymentStatus).withOpacity(0.25)),
-                                              ),
-                                              alignment: Alignment.center,
-                                              child: Icon(
-                                                _paymentStatusIcon(payment.paymentStatus),
-                                                color: _paymentStatusColor(payment.paymentStatus),
-                                                size: 28,
-                                              ),
-                                            ),
+                                          Text(
+                                            '${item.currency}${item.total.toStringAsFixed(0)}',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleSmall
+                                                ?.copyWith(
+                                                  color: chrome.textColor,
+                                                  fontWeight: FontWeight.w900,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }
 
-                                            const SizedBox(width: 18),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    payment.customerName,
-                                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                                          color: chrome.textColor,
-                                                          fontWeight: FontWeight.w900,
-                                                          fontSize: 18,
-                                                        ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
+                                  final payment = (item as _PaymentItem).payment;
+                                  final subtitle = () {
+                                    final rawNote = (payment.note ?? '').trim();
+
+                                    if (payment.paymentCount <= 1) {
+                                      if (rawNote.isEmpty) return '';
+                                      return rawNote;
+                                    }
+
+                                    if (rawNote.isEmpty || rawNote == 'Multiple payments') {
+                                      return '${payment.paymentCount} payments';
+                                    }
+
+                                    return '${payment.paymentCount} payments • $rawNote';
+                                  }();
+
+                                  final cardColor = visual.neumorphism
+                                      ? scheme.surface
+                                      : chrome.surfaceColor;
+                                  final shadows = visual.neumorphism
+                                      ? AppVisualStyle.neumorphicShadows(context, blurRadius: 22, offset: const Offset(7, 7))
+                                      : <BoxShadow>[
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.08),
+                                            blurRadius: 18,
+                                            offset: const Offset(0, 8),
+                                          ),
+                                        ];
+
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 14, left: 16, right: 16),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: cardColor,
+                                        borderRadius: BorderRadius.circular(28),
+                                        border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+                                        boxShadow: shadows,
+                                      ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          onTap: () {
+                                            final clientBloc = context.read<ClientBloc>();
+                                            final sessionsCubit = context.read<SessionsCubit>();
+
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => MultiBlocProvider(
+                                                  providers: [
+                                                    BlocProvider.value(value: clientBloc),
+                                                    BlocProvider.value(value: sessionsCubit),
+                                                  ],
+                                                  child: ClientTransactionsPage(clientId: payment.entityId),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                          borderRadius: BorderRadius.circular(28),
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(20),
+                                            child: Row(
+                                              children: [
+                                                Container(
+                                                  width: 58,
+                                                  height: 58,
+                                                  decoration: BoxDecoration(
+                                                    color: _paymentStatusColor(payment.paymentStatus).withOpacity(0.15),
+                                                    borderRadius: BorderRadius.circular(20),
+                                                    border: Border.all(color: _paymentStatusColor(payment.paymentStatus).withOpacity(0.25)),
                                                   ),
-                                                  const SizedBox(height: 6),
-                                                  Text(
-                                                    payment.contact,
-                                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                                          color: chrome.mutedColor,
-                                                          fontWeight: FontWeight.w600,
-                                                        ),
+                                                  alignment: Alignment.center,
+                                                  child: Icon(
+                                                    _paymentStatusIcon(payment.paymentStatus),
+                                                    color: _paymentStatusColor(payment.paymentStatus),
+                                                    size: 28,
                                                   ),
-                                                  if (subtitle.isNotEmpty) ...[
+                                                ),
+                                                const SizedBox(width: 18),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        payment.customerName,
+                                                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                              color: chrome.textColor,
+                                                              fontWeight: FontWeight.w900,
+                                                              fontSize: 18,
+                                                            ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                      const SizedBox(height: 6),
+                                                      Text(
+                                                        payment.contact,
+                                                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                              color: chrome.mutedColor,
+                                                              fontWeight: FontWeight.w600,
+                                                            ),
+                                                      ),
+                                                      if (subtitle.isNotEmpty) ...[
+                                                        const SizedBox(height: 4),
+                                                        Text(
+                                                          subtitle,
+                                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                                color: chrome.mutedColor.withOpacity(0.7),
+                                                                fontWeight: FontWeight.w500,
+                                                              ),
+                                                          maxLines: 1,
+                                                          overflow: TextOverflow.ellipsis,
+                                                        ),
+                                                      ],
+                                                    ],
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                                  mainAxisAlignment: MainAxisAlignment.center,
+                                                  children: [
+                                                    Text(
+                                                      '${payment.currency}${payment.amount.toStringAsFixed(0)}',
+                                                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                                            color: chrome.textColor,
+                                                            fontWeight: FontWeight.w900,
+                                                            fontSize: 20,
+                                                          ),
+                                                    ),
                                                     const SizedBox(height: 4),
                                                     Text(
-                                                      subtitle,
-                                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                                            color: chrome.mutedColor.withOpacity(0.7),
-                                                            fontWeight: FontWeight.w500,
-                                                          ),
-                                                      maxLines: 1,
-                                                      overflow: TextOverflow.ellipsis,
+                                                      _formatDate(payment.paidAt).toUpperCase(),
+                                                      style: TextStyle(
+                                                        color: chrome.mutedColor,
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w800,
+                                                        letterSpacing: 0.5,
+                                                      ),
                                                     ),
                                                   ],
-                                                ],
-                                              ),
-                                            ),
-                                            const SizedBox(width: 12),
-                                            Column(
-                                              crossAxisAlignment: CrossAxisAlignment.end,
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Text(
-                                                  '${payment.currency}${payment.amount.toStringAsFixed(0)}',
-                                                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                                        color: chrome.textColor,
-                                                        fontWeight: FontWeight.w900,
-                                                        fontSize: 20,
-                                                      ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  _formatDate(payment.paidAt).toUpperCase(),
-                                                  style: TextStyle(
-                                                    color: chrome.mutedColor,
-                                                    fontSize: 10,
-                                                    fontWeight: FontWeight.w800,
-                                                    letterSpacing: 0.5,
-                                                  ),
                                                 ),
                                               ],
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                  );
+                                },
+                              ),
+                            );
+                          }
                         );
                       },
                     ),
@@ -440,75 +457,36 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
 
   /* ================= HELPERS ================= */
 
-  bool _isPaymentPaid({
-    required Client client,
-    required ClientTimelineEvent payment,
-  }) {
-    final dateKey = AppDateUtils.dateToStr(payment.createdAt);
-
-    final hasMultiplePaymentsThatDay = client.timeline
-            .where((e) =>
-                e.type == ClientTimelineEventType.payment &&
-                AppDateUtils.dateToStr(e.createdAt) == dateKey)
-            .length >
-        1;
-
-    // Prefer payment-specific status changes.
-    for (final e in client.timeline.reversed) {
-      if (e.type != ClientTimelineEventType.statusChanged) continue;
-      if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-      if (e.refId != payment.id) continue;
-      final s = e.status?.trim();
-      if (s == 'Paid' || s == 'Paid fully') return true;
-    }
-
-    // Fallback to legacy date-based status changes (no refId).
-    // If there are multiple payments that day, legacy status changes would
-    // incorrectly affect all of them.
-    if (!hasMultiplePaymentsThatDay) {
-      for (final e in client.timeline.reversed) {
-        if (e.type != ClientTimelineEventType.statusChanged) continue;
-        if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-        if (e.refId != null) continue;
-        final s = e.status?.trim();
-        if (s == 'Paid' || s == 'Paid fully') return true;
-      }
-    }
-
-    return false;
-  }
-
   /// Returns ALL payment events as VMs, grouped by client + day.
   /// Each VM has a `paymentStatus` of 'Paid', 'Unpaid', or 'Overdue'.
-  List<_PaymentVM> _extractAllPayments(List<Client> entities) {
+  List<_PaymentVM> _mapPayments(List<Payment> payments, List<Client> clients) {
     final now = DateTime.now();
     final singles = <_PaymentSingleVM>[];
 
-    for (final entity in entities) {
-      for (final event in entity.timeline) {
-        if (event.type != ClientTimelineEventType.payment) continue;
+    for (final payment in payments) {
+      final client = clients.cast<Client?>().firstWhere((c) => c?.id == payment.clientId, orElse: () => null);
+      if (client == null) continue;
 
-        final isPaid = _isPaymentPaid(client: entity, payment: event);
-        final isOverdue = !isPaid && event.createdAt.isBefore(now);
-        final status = isPaid
-            ? 'Paid'
-            : isOverdue
-                ? 'Overdue'
-                : 'Unpaid';
+      final isPaid = payment.status == PaymentStatus.paid;
+      final isOverdue = !isPaid && payment.dueDate.isBefore(now);
+      final status = isPaid
+          ? 'Paid'
+          : isOverdue
+              ? 'Overdue'
+              : 'Unpaid';
 
-        singles.add(
-          _PaymentSingleVM(
-            entityId: entity.id,
-            customerName: entity.name,
-            contact: entity.formattedPhone,
-            amount: event.amount ?? 0,
-            paidAt: event.createdAt,
-            note: event.note,
-            currency: entity.currency ?? '',
-            paymentStatus: status,
-          ),
-        );
-      }
+      singles.add(
+        _PaymentSingleVM(
+          entityId: client.id,
+          customerName: client.name,
+          contact: client.formattedPhone,
+          amount: payment.amount,
+          paidAt: payment.dueDate,
+          note: payment.note,
+          currency: payment.currency ?? client.currency ?? 'USD',
+          paymentStatus: status,
+        ),
+      );
     }
 
     // Group by client + day + status so each combination gets its own card.

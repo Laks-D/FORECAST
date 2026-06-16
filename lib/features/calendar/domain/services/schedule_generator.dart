@@ -29,6 +29,7 @@ class ScheduleGenerator {
     SessionDuration? duration,
     String? courseName,
     String? programEnrollmentId,
+    String? recurrenceId,
   }) {
     final sessions = <ScheduleSession>[];
     var cursor = DateTime(startDate.year, startDate.month, startDate.day);
@@ -65,6 +66,7 @@ class ScheduleGenerator {
           duration: duration,
           courseName: courseName,
           programEnrollmentId: programEnrollmentId,
+          recurrenceId: recurrenceId,
         ),
       );
 
