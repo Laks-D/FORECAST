@@ -30,7 +30,7 @@ dependencies:
   flutter_riverpod: ^2.6.1
   share_plus: ^7.2.1
   qr_flutter: ^4.0.0
-  mobile_scanner: ^3.0.0
+  mobile_scanner: 7.2.0
   app_links: ^6.4.0   # handles Android App Links & iOS Universal Links
   # uni_links removed (unused) — prevents Android build issues with older plugin variants
 

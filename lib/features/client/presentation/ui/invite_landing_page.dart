@@ -196,7 +196,7 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Request to Join'),
+                      : const Text('Send Request To Join'),
                 ),
               ),
           ],
