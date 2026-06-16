@@ -11,10 +11,17 @@ class InviteLandingPage extends StatefulWidget {
   final String? tutorId;
   final String? qrTimestampMs;
 
+  /// Enforce the 15-minute QR freshness window. True for a live camera scan
+  /// (limits reuse of a QR photographed off a screen). False for a manually
+  /// pasted invite link/code, which the tutor deliberately shared to be used
+  /// later — the tutor still gates the actual join via accept/reject.
+  final bool requireFreshQr;
+
   const InviteLandingPage({
     super.key,
     this.tutorId,
     this.qrTimestampMs,
+    this.requireFreshQr = true,
   });
 
   @override
@@ -210,7 +217,12 @@ class _InviteLandingPageState extends State<InviteLandingPage> {
     final user = FirebaseAuth.instance.currentUser;
     if (tutorId == null || tutorId.isEmpty || user == null) return;
 
-    if (!JoinRequestService.isQrValid(widget.qrTimestampMs)) {
+    // Freshness only applies to live camera scans. A manually pasted/shared
+    // link has requireFreshQr=false (and a bare code may carry no timestamp).
+    final mustCheckFreshness =
+        widget.requireFreshQr && widget.qrTimestampMs != null;
+    if (mustCheckFreshness &&
+        !JoinRequestService.isQrValid(widget.qrTimestampMs)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
             content: Text('This invite QR has expired. Please scan a new one.')),

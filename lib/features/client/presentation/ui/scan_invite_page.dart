@@ -30,7 +30,11 @@ class _ScanInvitePageState extends State<ScanInvitePage> {
 
   /// Resolve a raw payload (QR or pasted text) to the invite and navigate.
   /// Returns false if nothing usable was found.
-  bool _resolveAndGo(String? raw) {
+  ///
+  /// [fromCamera] enforces the 15-minute QR freshness window (live scan only);
+  /// a manually pasted link is treated as a deliberately shared, longer-lived
+  /// invite.
+  bool _resolveAndGo(String? raw, {required bool fromCamera}) {
     if (_handled || raw == null) return false;
     final (tutorId, ts) = OnboardingLink.parse(raw);
     if (tutorId == null || tutorId.isEmpty) return false;
@@ -38,7 +42,11 @@ class _ScanInvitePageState extends State<ScanInvitePage> {
     _handled = true;
     Navigator.of(context).pushReplacement(
       MaterialPageRoute(
-        builder: (_) => InviteLandingPage(tutorId: tutorId, qrTimestampMs: ts),
+        builder: (_) => InviteLandingPage(
+          tutorId: tutorId,
+          qrTimestampMs: ts,
+          requireFreshQr: fromCamera,
+        ),
       ),
     );
     return true;
@@ -46,7 +54,7 @@ class _ScanInvitePageState extends State<ScanInvitePage> {
 
   void _onDetect(BarcodeCapture capture) {
     for (final b in capture.barcodes) {
-      if (_resolveAndGo(b.rawValue)) return;
+      if (_resolveAndGo(b.rawValue, fromCamera: true)) return;
     }
   }
 
@@ -91,7 +99,7 @@ class _ScanInvitePageState extends State<ScanInvitePage> {
     );
 
     if (!mounted || value == null) return;
-    final ok = _resolveAndGo(value);
+    final ok = _resolveAndGo(value, fromCamera: false);
     if (!ok) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
