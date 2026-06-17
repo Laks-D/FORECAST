@@ -7,6 +7,7 @@ import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../calendar/domain/entities/schedule_session.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
@@ -51,13 +52,24 @@ class CourseProfilePage extends StatelessWidget {
           children: [
             _SectionCard(
               title: 'Course details',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _kv(context, 'Course', courseName, chrome),
-                  const SizedBox(height: 8),
-                  _kv(context, 'Client', client?.displayName ?? 'Client', chrome),
-                ],
+              child: FutureBuilder<Map<String, String>>(
+                future: isClientMode ? _getTutorInfo(isClientMode, client?.tutorId) : Future.value({}),
+                builder: (context, snap) {
+                  final data = snap.data ?? {};
+                  final tutorName = data['name'] ?? '';
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _kv(context, 'Course', courseName, chrome),
+                      const SizedBox(height: 8),
+                      if (isClientMode)
+                        _kv(context, 'Tutor', tutorName.isEmpty ? 'Tutor' : tutorName, chrome)
+                      else
+                        _kv(context, 'Client', client?.displayName ?? 'Client', chrome),
+                    ],
+                  );
+                }
               ),
             ),
             const SizedBox(height: 12),
@@ -97,7 +109,11 @@ class CourseProfilePage extends StatelessWidget {
                 builder: (context, sessionsState) {
                   final items = sessionsState.sessions
                       .where((s) => s.clientId == clientId)
-                      .where((s) => (s.courseName ?? '').trim() == courseName)
+                      .where((s) {
+                        final rawName = (s.courseName ?? '').trim();
+                        final effectiveName = rawName.isEmpty ? 'General Sessions' : rawName;
+                        return effectiveName == courseName;
+                      })
                       .toList()
                     ..sort((a, b) {
                       final d = a.date.compareTo(b.date);
@@ -212,13 +228,30 @@ class CourseProfilePage extends StatelessWidget {
           Text(
             derived,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: chrome.mutedColor,
+                  color: _sessionStatusColor(derived, chrome),
                   fontWeight: FontWeight.w800,
                 ),
           ),
         ],
       ),
     );
+  }
+
+  Color _sessionStatusColor(String status, AppChromeTheme chrome) {
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return VibrantColors.pastelGreen;
+      case 'cancelled':
+        return VibrantColors.softPink;
+      case 'pending':
+        return VibrantColors.softPink;
+      case 'upcoming':
+        return VibrantColors.warmYellow;
+      case 'overdue':
+        return VibrantColors.softPink;
+      default:
+        return chrome.mutedColor;
+    }
   }
 
   Future<Map<String, String>> _getTutorInfo(bool isClientMode, String? passedTutorId) async {
@@ -233,11 +266,19 @@ class CourseProfilePage extends StatelessWidget {
     if (passedTutorId == null) return {};
 
     try {
-      final tutorDoc = await firestoreDb.collection('users').doc(passedTutorId).get();
-      final tData = tutorDoc.data();
+      final settingsDoc = await firestoreDb.collection('users').doc(passedTutorId).collection('settings').doc('app').get();
+      var tName = 'Tutor';
+      var tEmail = '';
+      if (settingsDoc.exists) {
+        final profile = settingsDoc.data()?['signupProfile'] as Map<String, dynamic>?;
+        if (profile != null) {
+          tName = (profile['fullName'] ?? profile['userName'] ?? 'Tutor').trim();
+          tEmail = (profile['email'] ?? '').trim();
+        }
+      }
       return {
-        'name': (tData?['fullName'] ?? tData?['displayName'] ?? 'Tutor').trim(),
-        'email': (tData?['email'] ?? '').trim(),
+        'name': tName.isEmpty ? 'Tutor' : tName,
+        'email': tEmail,
       };
     } catch (_) {
       return {

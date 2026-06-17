@@ -13,12 +13,53 @@ class StudentEnrollmentResolver {
   // ---------------------------------------------------------------------------
   static String? _cachedTutorUid;
   static String? _cachedForUid;
+  static String? _cachedTutorName;
 
   /// Clears the cached tutor-uid. Must be called on sign-out so that the next
   /// user session always re-fetches a fresh enrollment record.
   static void invalidateCache() {
     _cachedTutorUid = null;
     _cachedForUid = null;
+    _cachedTutorName = null;
+  }
+
+  static Future<String> getTutorName() async {
+    if (!AppModeConfig.isClient) return 'Tutor';
+    if (_cachedTutorName != null) return _cachedTutorName!;
+
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid;
+    if (uid == null) return 'Tutor';
+
+    final tutorId = await getTargetUid();
+    if (tutorId != null && tutorId.isNotEmpty && tutorId != uid) {
+      try {
+        final doc = await firestoreDb
+            .collection('users')
+            .doc(uid)
+            .collection('enrollment')
+            .doc(tutorId)
+            .get();
+        if (doc.exists) {
+          var fetched = doc.data()?['tutorName'] as String?;
+          if (fetched == null || fetched.trim().isEmpty || fetched.trim().toLowerCase() == 'tutor') {
+            final tutorSettingsDoc = await firestoreDb.collection('users').doc(tutorId).collection('settings').doc('app').get();
+            if (tutorSettingsDoc.exists) {
+              final signupProfile = tutorSettingsDoc.data()?['signupProfile'] as Map<String, dynamic>?;
+              if (signupProfile != null) {
+                fetched = signupProfile['fullName'] as String?;
+                if (fetched == null || fetched.trim().isEmpty) {
+                  fetched = signupProfile['userName'] as String?;
+                }
+              }
+            }
+          }
+          _cachedTutorName = (fetched != null && fetched.trim().isNotEmpty) ? fetched.trim() : 'Tutor';
+          return _cachedTutorName!;
+        }
+      } catch (_) {}
+    }
+    return 'Tutor';
   }
 
   /// Returns the target UID for fetching data.

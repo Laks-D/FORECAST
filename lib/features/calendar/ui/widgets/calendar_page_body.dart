@@ -9,6 +9,7 @@ import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../../design_system/widgets/app_neumorphic_buttons.dart';
 import '../../../../core/app/app_mode.dart';
+import '../../../../core/app/student_enrollment_resolver.dart';
 import '../../../client/domain/entities/client.dart';
 
 import '../../../client/presentation/bloc/client_bloc.dart';
@@ -20,6 +21,9 @@ import '../../bloc/calendar_state.dart';
 import '../../bloc/sessions_cubit.dart';
 import '../../domain/entities/schedule_session.dart';
 import 'schedule_sessions_sheet.dart';
+import 'dart:async';
+import 'package:firebase_auth/firebase_auth.dart';
+import '../../../payment/domain/entities/payment.dart';
 
 enum _ScheduleCalendarType {
   classSchedule,
@@ -58,6 +62,38 @@ class CalendarPageBody extends StatefulWidget {
 
 class _CalendarPageBodyState extends State<CalendarPageBody> {
   _ScheduleCalendarType _scheduleType = _ScheduleCalendarType.classSchedule;
+  StreamSubscription<List<Payment>>? _paymentSub;
+  List<Payment> _payments = [];
+  String _tutorName = 'Tutor';
+  bool _tutorNameFetched = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isClient = AppModeScope.isClient(context);
+    
+    if (!_tutorNameFetched && isClient) {
+      _tutorNameFetched = true;
+      StudentEnrollmentResolver.getTutorName().then((name) {
+        if (mounted) setState(() => _tutorName = name);
+      });
+    }
+
+    if (_paymentSub == null) {
+      final paymentRepo = context.read<ClientBloc>().paymentRepository;
+      final uid = FirebaseAuth.instance.currentUser?.uid ?? '';
+      final stream = isClient ? paymentRepo.watchForStudent(uid) : paymentRepo.watchAll();
+      _paymentSub = stream.listen((payments) {
+        if (mounted) setState(() => _payments = payments);
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _paymentSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,6 +116,7 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
                   child: _CalendarTopCard(
                     mode: mode,
                     scheduleType: _scheduleType,
+                    payments: _payments,
                   ),
                 ),
               ),
@@ -142,6 +179,8 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
               SliverToBoxAdapter(
                 child: _CalendarBottomCard(
                   scheduleType: _scheduleType,
+                  payments: _payments,
+                  tutorName: _tutorName,
                   isSliverWrap: true,
                 ),
               ),
@@ -159,6 +198,7 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
               child: _CalendarTopCard(
                 mode: mode,
                 scheduleType: _scheduleType,
+                payments: _payments,
               ),
             ),
             const SizedBox(height: 16),
@@ -192,7 +232,7 @@ class _CalendarPageBodyState extends State<CalendarPageBody> {
             const SizedBox(height: 12),
             Flexible(
               flex: bottomFlex,
-              child: _CalendarBottomCard(scheduleType: _scheduleType),
+              child: _CalendarBottomCard(scheduleType: _scheduleType, payments: _payments, tutorName: _tutorName),
             ),
           ],
         );
@@ -277,10 +317,12 @@ class _CalendarTopCard extends StatelessWidget {
   const _CalendarTopCard({
     required this.mode,
     required this.scheduleType,
+    required this.payments,
   });
 
   final CalendarViewMode mode;
   final _ScheduleCalendarType scheduleType;
+  final List<Payment> payments;
 
   @override
   Widget build(BuildContext context) {
@@ -308,10 +350,12 @@ class _CalendarTopCard extends StatelessWidget {
                   ? _WeeklyTopContent(
                       key: const ValueKey('weekly'),
                       scheduleType: scheduleType,
+                      payments: payments,
                     )
                   : _MonthlyTopContent(
                       key: const ValueKey('monthly'),
                       scheduleType: scheduleType,
+                      payments: payments,
                     ),
             ),
           ],
@@ -454,9 +498,11 @@ class _WeeklyTopContent extends StatelessWidget {
   const _WeeklyTopContent({
     super.key,
     required this.scheduleType,
+    required this.payments,
   });
 
   final _ScheduleCalendarType scheduleType;
+  final List<Payment> payments;
 
   @override
   Widget build(BuildContext context) {
@@ -500,25 +546,10 @@ class _WeeklyTopContent extends StatelessWidget {
               }
               markerDates = dates;
             } else {
-              final allClients = clientEntities ?? (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
               final dates = <String>{};
-              for (final c in allClients) {
-                for (final e in []) {
-                  if (e.type != null) continue;
-                  final dateKey = AppDateUtils.dateToStr(e.createdAt);
-                  // Skip dates covered by an earlier Paid fully.
-                  bool covered = false;
-                  for (final s in []) {
-                    if (s.type != null) continue;
-                    if (s.status?.trim() != 'Paid fully') continue;
-                    final sKey = AppDateUtils.dateToStr(s.createdAt);
-                    if (sKey.compareTo(dateKey) <= 0 && sKey != dateKey) {
-                      covered = true;
-                      break;
-                    }
-                  }
-                  if (!covered) dates.add(dateKey);
-                }
+              for (final p in payments) {
+                if (clientId != null && p.clientId != clientId) continue;
+                dates.add(AppDateUtils.dateToStr(p.dueDate));
               }
               markerDates = dates;
             }
@@ -724,9 +755,11 @@ class _MonthlyTopContent extends StatelessWidget {
   const _MonthlyTopContent({
     super.key,
     required this.scheduleType,
+    required this.payments,
   });
 
   final _ScheduleCalendarType scheduleType;
+  final List<Payment> payments;
 
   @override
   Widget build(BuildContext context) {
@@ -769,24 +802,10 @@ class _MonthlyTopContent extends StatelessWidget {
               }
               markerDates = dates;
             } else {
-              final allClients = clientEntities ?? (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
               final dates = <String>{};
-              for (final c in allClients) {
-                for (final e in []) {
-                  if (e.type != null) continue;
-                  final dateKey = AppDateUtils.dateToStr(e.createdAt);
-                  bool covered = false;
-                  for (final s in []) {
-                    if (s.type != null) continue;
-                    if (s.status?.trim() != 'Paid fully') continue;
-                    final sKey = AppDateUtils.dateToStr(s.createdAt);
-                    if (sKey.compareTo(dateKey) <= 0 && sKey != dateKey) {
-                      covered = true;
-                      break;
-                    }
-                  }
-                  if (!covered) dates.add(dateKey);
-                }
+              for (final p in payments) {
+                if (clientId != null && p.clientId != clientId) continue;
+                dates.add(AppDateUtils.dateToStr(p.dueDate));
               }
               markerDates = dates;
             }
@@ -1055,9 +1074,16 @@ bool _isSameDay(DateTime a, DateTime b) {
 }
 
 class _CalendarBottomCard extends StatelessWidget {
-  const _CalendarBottomCard({required this.scheduleType, this.isSliverWrap = false});
+  const _CalendarBottomCard({
+    required this.scheduleType,
+    required this.payments,
+    required this.tutorName,
+    this.isSliverWrap = false,
+  });
 
   final _ScheduleCalendarType scheduleType;
+  final List<Payment> payments;
+  final String tutorName;
   final bool isSliverWrap;
 
   @override
@@ -1092,23 +1118,21 @@ class _CalendarBottomCard extends StatelessWidget {
             }
 
             final clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
+            final isClientApp = AppModeScope.isClient(context);
             final clientNames = {
               for (final c in clients) c.id: c.name,
             };
-            final paymentItems = clients
-                .expand(
-                  (c) => []
-                      .where((e) => e.type == null)
-                      .map(
-                        (e) => _PaymentScheduleItem(
-                          clientId: c.id,
-                          paymentEventId: e.id,
-                          clientName: c.name,
-                          amount: e.amount,
-                          date: e.createdAt,
-                          note: e.note,
-                        ),
-                      ),
+            final paymentItems = payments
+                .map(
+                  (p) => _PaymentScheduleItem(
+                    clientId: p.clientId,
+                    paymentEventId: p.paymentId,
+                    clientName: isClientApp ? ((tutorName.trim().isNotEmpty && tutorName != 'Tutor') ? tutorName.trim() : 'Tutor') : (clientNames[p.clientId] ?? 'Unknown Client'),
+                    amount: p.amount,
+                    date: p.dueDate,
+                    note: p.note,
+                    status: p.status == PaymentStatus.paid ? 'Paid' : 'Unpaid',
+                  ),
                 )
                 .where((e) => visibleDateStrs.contains(AppDateUtils.dateToStr(e.date)))
                 .toList(growable: false)
@@ -1427,8 +1451,12 @@ class _CalendarBottomCard extends StatelessWidget {
                                   s.date,
                                   s.time,
                                 );
-                                final name = clientNames[s.clientId] ?? 'Client';
-                                final dateLabel = isWeeklyAll ? '${AppDateUtils.displayDateStr(s.date)} • ' : '';
+                              final isClientApp = AppModeScope.isClient(context);
+                              final resolvedClientName = (s.courseName?.isNotEmpty == true) 
+                                  ? s.courseName! 
+                                  : ((tutorName.trim().isNotEmpty && tutorName != 'Tutor') ? tutorName.trim() : 'Class');
+                              final name = isClientApp ? resolvedClientName : (clientNames[s.clientId] ?? 'Client');
+                              final dateLabel = isWeeklyAll ? '${AppDateUtils.displayDateStr(s.date)} • ' : '';
                                 
                                 // Generate a deterministic color based on the name length
                                 final avatarColors = [
@@ -1562,17 +1590,19 @@ class _PaymentScheduleItem {
     required this.clientId,
     required this.paymentEventId,
     required this.clientName,
+    required this.amount,
     required this.date,
-    this.amount,
     this.note,
+    required this.status,
   });
 
   final String clientId;
   final String paymentEventId;
   final String clientName;
+  final double amount;
   final DateTime date;
-  final double? amount;
   final String? note;
+  final String status;
 }
 
 class _PaymentScheduleRow {
@@ -1605,85 +1635,26 @@ class _PaymentScheduleList extends StatelessWidget {
     final clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
     final clientMap = {for (final c in clients) c.id: c};
 
-    String statusFor(Client client, DateTime date, String paymentEventId) {
-      final now = DateTime.now();
-      final today = DateTime(now.year, now.month, now.day);
-      final payDay = DateTime(date.year, date.month, date.day);
-
-      String status = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
-      try {
-        final dateKey = AppDateUtils.dateToStr(date);
-
-        final hasMultiplePaymentsThatDay = []
-            .where((e) =>
-              e.type == null &&
-              AppDateUtils.dateToStr(e.createdAt) == dateKey)
-            .length >
-          1;
-
-        // Prefer a payment-specific status change.
-        for (final e in [].reversed) {
-          if (e.type != null) continue;
-          if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-          if (e.refId != paymentEventId) continue;
-          final s = e.status;
-          if (s != null && s.trim().isNotEmpty) {
-            status = s;
-            break;
-          }
-        }
-
-        // Fallback to legacy date-based status changes (no refId).
-        // If there are multiple payments that day, legacy status changes would
-        // incorrectly affect all of them.
-        if (!hasMultiplePaymentsThatDay &&
-            status == (payDay.isBefore(today) ? 'Pending' : 'Upcoming')) {
-          for (final e in [].reversed) {
-            if (e.type != null) continue;
-            if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-            if (e.refId != null) continue;
-            final s = e.status;
-            if (s != null && s.trim().isNotEmpty) {
-              status = s;
-              break;
-            }
-          }
-        }
-      } catch (_) {}
-
-      // Legacy mapping.
-      if (status.trim() == 'Overdue') status = 'Pending';
-
-      // Older builds treated "Pending" as a future label; normalize future dates to "Upcoming".
-      if (status.trim() == 'Pending' && !payDay.isBefore(today)) {
-        status = 'Upcoming';
-      }
-
-      if (status != 'Upcoming' &&
-          status != 'Pending' &&
-          status != 'Paid' &&
-          status != 'Paid fully' &&
-          status != 'Will pay later') {
-        status = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
-      }
-
-      return status;
-    }
-
     final rows = <_PaymentScheduleRow>[];
     for (final item in items) {
       final client = clientMap[item.clientId];
-      if (client == null) {
+      if (client != null) {
+        String formattedStatus = item.status;
+        if (formattedStatus.toLowerCase() == 'willpaylater') formattedStatus = 'Will pay later';
+        else if (formattedStatus.toLowerCase() == 'partial') formattedStatus = 'Partial';
+        else if (formattedStatus.toLowerCase() == 'paid') formattedStatus = 'Paid fully';
+        else if (formattedStatus.toLowerCase() == 'overdue') formattedStatus = 'Overdue';
+        else if (formattedStatus.toLowerCase() == 'unpaid') {
+          final now = DateTime.now();
+          final today = DateTime(now.year, now.month, now.day);
+          final payDay = DateTime(item.date.year, item.date.month, item.date.day);
+          formattedStatus = payDay.isBefore(today) ? 'Pending' : 'Upcoming';
+        }
+
+        rows.add(_PaymentScheduleRow(item: item, client: client, status: formattedStatus));
+      } else {
         debugPrint('Calendar: client not found for id ${item.clientId}');
-        continue;
       }
-      String status = 'Upcoming';
-      try {
-        status = statusFor(client, item.date, item.paymentEventId);
-      } catch (e) {
-        debugPrint('Calendar: error statusFor for ${client.id}: $e');
-      }
-      rows.add(_PaymentScheduleRow(item: item, client: client, status: status));
     }
 
     if (rows.isEmpty) {
@@ -1849,14 +1820,9 @@ class _PaymentScheduleList extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        value: status,
-                        icon: Icon(
-                          Icons.keyboard_arrow_down,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        dropdownColor: scheme.surface,
+                    if (AppModeScope.isClient(context))
+                      Text(
+                        status,
                         style: TextStyle(
                           color: isPaidOrPast
                               ? VibrantColors.pastelGreen
@@ -1864,7 +1830,24 @@ class _PaymentScheduleList extends StatelessWidget {
                           fontWeight: FontWeight.w700,
                           fontSize: 14,
                         ),
-                        items: [
+                      )
+                    else
+                      DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          value: status,
+                          icon: Icon(
+                            Icons.keyboard_arrow_down,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                          dropdownColor: scheme.surface,
+                          style: TextStyle(
+                            color: isPaidOrPast
+                                ? VibrantColors.pastelGreen
+                                : VibrantColors.warmYellow,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
+                          items: [
                           DropdownMenuItem(
                             value: resetLabel,
                             child: Text(resetLabel),

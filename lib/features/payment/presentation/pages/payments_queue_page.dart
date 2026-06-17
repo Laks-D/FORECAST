@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/app/app_mode.dart';
+import '../../../../core/app/student_enrollment_resolver.dart';
 
 import 'package:snow/design_system/widgets/app_empty_state.dart';
 import 'package:snow/design_system/widgets/app_loading.dart';
@@ -34,11 +35,25 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
   String? _filterStatus;
   
   late Stream<List<Payment>> _paymentsStream;
+  String _tutorName = 'Tutor';
+  bool _tutorNameFetched = false;
 
   @override
   void initState() {
     super.initState();
     _paymentsStream = context.read<ClientBloc>().paymentRepository.watchAll();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isClient = AppModeScope.isClient(context);
+    if (!_tutorNameFetched && isClient) {
+      _tutorNameFetched = true;
+      StudentEnrollmentResolver.getTutorName().then((name) {
+        if (mounted) setState(() => _tutorName = name);
+      });
+    }
   }
 
   @override
@@ -85,43 +100,45 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                       },
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  // ── Filter pills ─────────────────────────────────────────
-                  SizedBox(
-                    height: 36,
-                    child: ListView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      children: [
-                        _FilterPill(
-                          label: 'All',
-                          selected: _filterStatus == null,
-                          onTap: () => setState(() => _filterStatus = null),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterPill(
-                          label: 'Paid',
-                          color: VibrantColors.pastelGreen,
-                          selected: _filterStatus == 'Paid',
-                          onTap: () => setState(() => _filterStatus = 'Paid'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterPill(
-                          label: 'Unpaid',
-                          color: VibrantColors.warmYellow,
-                          selected: _filterStatus == 'Unpaid',
-                          onTap: () => setState(() => _filterStatus = 'Unpaid'),
-                        ),
-                        const SizedBox(width: 8),
-                        _FilterPill(
-                          label: 'Overdue',
-                          color: const Color(0xFFEF4444),
-                          selected: _filterStatus == 'Overdue',
-                          onTap: () => setState(() => _filterStatus = 'Overdue'),
-                        ),
-                      ],
+                  if (!isClient) ...[
+                    const SizedBox(height: 12),
+                    // ── Filter pills ─────────────────────────────────────────
+                    SizedBox(
+                      height: 36,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        children: [
+                          _FilterPill(
+                            label: 'All',
+                            selected: _filterStatus == null,
+                            onTap: () => setState(() => _filterStatus = null),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
+                            label: 'Paid',
+                            color: VibrantColors.pastelGreen,
+                            selected: _filterStatus == 'Paid',
+                            onTap: () => setState(() => _filterStatus = 'Paid'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
+                            label: 'Unpaid',
+                            color: VibrantColors.warmYellow,
+                            selected: _filterStatus == 'Unpaid',
+                            onTap: () => setState(() => _filterStatus = 'Unpaid'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
+                            label: 'Overdue',
+                            color: const Color(0xFFEF4444),
+                            selected: _filterStatus == 'Overdue',
+                            onTap: () => setState(() => _filterStatus = 'Overdue'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 14),
                   Expanded(
                     child: BlocBuilder<ClientBloc, ClientState>(
@@ -140,12 +157,16 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                             var rawPayments = snapshot.data!;
                             
                             if (isClient) {
+                               rawPayments = rawPayments.where((p) => p.status == PaymentStatus.paid).toList();
+                               
                                final uid = context.read<ClientBloc>().state is ClientLoaded 
                                   ? (context.read<ClientBloc>().state as ClientLoaded).entities.firstOrNull?.firebaseUid 
                                   : null;
-                               rawPayments = rawPayments.where((p) => p.firebaseUid == uid).toList();
+                               
+                               if (uid != null) {
+                                 rawPayments = rawPayments.where((p) => p.firebaseUid == uid).toList();
+                               }
                             }
-                            
                             if (rawPayments.isEmpty && state.entities.isEmpty) {
                               return Center(
                                 child: AppEmptyState(
@@ -159,7 +180,12 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                               );
                             }
 
-                            final mappedPayments = _mapPayments(rawPayments, state.entities);
+                            final mappedPayments = _mapPayments(
+                              rawPayments,
+                              state.entities,
+                              isClient: isClient,
+                              tutorName: _tutorName,
+                            );
 
                             bool matchesQuery(_PaymentVM p) {
                               if (_query.isEmpty) return true;
@@ -467,7 +493,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
 
   /// Returns ALL payment events as VMs, grouped by client + day.
   /// Each VM has a `paymentStatus` of 'Paid', 'Unpaid', or 'Overdue'.
-  List<_PaymentVM> _mapPayments(List<Payment> payments, List<Client> clients) {
+  List<_PaymentVM> _mapPayments(List<Payment> payments, List<Client> clients, {required bool isClient, required String tutorName}) {
     final now = DateTime.now();
     final singles = <_PaymentSingleVM>[];
 
@@ -486,7 +512,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
       singles.add(
         _PaymentSingleVM(
           entityId: client.id,
-          customerName: client.name,
+          customerName: isClient ? ((tutorName.trim().isNotEmpty && tutorName != 'Tutor') ? tutorName.trim() : 'Tutor') : client.name,
           contact: client.formattedPhone,
           amount: payment.amount,
           paidAt: payment.dueDate,

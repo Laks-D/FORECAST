@@ -10,6 +10,7 @@ import '../../../calendar/domain/entities/schedule_session.dart';
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
 import '../../../../core/utils/date_utils.dart';
+import '../../../../core/app/student_enrollment_resolver.dart';
 
 class DashboardMiddleCard extends StatelessWidget {
   const DashboardMiddleCard({super.key, this.height = 330});
@@ -136,6 +137,19 @@ class _ScheduleSummaryCard extends StatefulWidget {
 
 class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
   bool? _userExpanded;
+  String _tutorName = 'Tutor';
+  bool _tutorNameFetched = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_tutorNameFetched && AppModeScope.isClient(context)) {
+      _tutorNameFetched = true;
+      StudentEnrollmentResolver.getTutorName().then((name) {
+        if (mounted) setState(() => _tutorName = name);
+      });
+    }
+  }
 
   static const String _postponeActionValue = '__postpone__';
 
@@ -626,7 +640,12 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
         final visible = picked.take(3).toList(growable: false);
 
         Widget sessionRow(ScheduleSession s) {
-          final name = widget.clientNames[s.clientId] ?? 'Client';
+          final isClient = AppModeScope.isClient(context);
+          final name = isClient 
+              ? (s.courseName?.isNotEmpty == true 
+                  ? s.courseName! 
+                  : (_tutorName.trim().isNotEmpty && _tutorName != 'Tutor' ? _tutorName.trim() : 'Class'))
+              : (widget.clientNames[s.clientId] ?? 'Client');
           final derivedStatus = AppDateUtils.determineSessionStatus(
             s.status,
             s.date,
