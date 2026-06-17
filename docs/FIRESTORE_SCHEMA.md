@@ -41,10 +41,18 @@ Subcollections under each user:
 
 Recommended structure:
 - `theme`: object (persist `AppThemeState`)
-- `navModules`: object
+- `navModulesAdmin`: object
+- `navModulesClient`: object
+- `widgetCustomization`: object
 - `notificationPrefs`: object
+- `notificationRecords`: array (optional)
+- `pinnedClients`: array (optional)
+- `pinnedCourses`: array (optional)
 - `signupProfile`: object (if needed)
 - `adminProfile`: object (if needed)
+- `programCatalog`: array (optional)
+- `appMode`: string (optional)
+- `appRole`: string (optional)
 - `updatedAt`: server timestamp
 
 #### `users/{uid}/clients/{clientId}`
@@ -54,6 +62,7 @@ Recommended structure:
 
 Fields based on `Client.toJson()`:
 - `id`: string
+- `firebaseUid`: string? (links client record to Firebase Auth user)
 - `name`: string
 - `middleName`: string? 
 - `primaryContact`: string
@@ -76,6 +85,9 @@ Fields based on `Client.toJson()`:
 > Scaling note: storing all timeline events inside the client document is fine initially.
 > If timelines grow large, move events to `users/{uid}/clients/{clientId}/timeline/{eventId}`.
 
+#### `users/{uid}/deleted_clients/{clientId}`
+Same shape as `clients/{clientId}` for restore workflows.
+
 #### `users/{uid}/sessions/{sessionId}`
 **Document id:** `ScheduleSession.id` converted to string (current code uses `s.id.toString()`).
 
@@ -97,20 +109,11 @@ Fields based on `ScheduleSession.toJson()`:
 - `programEnrollmentId`: string?
 - `updatedAt`: server timestamp
 
-#### `users/{uid}/programs/{programId}`
-**Document id:** recommended: slugged name or a generated id
-
-Fields based on `RegisteredProgram.toJson()`:
-- `name`: string
-- `description`: string
-- `frequency`: string
-- `numberOfClasses`: number
-- `classDuration`: string
-- `customDays`: number
-- `updatedAt`: server timestamp
+#### `users/{uid}/deleted_sessions/{sessionId}`
+Same shape as `sessions/{sessionId}` for restore workflows.
 
 #### `users/{uid}/notifications/{notificationId}` (optional)
-If you want notification history per user (instead of local storage), store:
+If you want notification history per user instead of settings arrays, store:
 - `title`: string
 - `body`: string
 - `scheduledFor`: timestamp?

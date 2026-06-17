@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:uuid/uuid.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,6 +21,8 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   final ClientEventRepository clientEventRepository;
 
   List<Client> _allEntities = [];
+  StreamSubscription? _clientsSub;
+
   final _uuid = const Uuid();
 
   ClientBloc({
@@ -43,7 +46,14 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     on<PermanentlyDeleteClient>(_onPermanentlyDeleteClient);
   }
 
+  @override
+  Future<void> close() {
+    _clientsSub?.cancel();
+    return super.close();
+  }
+
   Future<void> _onLoad(LoadClients event, Emitter<ClientState> emit) async {
+    await _clientsSub?.cancel();
     emit(ClientLoading());
     await repository.loadFromStorage();
 

@@ -43,13 +43,17 @@ class AppModeCubit extends Cubit<AppModeState> {
     }
   }
 
+  bool _manualSelection = false;
+
   Future<void> _load() async {
     try {
       final m = await AppModeStorage.load();
+      if (_manualSelection || state.loaded) return;
       final effective = m ?? AppMode.admin;
       AppModeConfig.mode = effective;
       emit(state.copyWith(loaded: true, mode: effective));
     } catch (_) {
+      if (_manualSelection || state.loaded) return;
       AppModeConfig.mode = AppMode.admin;
       emit(state.copyWith(loaded: true, mode: AppMode.admin));
     }
@@ -57,6 +61,7 @@ class AppModeCubit extends Cubit<AppModeState> {
 
   Future<void> setMode(AppMode mode) async {
     if (state.forced) return;
+    _manualSelection = true;
     AppModeConfig.mode = mode;
     emit(state.copyWith(loaded: true, mode: mode));
     try {

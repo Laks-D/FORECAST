@@ -3,22 +3,25 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_slidable/flutter_slidable.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
-import 'package:gendral_app/design_system/theme/app_visual_style.dart';
-import 'package:gendral_app/design_system/widgets/app_empty_state.dart';
-import 'package:gendral_app/design_system/widgets/app_loading.dart';
-import 'package:gendral_app/design_system/widgets/app_search_field.dart';
-import 'package:gendral_app/design_system/widgets/app_neumorphic_buttons.dart';
+import 'package:snow/design_system/theme/app_chrome_theme.dart';
+import 'package:snow/design_system/theme/app_visual_style.dart';
+import 'package:snow/design_system/widgets/app_empty_state.dart';
+import 'package:snow/design_system/widgets/app_loading.dart';
+import 'package:snow/design_system/widgets/app_search_field.dart';
+import 'package:snow/design_system/widgets/app_neumorphic_buttons.dart';
 
 import '../../../calendar/bloc/sessions_cubit.dart';
+import '../../../../core/services/user_firestore_sync.dart';
 import '../../domain/entities/client.dart';
 import '../bloc/client_bloc.dart';
 import '../bloc/client_event.dart';
 import '../bloc/client_state.dart';
 import 'client_profile_page.dart';
 import 'client_registration_page.dart';
+import '../ui/invite_qr_page.dart';
+import '../ui/scan_invite_page.dart';
+import '../../../../features/settings/ui/deleted_clients_screen.dart';
 
 /// Common country-code suggestions for the autocomplete (without +, prefix shown in field).
 const _quickAddCodes = <String>[
@@ -55,7 +58,10 @@ const _quickAddCodes = <String>[
 ];
 
 class ClientPage extends StatefulWidget {
-  const ClientPage({super.key, this.embedInDashboard = false});
+  const ClientPage({
+    super.key,
+    this.embedInDashboard = false,
+  });
 
   final bool embedInDashboard;
 
@@ -64,7 +70,6 @@ class ClientPage extends StatefulWidget {
 }
 
 class _ClientPageState extends State<ClientPage> {
-  static const _pinnedPrefsKey = 'pinned_clients_v1';
   Set<String> _pinnedClientIds = <String>{};
 
   @override
@@ -73,10 +78,12 @@ class _ClientPageState extends State<ClientPage> {
     _loadPinnedClients();
   }
 
+
   Future<void> _loadPinnedClients() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_pinnedPrefsKey) ?? const <String>[];
+      final settings = await UserFirestoreSync.instance.loadSettings();
+      final raw = settings?['pinnedClients'];
+      final list = raw is List ? raw.whereType<String>().toList() : const <String>[];
       if (!mounted) return;
       setState(() => _pinnedClientIds = list.toSet());
     } catch (_) {
@@ -86,11 +93,9 @@ class _ClientPageState extends State<ClientPage> {
 
   Future<void> _persistPinnedClients() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        _pinnedPrefsKey,
-        _pinnedClientIds.toList(growable: false),
-      );
+      await UserFirestoreSync.instance.patchSettingsNow({
+        'pinnedClients': _pinnedClientIds.toList(growable: false),
+      });
     } catch (_) {
       // Ignore persistence failures.
     }
@@ -353,6 +358,18 @@ class _ClientPageState extends State<ClientPage> {
                   );
                 },
               ),
+              ListTile(
+                leading: const Icon(Icons.qr_code_scanner),
+                title: const Text('Scan invite QR'),
+                subtitle: const Text('Scan a tutor invite to prefill registration'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ScanInvitePage()),
+                  );
+                },
+              ),
               const SizedBox(height: 8),
             ],
           ),
@@ -395,44 +412,126 @@ class _ClientPageState extends State<ClientPage> {
                             ),
                       ),
                     ),
-                    if (visual.neumorphism)
-                      AppNeumorphicIconButton(
-                        tooltip: 'Add Client',
-                        icon: Icons.add,
-                        iconSize: 24,
-                        onPressed: _showAddClientOptions,
-                      )
-                    else
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: scheme.surface,
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(
-                            color: scheme.outlineVariant.withOpacity(0.55),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (visual.neumorphism)
+                          AppNeumorphicIconButton(
+                            tooltip: 'Invite — QR',
+                            icon: Icons.qr_code,
+                            iconSize: 22,
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                   builder: (_) => const InviteQrPage(),
+                                ),
+                              );
+                            },
+                          )
+                        else
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: scheme.outlineVariant.withOpacity(0.55),
+                              ),
+                            ),
+                            child: IconButton(
+                              tooltip: 'Invite — QR',
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const InviteQrPage(),
+                                  ),
+                                );
+                              },
+                              icon: Icon(Icons.qr_code, size: 22),
+                              color: onSurface,
+                            ),
                           ),
+                        const SizedBox(width: 8),
+                        if (visual.neumorphism)
+                          AppNeumorphicIconButton(
+                            tooltip: 'Add Client',
+                            icon: Icons.add,
+                            iconSize: 24,
+                            onPressed: _showAddClientOptions,
+                          )
+                        else
+                          DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: scheme.surface,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: scheme.outlineVariant.withOpacity(0.55),
+                              ),
+                            ),
+                            child: IconButton(
+                              tooltip: 'Add Client',
+                              onPressed: _showAddClientOptions,
+                              icon: const Icon(Icons.add, size: 24),
+                              color: onSurface,
+                            ),
+                          ),
+                        const SizedBox(width: 4),
+                        // Kebab menu — access deleted clients
+                        PopupMenuButton<String>(
+                          icon: Icon(Icons.more_vert, color: onSurface),
+                          tooltip: 'More options',
+                          onSelected: (value) {
+                            if (value == 'deleted') {
+                              final clientBloc = context.read<ClientBloc>();
+                              final sessionsCubit = context.read<SessionsCubit>();
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => MultiBlocProvider(
+                                    providers: [
+                                      BlocProvider.value(value: clientBloc),
+                                      BlocProvider.value(value: sessionsCubit),
+                                    ],
+                                    child: const DeletedClientsScreen(),
+                                  ),
+                                ),
+                              );
+                            }
+                          },
+                          itemBuilder: (_) => [
+                            const PopupMenuItem<String>(
+                              value: 'deleted',
+                              child: ListTile(
+                                leading: Icon(Icons.delete_sweep_outlined),
+                                title: Text('Deleted clients'),
+                                contentPadding: EdgeInsets.zero,
+                              ),
+                            ),
+                          ],
                         ),
-                        child: IconButton(
-                          tooltip: 'Add Client',
-                          onPressed: _showAddClientOptions,
-                          icon: const Icon(Icons.add, size: 24),
-                          color: onSurface,
-                        ),
-                      ),
+                      ],
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: _SearchPill(
-                  hintText: 'Search customer / phone / program',
-                  onChanged: (value) {
-                    final sessions =
-                        context.read<SessionsCubit>().state.sessions;
-                    context
-                        .read<ClientBloc>()
-                        .add(SearchClients(value, sessions: sessions));
-                  },
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _SearchPill(
+                        hintText: 'Search customer / phone / program',
+                        onChanged: (value) {
+                          final sessions =
+                              context.read<SessionsCubit>().state.sessions;
+                          context
+                              .read<ClientBloc>()
+                              .add(SearchClients(value, sessions: sessions));
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 14),
@@ -454,40 +553,46 @@ class _ClientPageState extends State<ClientPage> {
                       }
 
                       final entities = _orderedClients(state.entities);
-                      return ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
-                        itemCount: entities.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 14),
-                        itemBuilder: (context, index) {
-                          final entity = entities[index];
-                          final isPinned = _pinnedClientIds.contains(entity.id);
-
-                          return _ClientCard(
-                            entity: entity,
-                            scheme: scheme,
-                            chrome: chrome,
-                            onTap: () {
-                              final clientBloc = context.read<ClientBloc>();
-                              final sessionsCubit =
-                                  context.read<SessionsCubit>();
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => MultiBlocProvider(
-                                    providers: [
-                                      BlocProvider.value(value: clientBloc),
-                                      BlocProvider.value(value: sessionsCubit),
-                                    ],
-                                    child: ClientProfilePage(entity: entity),
-                                  ),
-                                ),
-                              );
-                            },
-                            pinned: isPinned,
-                            onPinToggle: () => _togglePin(entity),
-                            onDelete: () => _confirmDeleteClient(entity),
-                          );
+                      return RefreshIndicator(
+                        onRefresh: () async {
+                          context.read<ClientBloc>().add(LoadClients());
+                          await Future.delayed(const Duration(milliseconds: 800));
                         },
+                        child: ListView.separated(
+                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                          itemCount: entities.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 14),
+                          itemBuilder: (context, index) {
+                            final entity = entities[index];
+                            final isPinned = _pinnedClientIds.contains(entity.id);
+
+                            return _ClientCard(
+                              entity: entity,
+                              scheme: scheme,
+                              chrome: chrome,
+                              onTap: () {
+                                final clientBloc = context.read<ClientBloc>();
+                                final sessionsCubit =
+                                    context.read<SessionsCubit>();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => MultiBlocProvider(
+                                      providers: [
+                                        BlocProvider.value(value: clientBloc),
+                                        BlocProvider.value(value: sessionsCubit),
+                                      ],
+                                      child: ClientProfilePage(entity: entity),
+                                    ),
+                                  ),
+                                );
+                              },
+                              pinned: isPinned,
+                              onPinToggle: () => _togglePin(entity),
+                              onDelete: () => _confirmDeleteClient(entity),
+                            );
+                          },
+                        ),
                       );
                     }
 
@@ -803,5 +908,6 @@ Color _clientStatusColor(String status) {
   if (s == 'active') return VibrantColors.pastelGreen;
   if (s == 'pending') return VibrantColors.warmYellow;
   if (s == 'inactive') return const Color(0xFF6B7280);
+  if (s == 'on hold') return const Color(0xFFF97316); // orange
   return VibrantColors.softBlue;
 }

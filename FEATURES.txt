@@ -1,0 +1,206 @@
+================================================================================
+                        GENERIC APP — FULL FEATURES LIST
+================================================================================
+
+================================================================================
+  AUTHENTICATION
+================================================================================
+
+  [A1]  Sign up with email and password
+  [A2]  Sign up with Google
+  [A3]  Sign in with email and password
+  [A4]  Sign in with Google
+  [A5]  Forgot password — receive reset link via email
+  [A6]  Role selection at signup — choose Tutor, Student, or Both
+  [A7]  Add a second role later — verify existing password to merge roles
+        (e.g. register as Tutor now, add Student role later with same email)
+  [A8]  Role enforcement at login — Tutor-only accounts blocked from Student
+        tab and vice versa; only dual-role accounts can use both tabs
+  [A9]  Dual-role dashboard routing — login tab determines which dashboard loads
+  [A10] Sign out
+
+
+================================================================================
+  TUTOR — STUDENT MANAGEMENT (Client Roster)
+================================================================================
+
+  [T1]  View full list of all students with name, status, and contact info
+  [T2]  Search students by name, phone, status, or course name
+  [T3]  Pin / unpin students to top of the list
+  [T4]  Add a student manually (name, phone, email, country code, gender,
+        date of birth, address, currency, referral source)
+  [T5]  Edit student details (all fields above)
+  [T6]  View a student's full profile page
+  [T7]  View a student's payment history timeline
+  [T8]  View a student's notes timeline
+  [T9]  Add notes to a student's profile
+  [T10] Update a student's status (Active, Inactive, On Hold, etc.)
+  [T11] Swipe-to-delete a student (moves to Deleted list)
+  [T12] Restore a deleted student
+  [T13] View deleted students list
+
+
+================================================================================
+  TUTOR — PAYMENT TRACKING
+================================================================================
+
+  [P1]  Add a payment record for a student (amount, date, note)
+  [P2]  Mark a payment as Paid
+  [P3]  Mark a payment as Unpaid
+  [P4]  Mark a payment as "Will pay later"
+  [P5]  Mark a student as Paid Fully (aggregates all unpaid into one payment)
+  [P6]  Revert "Paid Fully" status
+  [P7]  Reschedule a payment to a new date
+  [P8]  Clear payment status for a specific date
+  [P9]  View payments queue — chronological list of all upcoming/past payments
+        across all students, grouped by month
+  [P10] View a student's individual payment transactions page
+  [P11] Payment status colour-coding (Paid, Unpaid, Will Pay Later, Overdue)
+
+
+================================================================================
+  TUTOR — SESSION SCHEDULING & CALENDAR
+================================================================================
+
+  [C1]  View a calendar with all scheduled sessions
+  [C2]  Schedule a session for a student (date, time, course/class name,
+        duration, notes)
+  [C3]  Schedule recurring sessions (daily, weekly, custom patterns)
+  [C4]  Edit an existing session
+  [C5]  Delete a session
+  [C6]  Delete all upcoming sessions for a specific student
+  [C7]  Restore deleted upcoming sessions for a student
+  [C8]  View sessions per student on their profile page
+
+
+================================================================================
+  TUTOR — COURSES / CLASSES
+================================================================================
+
+  [CL1] View all courses/classes with student assignments
+  [CL2] Search courses by name
+  [CL3] Pin / unpin a course
+  [CL4] View course profile page (details, sessions, enrolled student)
+
+
+================================================================================
+  TUTOR — QR INVITE & JOIN REQUEST FLOW
+================================================================================
+
+  [J1]  Generate a time-limited QR code invite (valid 15 minutes)
+  [J2]  Regenerate QR code on demand
+  [J3]  Share invite link via share sheet
+  [J4]  Copy invite link to clipboard
+  [J5]  View list of pending join requests from students
+  [J6]  Accept a join request — automatically creates enrollment record
+        and adds student to tutor's client roster
+  [J7]  Reject a join request
+  [J8]  Real-time join request banner shown while requests are pending
+
+
+================================================================================
+  TUTOR — PROGRAMS
+================================================================================
+
+  [PR1] Create a program (name, class duration)
+  [PR2] Edit a program
+  [PR3] Delete a program
+  [PR4] View all programs list
+  [PR5] Programs used as templates when scheduling sessions
+
+
+================================================================================
+  STUDENT — SELF-VIEW
+================================================================================
+
+  [S1]  View own profile (name, phone, email, gender, DOB, address)
+  [S2]  Edit own profile details
+  [S3]  View own payment history
+  [S4]  View own sessions/classes in the calendar (real-time from tutor)
+  [S5]  View own courses page (sessions assigned by tutor)
+  [S6]  Scan a tutor's QR code to send a join request
+  [S7]  View join request waiting screen (live status updates)
+  [S8]  Auto-link to tutor account if tutor manually added student by
+        email/phone before the student registered (orphan matching)
+
+
+================================================================================
+  SETTINGS
+================================================================================
+
+  [SE1] View and edit own profile (name, profession)
+  [SE2] Upload / change profile photo
+  [SE3] Customise app theme (colours, light/dark mode, accent)
+  [SE4] Customise dashboard modules — show/hide and reorder navigation tabs
+  [SE5] Customise dashboard widgets — toggle and reorder home screen cards
+  [SE6] Program management (create/edit/delete programs — tutor only)
+  [SE7] Notification history — view all received push notifications
+  [SE8] Notification settings — enable/disable notification categories
+  [SE9] About application — app info and version
+  [SE10] Help / FAQ section
+  [SE11] Role-switch guidance — for dual-role users (sign out → sign in via
+         other tab to switch dashboards)
+  [SE12] Log out
+
+
+================================================================================
+  NOTIFICATIONS
+================================================================================
+
+  [N1]  Push notifications via Firebase Cloud Messaging (FCM)
+  [N2]  Foreground notifications shown as local alerts (mobile)
+  [N3]  FCM token auto-registered on login, refreshed when token changes
+  [N4]  Notification history page — list of all past notifications
+  [N5]  Notification settings page — granular control per category
+
+
+================================================================================
+  DASHBOARD
+================================================================================
+
+  [D1]  Home dashboard with summary cards / widgets
+  [D2]  Bottom navigation with configurable tabs (Clients, Calendar,
+        Courses, Payments, Settings — tutor side)
+  [D3]  Student dashboard with own Sessions, Courses, Profile, Settings
+  [D4]  Role-based navigation — tabs shown depend on whether logged in
+        as Tutor or Student
+  [D5]  Module customisation — tutor can hide/show and reorder nav tabs
+  [D6]  Widget customisation — tutor can toggle and reorder dashboard cards
+
+
+================================================================================
+  DEEP LINKS & WEB HOSTING
+================================================================================
+
+  [W1]  Firebase-hosted invite landing page at genericapp-prod.web.app/join
+  [W2]  Android App Links / iOS Universal Links — app opens directly from
+        invite URL (instead of browser) when installed
+  [W3]  Cold-start deep link handling — processes invite URL even if app
+        was not running when link was tapped
+  [W4]  QR timestamp validation — rejects QR codes older than 15 minutes
+
+
+================================================================================
+  DATA & SYNC
+================================================================================
+
+  [DS1] All data stored in Cloud Firestore with real-time sync
+  [DS2] Offline-tolerant — Firestore local cache keeps app functional
+        without an internet connection
+  [DS3] User settings synced to Firestore (users/{uid}/settings/app)
+  [DS4] Debounced settings writes — avoids excessive Firestore writes
+  [DS5] Firestore security rules — all paths locked to authenticated owners;
+        students can only read their own data from their tutor's collections
+
+
+================================================================================
+  SYSTEM / TECHNICAL
+================================================================================
+
+  [SY1] Health check probe on app startup to verify Firestore connectivity
+  [SY2] Username-based login lookup (usernames collection)
+  [SY3] Profile completion screen after first-time Google sign-in
+  [SY4] Dev bootstrap utility for seeding test data (debug builds only)
+  [SY5] Responsive layouts for phone and tablet form factors
+
+================================================================================

@@ -1,8 +1,12 @@
 
+import 'dart:async';
+
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'notification_storage.dart';
+import 'notification_orchestrator.dart';
 
 final class NotificationState extends Equatable {
 	const NotificationState({
@@ -87,26 +91,47 @@ final class NotificationState extends Equatable {
 
 class NotificationCubit extends Cubit<NotificationState> {
 	NotificationCubit() : super(NotificationState.defaults()) {
+		_authSub = FirebaseAuth.instance.authStateChanges().listen((_) => _load());
 		_load();
 	}
+
+	StreamSubscription<User?>? _authSub;
 
 	Future<void> _load() async {
 		emit(state.copyWith(loading: true));
 		final prefs = await NotificationStorage.loadPrefs();
 		final records = await NotificationStorage.loadRecords();
 
+		final sessionReminders = (prefs['sessionReminders'] as bool?) ?? state.sessionReminders;
+		final sessionLeadMinutes = (prefs['sessionLeadMinutes'] as int?) ?? state.sessionLeadMinutes;
+		final paymentReminders = (prefs['paymentReminders'] as bool?) ?? state.paymentReminders;
+		final paymentReminderHour = (prefs['paymentReminderHour'] as int?) ?? state.paymentReminderHour;
+		final paymentReminderMinute = (prefs['paymentReminderMinute'] as int?) ?? state.paymentReminderMinute;
+		final paymentDaysBefore = (prefs['paymentDaysBefore'] as int?) ?? state.paymentDaysBefore;
+		final paymentOverdueDaily = (prefs['paymentOverdueDaily'] as bool?) ?? state.paymentOverdueDaily;
+
 		emit(
 			state.copyWith(
 				loading: false,
-				sessionReminders: (prefs['sessionReminders'] as bool?) ?? state.sessionReminders,
-				sessionLeadMinutes: (prefs['sessionLeadMinutes'] as int?) ?? state.sessionLeadMinutes,
-				paymentReminders: (prefs['paymentReminders'] as bool?) ?? state.paymentReminders,
-				paymentReminderHour: (prefs['paymentReminderHour'] as int?) ?? state.paymentReminderHour,
-				paymentReminderMinute: (prefs['paymentReminderMinute'] as int?) ?? state.paymentReminderMinute,
-				paymentDaysBefore: (prefs['paymentDaysBefore'] as int?) ?? state.paymentDaysBefore,
-				paymentOverdueDaily: (prefs['paymentOverdueDaily'] as bool?) ?? state.paymentOverdueDaily,
+				sessionReminders: sessionReminders,
+				sessionLeadMinutes: sessionLeadMinutes,
+				paymentReminders: paymentReminders,
+				paymentReminderHour: paymentReminderHour,
+				paymentReminderMinute: paymentReminderMinute,
+				paymentDaysBefore: paymentDaysBefore,
+				paymentOverdueDaily: paymentOverdueDaily,
 				records: _sortNewestFirst(records),
 			),
+		);
+
+		NotificationOrchestrator.instance.updatePreferences(
+			sessionRemindersEnabled: sessionReminders,
+			sessionLeadMinutes: sessionLeadMinutes,
+			paymentRemindersEnabled: paymentReminders,
+			paymentHour: paymentReminderHour,
+			paymentMinute: paymentReminderMinute,
+			paymentDaysBefore: paymentDaysBefore,
+			paymentOverdueDaily: paymentOverdueDaily,
 		);
 	}
 
@@ -134,31 +159,43 @@ class NotificationCubit extends Cubit<NotificationState> {
 	Future<void> toggleSessionReminders(bool enabled) async {
 		emit(state.copyWith(sessionReminders: enabled));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+			sessionRemindersEnabled: enabled);
 	}
 
 	Future<void> setSessionLeadMinutes(int minutes) async {
 		emit(state.copyWith(sessionLeadMinutes: minutes));
 		await _persistPrefs();
+		NotificationOrchestrator.instance
+				.updatePreferences(sessionLeadMinutes: minutes);
 	}
 
 	Future<void> togglePaymentReminders(bool enabled) async {
 		emit(state.copyWith(paymentReminders: enabled));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+				paymentRemindersEnabled: enabled);
 	}
 
 	Future<void> setPaymentReminderTime(int hour, int minute) async {
 		emit(state.copyWith(paymentReminderHour: hour, paymentReminderMinute: minute));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+				paymentHour: hour, paymentMinute: minute);
 	}
 
 	Future<void> setPaymentDaysBefore(int days) async {
 		emit(state.copyWith(paymentDaysBefore: days));
 		await _persistPrefs();
+		NotificationOrchestrator.instance
+				.updatePreferences(paymentDaysBefore: days);
 	}
 
 	Future<void> togglePaymentOverdueDaily(bool enabled) async {
 		emit(state.copyWith(paymentOverdueDaily: enabled));
 		await _persistPrefs();
+		NotificationOrchestrator.instance.updatePreferences(
+				paymentOverdueDaily: enabled);
 	}
 
 	/* ─────── Records API (used by NotificationsPage) ─────── */
@@ -190,6 +227,12 @@ class NotificationCubit extends Cubit<NotificationState> {
 	Future<void> clearAll() async {
 		emit(state.copyWith(records: const <AppNotification>[]));
 		await NotificationStorage.clearRecords();
+	}
+
+	@override
+	Future<void> close() async {
+		await _authSub?.cancel();
+		return super.close();
 	}
 }
 

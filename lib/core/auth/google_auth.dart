@@ -13,21 +13,22 @@ class GoogleAuth {
       final provider = GoogleAuthProvider();
       return FirebaseAuth.instance.signInWithPopup(provider);
     }
-
+    // Native/mobile flow
     if (!_initialized) {
       await GoogleSignIn.instance.initialize();
       _initialized = true;
     }
 
     final googleAccount = await GoogleSignIn.instance.authenticate();
-    final idToken = googleAccount.authentication.idToken;
+    final auth = googleAccount.authentication;
+    final idToken = auth.idToken;
+
     if (idToken == null || idToken.trim().isEmpty) {
       throw FirebaseAuthException(
-        code: 'GOOGLE_ID_TOKEN_MISSING',
-        message: 'Google sign-in failed: missing ID token',
+        code: 'GOOGLE_TOKENS_MISSING',
+        message: 'Google sign-in failed: missing tokens',
       );
     }
-
     final credential = GoogleAuthProvider.credential(idToken: idToken);
     return FirebaseAuth.instance.signInWithCredential(credential);
   }

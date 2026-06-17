@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -212,7 +210,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     if (_clashIds.isNotEmpty) return;
 
     if (_sessionCount > 1) {
-      final recurrenceId = 'rr_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+      final recurrenceId = 'rr_${DateTime.now().millisecondsSinceEpoch}';
       
       // Update draft sessions to have this recurrenceId
       final linkedDraft = _draft.map((s) => s.copyWith(recurrenceId: recurrenceId)).toList();

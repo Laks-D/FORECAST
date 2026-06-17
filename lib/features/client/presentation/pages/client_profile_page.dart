@@ -1,8 +1,12 @@
+import '../../domain/entities/client_event.dart' as domain;
+import '../../../payment/domain/entities/payment.dart';
+import '../../../client/presentation/bloc/client_bloc.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:gendral_app/design_system/theme/app_chrome_theme.dart';
-import 'package:gendral_app/design_system/widgets/app_card.dart';
+import 'package:snow/design_system/theme/app_chrome_theme.dart';
+import 'package:snow/design_system/widgets/app_card.dart';
 import '../../../../core/profile/user_profile_cubit.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
@@ -10,12 +14,13 @@ import '../../../calendar/domain/entities/schedule_session.dart';
 import '../../../calendar/domain/services/schedule_generator.dart';
 import '../../../calendar/ui/widgets/schedule_sessions_sheet.dart';
 import '../../domain/entities/client.dart';
-import '../../domain/entities/client_timeline_event.dart';
+
 import '../bloc/client_bloc.dart';
 import '../bloc/client_event.dart';
 import '../bloc/client_state.dart';
-import 'client_payments_page.dart';
+import '../../../payment/presentation/pages/client_transactions_page.dart';
 import 'client_personal_details_page.dart';
+import '../ui/scan_invite_page.dart';
 
 class ClientProfilePage extends StatelessWidget {
   final Client entity;
@@ -106,7 +111,7 @@ class ClientProfilePage extends StatelessWidget {
     required Client entity,
   }) async {
     final chrome = AppChromeTheme.of(context);
-    const options = <String>['Active', 'Pending', 'Inactive'];
+    const options = <String>['Active', 'On Hold', 'Inactive', 'Pending'];
 
     final picked = await showModalBottomSheet<String>(
       context: context,
@@ -244,7 +249,20 @@ class ClientProfilePage extends StatelessWidget {
         final current = updated ?? entity;
 
         return Scaffold(
-          appBar: AppBar(title: const Text('Profile')),
+          appBar: AppBar(
+            title: const Text('Profile'),
+            actions: [
+              IconButton(
+                tooltip: 'Scan to join class',
+                icon: const Icon(Icons.qr_code_scanner),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ScanInvitePage()),
+                  );
+                },
+              ),
+            ],
+          ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
             children: [
@@ -278,14 +296,21 @@ class ClientProfilePage extends StatelessWidget {
                     child: _QuickActionCard(
                       icon: Icons.payments_outlined,
                       label: 'Payment',
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => BlocProvider.value(
-                            value: context.read<ClientBloc>(),
-                            child: ClientPaymentsPage(entity: current),
+                      onTap: () {
+                        final clientBloc = context.read<ClientBloc>();
+                        final sessionsCubit = context.read<SessionsCubit>();
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MultiBlocProvider(
+                              providers: [
+                                BlocProvider.value(value: clientBloc),
+                                BlocProvider.value(value: sessionsCubit),
+                              ],
+                              child: ClientTransactionsPage(clientId: current.id),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -469,122 +494,9 @@ class _ProfileStatsCard extends StatelessWidget {
 
   const _ProfileStatsCard({required this.entity});
 
-  String _money(double amount, String currency) =>
-      '${currency}${amount.toStringAsFixed(0)}';
-
-  String _formatDate(DateTime? dt) {
-    if (dt == null) return '—';
-    return AppDateUtils.displayDate(dt);
-  }
-
-  String _paymentStatusFor(DateTime date, String paymentEventId) {
-    final dateKey = AppDateUtils.dateToStr(date);
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final payDay = DateTime(date.year, date.month, date.day);
-
-    final hasMultiplePaymentsThatDay = entity.timeline
-            .where((e) =>
-                e.type == ClientTimelineEventType.payment &&
-                AppDateUtils.dateToStr(e.createdAt) == dateKey)
-            .length >
-        1;
-
-    // Prefer payment-specific status.
-    for (final e in entity.timeline.reversed) {
-      if (e.type != ClientTimelineEventType.statusChanged) continue;
-      if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-      if (e.refId != paymentEventId) continue;
-      final s = e.status?.trim();
-      if (s == 'Paid' || s == 'Paid fully') return 'Paid';
-    }
-
-    // Legacy fallback (date-based) only when a single payment exists that day.
-    if (!hasMultiplePaymentsThatDay) {
-      for (final e in entity.timeline.reversed) {
-        if (e.type != ClientTimelineEventType.statusChanged) continue;
-        if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
-        if (e.refId != null) continue;
-        final s = e.status?.trim();
-        if (s == 'Paid' || s == 'Paid fully') return 'Paid';
-      }
-    }
-    if (payDay.isBefore(today)) return 'Pending';
-    return 'Upcoming';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-    final defaultCurrency =
-        context.select((UserProfileCubit c) => c.state.currency);
-    final currency = entity.currency ?? defaultCurrency;
-
-    double paidTotal = 0;
-    double upcomingTotal = 0;
-    double pendingTotal = 0;
-
-    for (final pay in entity.payments) {
-      final s = _paymentStatusFor(pay.createdAt, pay.id);
-      final amt = pay.amount ?? 0;
-      if (s == 'Paid') {
-        paidTotal += amt;
-      } else if (s == 'Pending') {
-        pendingTotal += amt;
-      } else {
-        upcomingTotal += amt;
-      }
-    }
-
-    return AppCard(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _StatRow(
-            label: 'Last Activity',
-            value: _formatDate(entity.lastActivityAt),
-            mutedColor: chrome.mutedColor,
-          ),
-          const SizedBox(height: 12),
-          _StatRow(
-            label: 'Total Amount',
-            value: _money(entity.outstandingAmount, currency),
-            valueStyle: Theme.of(context)
-                .textTheme
-                .bodyMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
-            mutedColor: chrome.mutedColor,
-          ),
-          const SizedBox(height: 12),
-          _StatRow(
-            label: 'Paid',
-            value: _money(paidTotal, currency),
-            valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: VibrantColors.deep(VibrantColors.pastelGreen)),
-            mutedColor: chrome.mutedColor,
-          ),
-          const SizedBox(height: 12),
-          _StatRow(
-            label: 'Upcoming',
-            value: _money(upcomingTotal, currency),
-            valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: VibrantColors.deep(VibrantColors.warmYellow)),
-            mutedColor: chrome.mutedColor,
-          ),
-          const SizedBox(height: 12),
-          _StatRow(
-            label: 'Pending',
-            value: _money(pendingTotal, currency),
-            valueStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: VibrantColors.deep(VibrantColors.softPink)),
-            mutedColor: chrome.mutedColor,
-          ),
-        ],
-      ),
-    );
+    return const SizedBox.shrink();
   }
 }
 
@@ -1948,84 +1860,74 @@ class _Timeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final defaultCurrency =
-        context.select((UserProfileCubit c) => c.state.currency);
-    final currency = entity.currency ?? defaultCurrency;
-    final events = [...entity.timeline]
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    final clientEventRepository = context.read<ClientBloc>().clientEventRepository;
+    return StreamBuilder<List<domain.ClientEvent>>(
+      stream: clientEventRepository.watchForClient(entity.id),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) return const SizedBox.shrink();
+        
+        final events = snapshot.data!;
+        if (events.isEmpty) return const SizedBox.shrink();
 
-    // Filter out payment and payment-related statusChanged events.
-    final nonPaymentEvents = events.where((e) {
-      if (e.type == ClientTimelineEventType.payment) return false;
-      if (e.type == ClientTimelineEventType.statusChanged) {
-        final s = e.status?.trim();
-        if (s == 'Paid' || s == 'Paid fully' || s == 'Will pay later') {
-          return false;
-        }
-      }
-      return true;
-    }).toList();
-
-    if (nonPaymentEvents.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
-          child: Text(
-            'Activity (${nonPaymentEvents.length})',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-          ),
-        ),
-        ...nonPaymentEvents.map((e) {
-          final subtitle = _subtitleForEvent(e, currency);
-          return Card(
-            child: ListTile(
-              title: Text(_titleForEvent(e)),
-              subtitle: subtitle == null ? null : Text(subtitle),
-              trailing: Text(
-                AppDateUtils.displayDate(e.createdAt),
-                style: Theme.of(context).textTheme.bodySmall,
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(left: 4, bottom: 8),
+              child: Text(
+                'Activity (${events.length})',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
               ),
             ),
-          );
-        }),
-      ],
+            ...events.map((e) {
+              final subtitle = _subtitleForEvent(e);
+              return Card(
+                child: ListTile(
+                  title: Text(_titleForEvent(e)),
+                  subtitle: subtitle == null ? null : Text(subtitle),
+                  trailing: Text(
+                    AppDateUtils.displayDate(e.createdAt),
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              );
+            }),
+          ],
+        );
+      }
     );
   }
 
-  String? _subtitleForEvent(ClientTimelineEvent e, String currency) {
+  String? _subtitleForEvent(domain.ClientEvent e) {
     switch (e.type) {
-      case ClientTimelineEventType.payment:
-        if (e.amount == null) return e.note;
-        if (e.note != null && e.note!.trim().isNotEmpty) {
-          return '${currency}${e.amount} • ${e.note!}';
+      case domain.ClientEventType.statusChanged:
+        final oldStatus = null;
+        final newStatus = e.status;
+        if (oldStatus != null && newStatus != null) {
+          return 'Changed from $oldStatus to $newStatus';
         }
-        return '${currency}${e.amount}';
-      case ClientTimelineEventType.statusChanged:
-        return e.status;
-      case ClientTimelineEventType.note:
+        return 'Status updated';
+      case domain.ClientEventType.note:
         return e.note;
-      case ClientTimelineEventType.profileCreated:
+      case domain.ClientEventType.profileCreated:
+        return null;
+      default:
         return null;
     }
   }
 
-  String _titleForEvent(ClientTimelineEvent e) {
+  String _titleForEvent(domain.ClientEvent e) {
     switch (e.type) {
-      case ClientTimelineEventType.profileCreated:
+      case domain.ClientEventType.profileCreated:
         return 'Profile created';
-      case ClientTimelineEventType.statusChanged:
+      case domain.ClientEventType.statusChanged:
         return 'Status changed';
-      case ClientTimelineEventType.payment:
-        return 'Payment received';
-      case ClientTimelineEventType.note:
+      case domain.ClientEventType.note:
         return 'Note added';
+      default:
+        return 'Activity';
     }
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
 import '../../../../core/app/app_mode.dart';
+import '../../../../core/firebase/firestore_db.dart';
 import '../../../../core/utils/date_utils.dart';
 import '../../../../core/storage/signup_profile_storage.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
@@ -27,6 +29,17 @@ class CourseProfilePage extends StatelessWidget {
     final chrome = AppChromeTheme.of(context);
     final isClientMode = AppModeScope.isClient(context);
 
+    final clientState = context.watch<ClientBloc>().state;
+    Client? client;
+    if (clientState is ClientLoaded) {
+      for (final c in clientState.entities) {
+        if (c.id == clientId) {
+          client = c;
+          break;
+        }
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(courseName),
@@ -38,38 +51,24 @@ class CourseProfilePage extends StatelessWidget {
           children: [
             _SectionCard(
               title: 'Course details',
-              child: BlocBuilder<ClientBloc, ClientState>(
-                builder: (context, state) {
-                  Client? client;
-                  if (state is ClientLoaded) {
-                    for (final c in state.entities) {
-                      if (c.id == clientId) {
-                        client = c;
-                        break;
-                      }
-                    }
-                  }
-
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _kv(context, 'Course', courseName, chrome),
-                      const SizedBox(height: 8),
-                      _kv(context, 'Client', client?.displayName ?? 'Client', chrome),
-                    ],
-                  );
-                },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _kv(context, 'Course', courseName, chrome),
+                  const SizedBox(height: 8),
+                  _kv(context, 'Client', client?.displayName ?? 'Client', chrome),
+                ],
               ),
             ),
             const SizedBox(height: 12),
             _SectionCard(
               title: 'Tutor info',
-              child: FutureBuilder<SignupProfileData?>(
-                future: SignupProfileStorage.getProfile(),
+              child: FutureBuilder<Map<String, String>>(
+                future: _getTutorInfo(isClientMode, client?.tutorId),
                 builder: (context, snap) {
-                  final profile = snap.data;
-                  final tutorName = (profile?.fullName ?? '').trim();
-                  final tutorEmail = (profile?.email ?? '').trim();
+                  final data = snap.data ?? {};
+                  final tutorName = data['name'] ?? '';
+                  final tutorEmail = data['email'] ?? '';
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -212,6 +211,32 @@ class CourseProfilePage extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<Map<String, String>> _getTutorInfo(bool isClientMode, String? passedTutorId) async {
+    if (!isClientMode) {
+      final profile = await SignupProfileStorage.getProfile();
+      return {
+        'name': (profile?.fullName ?? '').trim(),
+        'email': (profile?.email ?? '').trim(),
+      };
+    }
+
+    if (passedTutorId == null) return {};
+
+    try {
+      final tutorDoc = await firestoreDb.collection('users').doc(passedTutorId).get();
+      final tData = tutorDoc.data();
+      return {
+        'name': (tData?['fullName'] ?? tData?['displayName'] ?? 'Tutor').trim(),
+        'email': (tData?['email'] ?? '').trim(),
+      };
+    } catch (_) {
+      return {
+        'name': 'Tutor',
+        'email': '',
+      };
+    }
   }
 }
 

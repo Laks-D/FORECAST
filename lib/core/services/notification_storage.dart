@@ -1,9 +1,7 @@
-import 'dart:convert';
-
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 import 'user_firestore_sync.dart';
+import '../../features/notifications/data/notification_record_repository.dart';
 
 /// Types of in-app notifications.
 enum AppNotificationType { sessionReminder, paymentReminder, general }
@@ -61,21 +59,9 @@ class AppNotification {
 
 /// Persists notification preferences and in-app notification records.
 class NotificationStorage {
-  static const _prefsKeyBase = 'notification_prefs_v1';
-  static const _recordsKeyBase = 'notification_records_v1';
-  static const _dismissedKeyBase = 'notification_dismissed_v1';
-
-  static String _uidSuffix() {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    // If there's no signed-in user, keep this separate from any real user's data.
-    return uid == null || uid.trim().isEmpty ? '_signed_out' : '_$uid';
-  }
-
-  static String get _prefsKey => '$_prefsKeyBase${_uidSuffix()}';
-  static String get _recordsKey => '$_recordsKeyBase${_uidSuffix()}';
-  static String get _dismissedKey => '$_dismissedKeyBase${_uidSuffix()}';
-
-  /* ─────── Preferences ─────── */
+  static const _prefsKey = 'notificationPrefs';
+  static const _recordsKey = 'notificationRecords';
+  static const _dismissedKey = 'notificationDismissedIds';
 
   /// Default preferences.
   static const defaultPrefs = {
@@ -90,83 +76,65 @@ class NotificationStorage {
   };
 
   static Future<Map<String, dynamic>> loadPrefs() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_prefsKey);
-    if (raw == null) return Map.from(defaultPrefs);
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        final merged = {...defaultPrefs, ...decoded};
-
-        // One-time migration: old default was 15 minutes, new default is 5.
-        // If the stored value is missing or still 15, move it to 5.
-        final migrated = merged['__migrated_session_lead_5'] == true;
-        final storedLead = merged['sessionLeadMinutes'];
-        if (!migrated && (storedLead == null || storedLead == 15)) {
-          merged['sessionLeadMinutes'] = 5;
-          merged['__migrated_session_lead_5'] = true;
-          await prefs.setString(_prefsKey, jsonEncode(merged));
-          // Also mirror to Firestore settings (best-effort).
-          UserFirestoreSync.instance.scheduleSettingsPatch({'notificationPrefs': merged});
-        }
-
-        return merged;
-      }
-    } catch (_) {}
+    final settings = await UserFirestoreSync.instance.loadSettings();
+    final raw = settings?[_prefsKey];
+    if (raw is Map<String, dynamic>) {
+      return {...defaultPrefs, ...raw};
+    }
+    if (raw is Map) {
+      return {...defaultPrefs, ...Map<String, dynamic>.from(raw)};
+    }
     return Map.from(defaultPrefs);
   }
 
   static Future<void> savePrefs(Map<String, dynamic> data) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_prefsKey, jsonEncode(data));
-
-    UserFirestoreSync.instance.scheduleSettingsPatch({'notificationPrefs': data});
+    await UserFirestoreSync.instance.patchSettingsNow({_prefsKey: data});
   }
 
-  /* ─────── In-app records ─────── */
-
   static Future<List<AppNotification>> loadRecords() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_recordsKey);
-    if (raw == null) return [];
-    try {
-      final decoded = jsonDecode(raw) as List<dynamic>;
-      return decoded
-          .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
-          .toList();
-    } catch (_) {
-      return [];
+    final settings = await UserFirestoreSync.instance.loadSettings();
+    final raw = settings?[_recordsKey];
+    if (raw is List) {
+      return raw
+          .whereType<Map>()
+          .map((e) => AppNotification.fromJson(Map<String, dynamic>.from(e)))
+          .toList(growable: false);
     }
+    return const <AppNotification>[];
   }
 
   static Future<void> saveRecords(List<AppNotification> records) async {
-    final prefs = await SharedPreferences.getInstance();
-    final json = records.map((e) => e.toJson()).toList();
-    await prefs.setString(_recordsKey, jsonEncode(json));
+    final json = records.map((e) => e.toJson()).toList(growable: false);
+    await UserFirestoreSync.instance.patchSettingsNow({_recordsKey: json});
+    // Dual-write to the notifications sub-collection (additive; settings array
+    // remains the read source until the UI is switched over). Guarded.
+    unawaited(_mirrorToSubcollection(records));
+  }
+
+  static Future<void> _mirrorToSubcollection(
+      List<AppNotification> records) async {
+    try {
+      if (records.isEmpty) return;
+      await FirestoreNotificationRecordRepository().upsertAll(records);
+    } catch (_) {
+      // Non-critical mirror.
+    }
   }
 
   static Future<void> clearRecords() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_recordsKey);
+    await UserFirestoreSync.instance.patchSettingsNow({_recordsKey: []});
   }
 
-  /* ─────── Dismissed ids ─────── */
-
   static Future<Set<String>> loadDismissedIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_dismissedKey);
-    if (raw == null) return <String>{};
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is List) {
-        return decoded.whereType<String>().toSet();
-      }
-    } catch (_) {}
+    final settings = await UserFirestoreSync.instance.loadSettings();
+    final raw = settings?[_dismissedKey];
+    if (raw is List) {
+      return raw.whereType<String>().toSet();
+    }
     return <String>{};
   }
 
   static Future<void> saveDismissedIds(Set<String> ids) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_dismissedKey, jsonEncode(ids.toList()));
+    await UserFirestoreSync.instance.patchSettingsNow({_dismissedKey: ids.toList(growable: false)});
   }
 }

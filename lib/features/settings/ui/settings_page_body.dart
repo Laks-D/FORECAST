@@ -23,14 +23,13 @@ import '../../theme_customization/bloc/app_theme_state.dart';
 import '../../theme_customization/ui/theme_customization_screen.dart';
 import 'program_management_screen.dart';
 import 'profile/profile_details_screen.dart';
+import 'profile/client_profile_details_screen.dart';
 import '../../../core/services/notification_cubit.dart';
+import '../../../core/services/notification_service.dart';
 import '../../notifications/ui/notifications_page.dart';
 import '../../notifications/ui/notification_settings_page.dart';
 import '../../../core/app/app_mode.dart';
-import '../../client/presentation/bloc/client_state.dart';
-import '../../client/presentation/pages/my_profile_page.dart';
-import '../../client/presentation/pages/profile_not_linked_page.dart';
-import '../../client/domain/entities/client.dart';
+
 
 class SettingsPageBody extends StatelessWidget {
   const SettingsPageBody({super.key});
@@ -198,9 +197,13 @@ class SettingsPageBody extends StatelessWidget {
                         title: 'Module customization',
                         chevronColor: chevronColor,
                         onTap: () {
+                          final navCubit = context.read<NavModulesCubit>();
                           Navigator.of(context).push(
                             MaterialPageRoute<void>(
-                              builder: (_) => const ModuleCustomizationScreen(),
+                              builder: (_) => BlocProvider.value(
+                                value: navCubit,
+                                child: const ModuleCustomizationScreen(),
+                              ),
                             ),
                           );
                         },
@@ -264,6 +267,22 @@ class SettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
+                      _SectionTileDark(
+                        leading: Icons.podcasts_outlined,
+                        title: 'Test Local Notification',
+                        chevronColor: chevronColor,
+                        onTap: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Test notification triggered locally.')),
+                          );
+                          await NotificationService.instance.show(
+                            id: 9999,
+                            title: 'Local Notification Test',
+                            body: 'It works! Device-local notifications are fully operational.',
+                            payload: 'test',
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -285,6 +304,22 @@ class SettingsPageBody extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (AppModeConfig.isDualRole) ...[
+                    const SizedBox(height: 16),
+                    _SectionCardDark(
+                      color: cardColor,
+                      neumorphism: visual.neumorphism,
+                      children: [
+                        _SectionTileDark(
+                          leading: Icons.swap_horiz_rounded,
+                          title: 'Switch to Student Mode',
+                          subtitle: 'Sign out, then log in via the Student tab',
+                          chevronColor: chevronColor,
+                          onTap: () => FirebaseAuth.instance.signOut(),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 32),
                   _SectionCardDark(
                     color: cardColor,
@@ -314,7 +349,7 @@ class SettingsPageBody extends StatelessWidget {
       case DashboardTab.calendar:
         return Icons.calendar_month_outlined;
       case DashboardTab.people:
-        return Icons.group_outlined;
+        return AppModeConfig.isClient ? Icons.school_outlined : Icons.group_outlined;
       case DashboardTab.cards:
         return Icons.menu_book_outlined;
       case DashboardTab.home:
@@ -476,6 +511,22 @@ class _ClientSettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
+                      _SectionTileDark(
+                        leading: Icons.view_module_outlined,
+                        title: 'Module customization',
+                        chevronColor: chevronColor,
+                        onTap: () {
+                          final navCubit = context.read<NavModulesCubit>();
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => BlocProvider.value(
+                                value: navCubit,
+                                child: const ModuleCustomizationScreen(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -523,6 +574,22 @@ class _ClientSettingsPageBody extends StatelessWidget {
                           );
                         },
                       ),
+                      _SectionTileDark(
+                        leading: Icons.podcasts_outlined,
+                        title: 'Test Local Notification',
+                        chevronColor: chevronColor,
+                        onTap: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Test notification triggered locally.')),
+                          );
+                          await NotificationService.instance.show(
+                            id: 9999,
+                            title: 'Local Notification Test',
+                            body: 'It works! Device-local notifications are fully operational.',
+                            payload: 'test',
+                          );
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -544,6 +611,22 @@ class _ClientSettingsPageBody extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (AppModeConfig.isDualRole) ...[
+                    const SizedBox(height: 16),
+                    _SectionCardDark(
+                      color: cardColor,
+                      neumorphism: visual.neumorphism,
+                      children: [
+                        _SectionTileDark(
+                          leading: Icons.swap_horiz_rounded,
+                          title: 'Switch to Tutor Mode',
+                          subtitle: 'Sign out, then log in via the Tutor tab',
+                          chevronColor: chevronColor,
+                          onTap: () => FirebaseAuth.instance.signOut(),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 32),
                   _SectionCardDark(
                     color: cardColor,
@@ -591,57 +674,55 @@ class _ClientProfileCardCompact extends StatelessWidget {
           fontWeight: FontWeight.w500,
         );
 
-    return BlocBuilder<ClientBloc, ClientState>(
-      builder: (context, state) {
-        Client? me;
-        if (state is ClientLoaded && state.entities.isNotEmpty) {
-          me = state.entities.first;
-        }
-
-        return InkWell(
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => me == null
-                    ? const ProfileNotLinkedPage()
-                    : MyProfilePage(client: me),
-              ),
-            );
-          },
-          borderRadius: BorderRadius.circular(22),
-          child: Ink(
-            decoration: BoxDecoration(
-              color: cardColor,
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
-              boxShadow: shadows,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  const _AvatarCircleSmall(),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(me?.displayName ?? 'My profile', style: titleStyle),
-                        const SizedBox(height: 4),
-                        Text(me?.email ?? 'View your details', style: subtitleStyle),
-                      ],
-                    ),
-                  ),
-                  Icon(
-                    Icons.chevron_right,
-                    color: scheme.onSurface.withOpacity(0.35),
-                  ),
-                ],
-              ),
+    return InkWell(
+      onTap: () {
+        final dashboardCubit = context.read<DashboardCubit>();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => BlocProvider.value(
+              value: dashboardCubit,
+              child: const ClientProfileDetailsScreen(),
             ),
           ),
         );
       },
+      borderRadius: BorderRadius.circular(22),
+      child: Ink(
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: chrome.mutedColor.withOpacity(0.12)),
+          boxShadow: shadows,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              const _AvatarCircleSmall(),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    BlocSelector<DashboardCubit, DashboardState, String>(
+                      selector: (state) => state.userName ?? 'User',
+                      builder: (context, name) {
+                        return Text(name, style: titleStyle);
+                      },
+                    ),
+                    const SizedBox(height: 4),
+                    Text('Student Profile', style: subtitleStyle),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right,
+                color: scheme.onSurface.withOpacity(0.35),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

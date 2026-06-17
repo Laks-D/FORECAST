@@ -41,6 +41,8 @@ class AddPaymentToClient extends ClientEvent {
 class CreateClient extends ClientEvent {
   final String name;
   final String primaryContact;
+  final String? firebaseUid;
+  final String? referredBy;
   final String? middleName;
   final String? countryCode;
   final String? email;
@@ -51,6 +53,8 @@ class CreateClient extends ClientEvent {
   CreateClient({
     required this.name,
     required this.primaryContact,
+    this.firebaseUid,
+    this.referredBy,
     this.middleName,
     this.countryCode,
     this.email,
@@ -85,6 +89,7 @@ class UpdateClientDetails extends ClientEvent {
   final DateTime? dateOfBirth;
   final String? address;
   final String? currency;
+  final String? firebaseUid;
 
   UpdateClientDetails({
     required this.entityId,
@@ -97,6 +102,7 @@ class UpdateClientDetails extends ClientEvent {
     this.dateOfBirth,
     this.address,
     this.currency,
+    this.firebaseUid,
   });
 }
 
@@ -150,4 +156,9 @@ class DeleteClient extends ClientEvent {
 class RestoreClient extends ClientEvent {
   final String entityId;
   RestoreClient({required this.entityId});
+}
+
+class PermanentlyDeleteClient extends ClientEvent {
+  final String entityId;
+  PermanentlyDeleteClient({required this.entityId});
 }

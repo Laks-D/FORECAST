@@ -2,9 +2,14 @@ import 'dart:async';
 
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../core/app/app_mode.dart';
+import '../../../core/app/student_enrollment_resolver.dart';
+import '../data/datasources/schedule_local_datasource.dart';
 import '../domain/entities/schedule_session.dart';
+import '../domain/entities/recurrence_rule.dart';
+import '../data/recurrence_rule_repository.dart';
 import '../domain/repositories/schedule_repository.dart';
 
 final class SessionsState extends Equatable {
@@ -35,22 +40,46 @@ final class SessionsState extends Equatable {
 }
 
 class SessionsCubit extends Cubit<SessionsState> {
+  final RecurrenceRuleRepository recurrenceRepository;
   final ScheduleRepository repository;
+  final ScheduleLocalDataSource? _dataSource;
   StreamSubscription<List<ScheduleSession>>? _sub;
+  StreamSubscription<User?>? _authSub;
 
-  SessionsCubit(this.repository)
-      : super(const SessionsState(isLoading: true, sessions: [])) {
-    _init();
+  SessionsCubit(this.repository, {required this.recurrenceRepository, ScheduleLocalDataSource? dataSource})
+      : _dataSource = dataSource,
+        super(const SessionsState(isLoading: true, sessions: [])) {
+    _authSub = FirebaseAuth.instance.authStateChanges().listen((user) {
+      if (user == null) {
+        // Fix C: invalidate enrollment cache on sign-out so the next
+        // user always gets a fresh lookup.
+        StudentEnrollmentResolver.invalidateCache();
+        _sub?.cancel();
+        emit(const SessionsState(isLoading: false, sessions: []));
+      } else {
+        reinit();
+      }
+    });
   }
 
-  Future<void> _init() async {
+  Future<void> reinit() async {
+    await _sub?.cancel();
+    emit(state.copyWith(isLoading: true, error: null));
     await repository.loadFromStorage();
     _sub = repository.watchSessions().listen(
-      (items) => emit(state.copyWith(isLoading: false, sessions: items)),
+      (items) =>
+          emit(state.copyWith(isLoading: false, sessions: items, error: null)),
       onError: (e, __) => emit(
         state.copyWith(isLoading: false, error: e.toString()),
       ),
     );
+  }
+
+  
+  Future<void> addRecurringSessions(RecurrenceRule rule, List<ScheduleSession> sessions) async {
+    if (AppModeConfig.isClient) return;
+    await recurrenceRepository.upsert(rule);
+    await repository.addSessions(sessions);
   }
 
   Future<void> addSessions(List<ScheduleSession> sessions) {
@@ -91,6 +120,9 @@ class SessionsCubit extends Cubit<SessionsState> {
   @override
   Future<void> close() async {
     await _sub?.cancel();
+    await _authSub?.cancel();
+    // Fix E: dispose the datasource's stream subscriptions cleanly.
+    await _dataSource?.dispose();
     return super.close();
   }
 }

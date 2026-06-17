@@ -76,13 +76,11 @@ class JoinRequestService {
 
   /// Admin resolves a request by writing `accepted` or `rejected`.
   ///
-  /// On acceptance this atomically (via WriteBatch):
-  ///   1. Writes the enrollment record into the student's sub-collection so
-  ///      their device knows they are enrolled.
-  ///   2. Writes the client doc into the tutor's `clients` sub-collection so
-  ///      the client appears in the tutor's roster immediately.
-  /// The UI layer should reload clients via `LoadClients` after calling resolve
-  /// rather than issuing a separate `CreateClient`.
+  /// On acceptance this also writes the enrollment record into the student's
+  /// own sub-collection so their device knows they are enrolled.
+  /// The tutor's client record in `users/{tutorId}/clients` is created by the
+  /// UI layer (JoinRequestBanner → ClientBloc) because the Client entity
+  /// requires richer local-state management.
   static Future<void> resolve(String docId, String status) async {
     assert(status == 'accepted' || status == 'rejected');
 
@@ -102,71 +100,31 @@ class JoinRequestService {
     if (tutorId.isEmpty || studentUid.isEmpty) return;
 
     // Resolve the tutor's display name from their profile doc.
-    // The app stores the name in `fullName` (via upsertUserProfile) or
-    // `username` (the handle), not Firebase Auth's `displayName`.
     String tutorName = '';
     try {
       final tutorDoc = await firestoreDb.collection('users').doc(tutorId).get();
-      final d = tutorDoc.data();
-      tutorName = (d?['fullName'] as String?) ??
-                  (d?['username'] as String?) ??
-                  (d?['userName'] as String?) ??
-                  '';
+      tutorName = (tutorDoc.data()?['displayName'] as String?) ?? '';
     } catch (_) {
       // Non-fatal — tutorName stays empty rather than blocking enrollment.
     }
 
-    final clientId = docId;
-    final batch = firestoreDb.batch();
-
     // Write enrollment record to the client's own user doc so their device
     // can detect them as a client on next login / app restart.
-    batch.set(
-      firestoreDb
-          .collection('users')
-          .doc(studentUid)
-          .collection('enrollment')
-          .doc(tutorId),
-      {
-        ...buildEnrollmentPayload(
-          tutorId: tutorId,
-          studentUid: studentUid,
-          tutorName: tutorName,
-          source: 'qr',
-          joinRequestId: docId,
-        ),
-        'enrolledAt': FieldValue.serverTimestamp(),
-      },
-    );
-
-    // Write client doc to the tutor's client list atomically so there is
-    // no orphan enrollment (resolve and client creation are one unit).
-    batch.set(
-      firestoreDb
-          .collection('users')
-          .doc(tutorId)
-          .collection('clients')
-          .doc(clientId),
-      {
-        'id': clientId,
-        if (studentUid.isNotEmpty) 'firebaseUid': studentUid,
-        'name': (data['clientName'] as String?)?.isNotEmpty == true
-            ? data['clientName']
-            : 'Student',
-        'primaryContact':
-            (data['clientPhone'] as String?)?.isNotEmpty == true
-                ? data['clientPhone']
-                : '',
-        if ((data['clientEmail'] as String?)?.isNotEmpty == true)
-          'email': data['clientEmail'],
-        'status': 'Active',
-        'pinned': false,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      },
-    );
-
-    await batch.commit();
+    await firestoreDb
+        .collection('users')
+        .doc(studentUid)
+        .collection('enrollment')
+        .doc(tutorId)
+        .set({
+      ...buildEnrollmentPayload(
+        tutorId: tutorId,
+        studentUid: studentUid,
+        tutorName: tutorName,
+        source: 'qr',
+        joinRequestId: docId,
+      ),
+      'enrolledAt': FieldValue.serverTimestamp(),
+    });
   }
 
   /// Client-side: marks a pending request as `expired` when the waiting-page

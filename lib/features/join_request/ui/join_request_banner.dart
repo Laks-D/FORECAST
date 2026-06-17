@@ -98,10 +98,13 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
               ),
             );
           } else {
-            // Client doc was already created atomically inside
-            // JoinRequestService.resolve().  Just reload the local list so it
-            // appears immediately.
-            parentCtx.read<ClientBloc>().add(const LoadClients());
+            // Add student to the tutor's local client list so they appear immediately.
+            parentCtx.read<ClientBloc>().add(CreateClient(
+              name: req.clientName.isNotEmpty ? req.clientName : 'Student',
+              primaryContact: phone.isNotEmpty ? phone : (req.clientEmail.isNotEmpty ? req.clientEmail : ''),
+              email: req.clientEmail.isNotEmpty ? req.clientEmail : null,
+              firebaseUid: req.clientFirebaseUid.isNotEmpty ? req.clientFirebaseUid : null,
+            ));
             ScaffoldMessenger.of(parentCtx).showSnackBar(
               SnackBar(
                 content: Text('✓ ${req.clientName} accepted'),

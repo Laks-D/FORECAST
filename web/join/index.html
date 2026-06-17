@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join Class</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial; background:#f7fafc; color:#111827; padding:24px; }
+    .card { max-width:720px; margin:40px auto; background:white; border-radius:12px; padding:28px; box-shadow:0 6px 18px rgba(15,23,42,0.06); }
+    .meta { color:#6b7280; font-size:14px }
+    .big { font-size:20px; font-weight:600; margin-top:8px }
+    .cta { display:inline-block; margin-top:18px; padding:12px 18px; background:#0ea5a3; color:white; border-radius:8px; text-decoration:none }
+    .note { margin-top:12px; color:#374151 }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="meta">Class Invitation</div>
+    <div id="title" class="big">You're invited to join a class</div>
+    <div id="details" class="note">Loading invite details…</div>
+
+    <a id="openApp" class="cta" href="#">Open in App</a>
+
+    <p style="margin-top:16px; color:#6b7280; font-size:13px">If the button does not open your app, you can copy the link and share it with a friend or open it from the app's Join screen.</p>
+  </div>
+
+  <script>
+    function getQuery() {
+      const qs = window.location.search.replace(/^\?/, '');
+      const params = new URLSearchParams(qs);
+      return Object.fromEntries(params.entries());
+    }
+
+    const params = getQuery();
+    const details = [];
+    if (params.orgId) details.push('Organization: ' + params.orgId);
+    if (params.tutorId) details.push('Tutor: ' + params.tutorId);
+    if (params.ts) details.push('Sent: ' + new Date(Number(params.ts)).toUTCString());
+
+    document.getElementById('details').textContent = details.length ? details.join(' • ') : 'No invite details found.';
+
+    // Deep link: try an app scheme (customize if your app uses a scheme), fallback to intent link for Android
+    const fullUrl = window.location.href;
+    const appScheme = 'snow://join?';
+    const schemeLink = appScheme + window.location.search.replace(/^\?/, '');
+    const intentLink = 'intent://' + window.location.pathname + window.location.search + '#Intent;package=com.example.snow;scheme=https;end';
+
+    const openApp = document.getElementById('openApp');
+    openApp.href = schemeLink;
+    openApp.addEventListener('click', function(e) {
+      // attempt to open app, then fall back to staying on page
+      setTimeout(function() { /* no-op */ }, 1000);
+    });
+  </script>
+</body>
+</html>

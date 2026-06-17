@@ -10,8 +10,7 @@ import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../../design_system/widgets/app_neumorphic_buttons.dart';
 import '../../../../core/app/app_mode.dart';
 import '../../../client/domain/entities/client.dart';
-import '../../../client/domain/usecases/get_clients_usecase.dart';
-import '../../../client/domain/entities/client_timeline_event.dart';
+
 import '../../../client/presentation/bloc/client_bloc.dart';
 import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/presentation/bloc/client_event.dart';
@@ -501,15 +500,24 @@ class _WeeklyTopContent extends StatelessWidget {
               }
               markerDates = dates;
             } else {
-              final allClients = clientEntities ?? sl<GetClientsUseCase>().execute();
+              final allClients = clientEntities ?? (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
               final dates = <String>{};
               for (final c in allClients) {
-                for (final e in c.timeline) {
-                  if (e.type != ClientTimelineEventType.payment) continue;
+                for (final e in []) {
+                  if (e.type != null) continue;
                   final dateKey = AppDateUtils.dateToStr(e.createdAt);
-                  // Always include payment dates as markers even if payments
-                  // were marked Paid or Paid fully — keep per-day markers visible.
-                  dates.add(dateKey);
+                  // Skip dates covered by an earlier Paid fully.
+                  bool covered = false;
+                  for (final s in []) {
+                    if (s.type != null) continue;
+                    if (s.status?.trim() != 'Paid fully') continue;
+                    final sKey = AppDateUtils.dateToStr(s.createdAt);
+                    if (sKey.compareTo(dateKey) <= 0 && sKey != dateKey) {
+                      covered = true;
+                      break;
+                    }
+                  }
+                  if (!covered) dates.add(dateKey);
                 }
               }
               markerDates = dates;
@@ -761,16 +769,23 @@ class _MonthlyTopContent extends StatelessWidget {
               }
               markerDates = dates;
             } else {
-              final allClients = clientEntities ?? sl<GetClientsUseCase>().execute();
+              final allClients = clientEntities ?? (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
               final dates = <String>{};
               for (final c in allClients) {
-                for (final e in c.timeline) {
-                  if (e.type != ClientTimelineEventType.payment) continue;
+                for (final e in []) {
+                  if (e.type != null) continue;
                   final dateKey = AppDateUtils.dateToStr(e.createdAt);
-                  // Always include payment dates as markers. Do not hide a
-                  // date just because an earlier "Paid fully" exists — the
-                  // calendar should show the paid marker on the actual date.
-                  dates.add(dateKey);
+                  bool covered = false;
+                  for (final s in []) {
+                    if (s.type != null) continue;
+                    if (s.status?.trim() != 'Paid fully') continue;
+                    final sKey = AppDateUtils.dateToStr(s.createdAt);
+                    if (sKey.compareTo(dateKey) <= 0 && sKey != dateKey) {
+                      covered = true;
+                      break;
+                    }
+                  }
+                  if (!covered) dates.add(dateKey);
                 }
               }
               markerDates = dates;
@@ -1076,14 +1091,14 @@ class _CalendarBottomCard extends StatelessWidget {
               visibleDateStrs = {selectedDateStr};
             }
 
-            final clients = sl<GetClientsUseCase>().execute();
+            final clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
             final clientNames = {
               for (final c in clients) c.id: c.name,
             };
             final paymentItems = clients
                 .expand(
-                  (c) => c.timeline
-                      .where((e) => e.type == ClientTimelineEventType.payment)
+                  (c) => []
+                      .where((e) => e.type == null)
                       .map(
                         (e) => _PaymentScheduleItem(
                           clientId: c.id,
@@ -1583,7 +1598,7 @@ class _PaymentScheduleList extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final visual = AppVisualStyle.of(context);
-    final clients = sl<GetClientsUseCase>().execute();
+    final clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
     final clientMap = {for (final c in clients) c.id: c};
 
     String statusFor(Client client, DateTime date, String paymentEventId) {
@@ -1595,16 +1610,16 @@ class _PaymentScheduleList extends StatelessWidget {
       try {
         final dateKey = AppDateUtils.dateToStr(date);
 
-        final hasMultiplePaymentsThatDay = client.timeline
+        final hasMultiplePaymentsThatDay = []
             .where((e) =>
-              e.type == ClientTimelineEventType.payment &&
+              e.type == null &&
               AppDateUtils.dateToStr(e.createdAt) == dateKey)
             .length >
           1;
 
         // Prefer a payment-specific status change.
-        for (final e in client.timeline.reversed) {
-          if (e.type != ClientTimelineEventType.statusChanged) continue;
+        for (final e in [].reversed) {
+          if (e.type != null) continue;
           if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
           if (e.refId != paymentEventId) continue;
           final s = e.status;
@@ -1619,8 +1634,8 @@ class _PaymentScheduleList extends StatelessWidget {
         // incorrectly affect all of them.
         if (!hasMultiplePaymentsThatDay &&
             status == (payDay.isBefore(today) ? 'Pending' : 'Upcoming')) {
-          for (final e in client.timeline.reversed) {
-            if (e.type != ClientTimelineEventType.statusChanged) continue;
+          for (final e in [].reversed) {
+            if (e.type != null) continue;
             if (AppDateUtils.dateToStr(e.createdAt) != dateKey) continue;
             if (e.refId != null) continue;
             final s = e.status;
@@ -1698,7 +1713,6 @@ class _PaymentScheduleList extends StatelessWidget {
         final amountLabel = p.amount == null
           ? 'No amount'
           : '${rowCurrency}${p.amount!.toStringAsFixed(0)}';
-        final trimmedNote = (p.note ?? '').trim();
         final resetLabel = () {
           final now = DateTime.now();
           final today = DateTime(now.year, now.month, now.day);
@@ -1819,8 +1833,8 @@ class _PaymentScheduleList extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            trimmedNote.isNotEmpty
-                                ? '$amountLabel • $trimmedNote'
+                            p.note != null && p.note!.trim().isNotEmpty
+                                ? '$amountLabel • ${p.note!.trim()}'
                                 : amountLabel,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: scheme.onSurfaceVariant,
@@ -1832,126 +1846,126 @@ class _PaymentScheduleList extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          value: status,
-                          icon: Icon(
-                            Icons.keyboard_arrow_down,
-                            color: scheme.onSurfaceVariant,
-                          ),
-                          dropdownColor: scheme.surface,
-                          style: TextStyle(
-                            color: isPaidOrPast
-                                ? VibrantColors.pastelGreen
-                                : VibrantColors.warmYellow,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                          ),
-                          items: [
-                            DropdownMenuItem(
-                              value: resetLabel,
-                              child: Text(resetLabel),
-                            ),
-                            const DropdownMenuItem(
-                              value: 'Paid',
-                              child: Text('Paid'),
-                            ),
-                            const DropdownMenuItem(
-                              value: 'Paid fully',
-                              child: Text('Paid fully'),
-                            ),
-                            const DropdownMenuItem(
-                              value: 'Will pay later',
-                              child: Text('Will pay later'),
-                            ),
-                          ],
-                          onChanged: (v) {
-                            if (v == null) return;
-
-                            if (v == resetLabel) {
-                              try {
-                                context.read<ClientBloc>().add(
-                                      ClearPaymentStatusForDate(
-                                        entityId: client.id,
-                                        date: p.date,
-                                        paymentId: p.paymentEventId,
-                                      ),
-                                    );
-                              } catch (_) {}
-
-                              try {
-                                context.read<CalendarCubit>().refresh();
-                              } catch (_) {}
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  duration: const Duration(seconds: 1),
-                                  content: Text(
-                                    'Payment reset to $resetLabel for ${AppDateUtils.displayDate(p.date)}',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-
-                            if (v == 'Will pay later') {
-                              if (isPaidOrPast) {
-                                context.read<ClientBloc>().add(
-                                      ClearPaymentStatusForDate(
-                                        entityId: client.id,
-                                        date: p.date,
-                                        paymentId: p.paymentEventId,
-                                      ),
-                                    );
-                              }
-                              openReschedule();
-                              return;
-                            }
-
-                            if (v == 'Paid') {
-                              context.read<ClientBloc>().add(
-                                    UpdateClientStatus(
-                                      entityId: client.id,
-                                      status: 'Paid',
-                                      createdAt: p.date,
-                                      refId: p.paymentEventId,
-                                    ),
-                                  );
-                              try {
-                                context.read<CalendarCubit>().refresh();
-                              } catch (_) {}
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  duration: const Duration(seconds: 1),
-                                  content: Text(
-                                    'Payment marked Paid for ${AppDateUtils.displayDate(p.date)}',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-
-                            if (v == 'Paid fully') {
-                              context.read<ClientBloc>().add(
-                                    MarkClientPaidFully(
-                                      entityId: client.id,
-                                      fromDate: p.date,
-                                    ),
-                                  );
-                              try {
-                                context.read<CalendarCubit>().refresh();
-                              } catch (_) {}
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  duration: const Duration(seconds: 1),
-                                  content: Text(
-                                    'Marked Paid for all payments on ${AppDateUtils.displayDate(p.date)}',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-                          },
+                      child: DropdownButton<String>(
+                        value: status,
+                        icon: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: scheme.onSurfaceVariant,
                         ),
+                        dropdownColor: scheme.surface,
+                        style: TextStyle(
+                          color: isPaidOrPast
+                              ? VibrantColors.pastelGreen
+                              : VibrantColors.warmYellow,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 14,
+                        ),
+                        items: [
+                          DropdownMenuItem(
+                            value: resetLabel,
+                            child: Text(resetLabel),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Paid',
+                            child: Text('Paid'),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Paid fully',
+                            child: Text('Paid fully'),
+                          ),
+                          const DropdownMenuItem(
+                            value: 'Will pay later',
+                            child: Text('Will pay later'),
+                          ),
+                        ],
+                        onChanged: (v) {
+                          if (v == null) return;
+
+                          if (v == resetLabel) {
+                            try {
+                              context.read<ClientBloc>().add(
+                                    ClearPaymentStatusForDate(
+                                      entityId: client.id,
+                                      date: p.date,
+                                      paymentId: p.paymentEventId,
+                                    ),
+                                  );
+                            } catch (_) {}
+
+                            try {
+                              context.read<CalendarCubit>().refresh();
+                            } catch (_) {}
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                duration: const Duration(seconds: 1),
+                                content: Text(
+                                  'Payment reset to $resetLabel for ${AppDateUtils.displayDate(p.date)}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (v == 'Will pay later') {
+                            if (isPaidOrPast) {
+                              context.read<ClientBloc>().add(
+                                    ClearPaymentStatusForDate(
+                                      entityId: client.id,
+                                      date: p.date,
+                                      paymentId: p.paymentEventId,
+                                    ),
+                                  );
+                            }
+                            openReschedule();
+                            return;
+                          }
+
+                          if (v == 'Paid') {
+                            context.read<ClientBloc>().add(
+                                  UpdateClientStatus(
+                                    entityId: client.id,
+                                    status: 'Paid',
+                                    createdAt: p.date,
+                                    refId: p.paymentEventId,
+                                  ),
+                                );
+                            try {
+                              context.read<CalendarCubit>().refresh();
+                            } catch (_) {}
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                duration: const Duration(seconds: 1),
+                                content: Text(
+                                  'Payment marked Paid for ${AppDateUtils.displayDate(p.date)}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+
+                          if (v == 'Paid fully') {
+                            context.read<ClientBloc>().add(
+                                  MarkClientPaidFully(
+                                    entityId: client.id,
+                                    fromDate: p.date,
+                                  ),
+                                );
+                            try {
+                              context.read<CalendarCubit>().refresh();
+                            } catch (_) {}
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                duration: const Duration(seconds: 1),
+                                content: Text(
+                                  'Marked Paid for all payments on ${AppDateUtils.displayDate(p.date)}',
+                                ),
+                              ),
+                            );
+                            return;
+                          }
+                        },
                       ),
+                    ),
                   ],
                 ),
               ),
@@ -1999,15 +2013,15 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
   DateTime _normalizeDay(DateTime d) => DateTime(d.year, d.month, d.day);
 
   Future<void> _save() async {
-    final clients = sl<GetClientsUseCase>().execute();
+    final clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
     final client = clients.firstWhere((c) => c.id == widget.clientId);
-    final timeline = client.timeline;
+    final timeline = [];
 
     // Find the exact payment object by id AND date (safe even with legacy duplicate IDs).
     final oldKey = AppDateUtils.dateToStr(_normalizeDay(widget.currentDate));
-    ClientTimelineEvent? old;
+    dynamic? old;
     for (final e in timeline) {
-      if (e.type != ClientTimelineEventType.payment) continue;
+      if (e.type != null) continue;
       if (e.id != widget.paymentEventId) continue;
       if (AppDateUtils.dateToStr(_normalizeDay(e.createdAt)) == oldKey) {
         old = e;
@@ -2016,7 +2030,7 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
     }
     // Fallback: match by id only (for newly-generated unique IDs).
     old ??= timeline.firstWhere(
-      (e) => e.type == ClientTimelineEventType.payment && e.id == widget.paymentEventId,
+      (e) => e.type == null && e.id == widget.paymentEventId,
     );
 
     final targetDay = _normalizeDay(_newDate);
@@ -2029,10 +2043,10 @@ class _ReschedulePaymentSheetState extends State<_ReschedulePaymentSheet> {
 
     // Look for an existing payment on the target date for the SAME client.
     // Use `identical` to skip the exact object we're rescheduling.
-    ClientTimelineEvent? existing;
+    dynamic? existing;
     for (final e in timeline) {
       if (identical(e, old)) continue;
-      if (e.type != ClientTimelineEventType.payment) continue;
+      if (e.type != null) continue;
       if (AppDateUtils.dateToStr(_normalizeDay(e.createdAt)) == targetKey) {
         existing = e;
         break;
@@ -2471,7 +2485,7 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
   @override
   void initState() {
     super.initState();
-    clients = sl<GetClientsUseCase>().execute();
+    clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
     if (clients.isNotEmpty) {
       _clientId = clients.first.id;
     }
@@ -2572,9 +2586,13 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
     return DateTime(year, month, day.clamp(1, dim));
   }
 
-  // Previously used to avoid scheduling duplicate payments on the same day.
-  // We intentionally allow multiple payments per client on the same date,
-  // so this helper is no longer needed.
+  Set<String> _existingPaymentKeysForClient(String clientId) {
+    final selectedClient = clients.firstWhere((c) => c.id == clientId);
+    return []
+        .where((e) => e.type == null)
+        .map((e) => AppDateUtils.dateToStr(_normalizeDay(e.createdAt)))
+        .toSet();
+  }
 
   DateTime _firstDateForFrequency({
     required DateTime start,
@@ -2632,6 +2650,7 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
     required int monthlyDate,
     required int customDays,
     required int count,
+    required Set<String> existingPaymentKeys,
   }) {
     final result = <DateTime>[];
     final seen = <String>{};
@@ -2647,8 +2666,7 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
     while (result.length < count && guard < (count * 40).clamp(40, 2000)) {
       guard++;
       final key = AppDateUtils.dateToStr(_normalizeDay(d));
-      // Allow generating dates even if a payment already exists on that day.
-      if (seen.add(key)) {
+      if (!existingPaymentKeys.contains(key) && seen.add(key)) {
         result.add(_normalizeDay(d));
       }
       d = _nextDateForFrequency(
@@ -2720,6 +2738,8 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
       note = 'Every $_customDays days';
     }
 
+    final existingPaymentKeys = _existingPaymentKeysForClient(clientId);
+
     final isTotalAmount = hasFull;
     final int desiredCount = _times;
     final double amountPerPayment;
@@ -2737,6 +2757,7 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
       monthlyDate: _monthlyDate,
       customDays: _customDays,
       count: desiredCount,
+      existingPaymentKeys: existingPaymentKeys,
     );
 
     if (generated.isEmpty) {

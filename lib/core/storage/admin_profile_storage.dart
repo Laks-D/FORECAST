@@ -1,13 +1,7 @@
-import 'dart:convert';
-
-import 'package:shared_preferences/shared_preferences.dart';
-
 import '../services/user_firestore_sync.dart';
 
-/// Persists the admin (app-user) profile details locally.
+/// Persists the admin (app-user) profile details in Firestore.
 class AdminProfileStorage {
-  static const _key = 'admin_profile_data_v1';
-
   static Future<void> save({
     String? userName,
     String? userHandle,
@@ -17,7 +11,6 @@ class AdminProfileStorage {
     String? userGender,
     DateTime? userDateOfBirth,
   }) async {
-    final prefs = await SharedPreferences.getInstance();
     final data = <String, dynamic>{
       'userName': userName,
       'userHandle': userHandle,
@@ -27,9 +20,8 @@ class AdminProfileStorage {
       'userGender': userGender,
       'userDateOfBirth': userDateOfBirth?.toIso8601String(),
     };
-    await prefs.setString(_key, jsonEncode(data));
 
-    UserFirestoreSync.instance.scheduleSettingsPatch({'adminProfile': data});
+    await UserFirestoreSync.instance.patchSettingsNow({'adminProfile': data});
     await UserFirestoreSync.instance.upsertUserProfile(
       fullName: userName,
       handle: userHandle,
@@ -42,20 +34,14 @@ class AdminProfileStorage {
   }
 
   static Future<Map<String, dynamic>?> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_key);
-    if (raw == null || raw.trim().isEmpty) return null;
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is! Map<String, dynamic>) return null;
-      return decoded;
-    } catch (_) {
-      return null;
-    }
+    final settings = await UserFirestoreSync.instance.loadSettings();
+    final raw = settings?['adminProfile'];
+    if (raw is Map<String, dynamic>) return raw;
+    if (raw is Map) return Map<String, dynamic>.from(raw);
+    return null;
   }
 
   static Future<void> clear() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_key);
+    await UserFirestoreSync.instance.patchSettingsNow({'adminProfile': null});
   }
 }

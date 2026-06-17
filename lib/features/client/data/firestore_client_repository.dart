@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../core/app/target_uid_resolver.dart';
 import '../domain/entities/client.dart';
@@ -27,10 +26,6 @@ class FirestoreClientRepository implements ClientRepository {
 
   @override
   Stream<List<Client>> watchClients() async* {
-    // Wait for Firebase Auth to initialise so that _col() returns a valid
-    // reference even on cold start.  Without this the stream would yield []
-    // once and close permanently.
-    await FirebaseAuth.instance.authStateChanges().first;
     final col = await _col();
     if (col == null) {
       yield const [];

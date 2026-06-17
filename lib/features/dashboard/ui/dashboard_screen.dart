@@ -3,8 +3,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:typed_data';
 
 import '../../calendar/bloc/calendar_cubit.dart';
+import '../../../core/app/app_mode.dart';
 import '../bloc/dashboard_cubit.dart';
 import 'widgets/dashboard_phone_frame.dart';
+import '../../join_request/ui/join_request_banner.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({
@@ -14,6 +16,7 @@ class DashboardScreen extends StatelessWidget {
     this.initialUserPhone,
     this.initialUserAvatarBytes,
     this.initialUserAvatarAlignment,
+    this.canSwitchMode = false,
   });
 
   final String? initialUserName;
@@ -21,6 +24,9 @@ class DashboardScreen extends StatelessWidget {
   final String? initialUserPhone;
   final Uint8List? initialUserAvatarBytes;
   final Alignment? initialUserAvatarAlignment;
+  /// When true the user is enrolled as both a student and a tutor;
+  /// the UI exposes a mode-switch option so they can toggle roles.
+  final bool canSwitchMode;
 
   @override
   Widget build(BuildContext context) {
@@ -29,16 +35,25 @@ class DashboardScreen extends StatelessWidget {
         BlocProvider(
           create: (_) {
             final cubit = DashboardCubit();
-            // Load persisted profile, then overlay any initial values.
+            // Load persisted profile, then overlay Firebase Auth values ONLY if
+            // Firestore returned no saved data for that field.
             cubit.loadProfile().then((_) {
               final name = (initialUserName ?? '').trim();
               final email = (initialUserEmail ?? '').trim();
               final phone = (initialUserPhone ?? '').trim();
               final avatarBytes = initialUserAvatarBytes;
               final avatarAlignment = initialUserAvatarAlignment;
-              if (name.isNotEmpty) cubit.setUserName(name);
-              if (email.isNotEmpty) cubit.setUserEmail(email);
-              if (phone.isNotEmpty) cubit.setUserPhone(phone);
+              // Don't overwrite a saved profile name with the Firebase Auth
+              // displayName — users may have customised their display name in-app.
+              if (name.isNotEmpty && (cubit.state.userName ?? '').isEmpty) {
+                cubit.setUserName(name);
+              }
+              if (email.isNotEmpty && (cubit.state.userEmail ?? '').isEmpty) {
+                cubit.setUserEmail(email);
+              }
+              if (phone.isNotEmpty && (cubit.state.userPhone ?? '').isEmpty) {
+                cubit.setUserPhone(phone);
+              }
               if (avatarBytes != null) cubit.setUserAvatarBytes(avatarBytes);
               if (avatarAlignment != null) cubit.setUserAvatarAlignment(avatarAlignment);
             });
@@ -47,21 +62,29 @@ class DashboardScreen extends StatelessWidget {
         ),
         BlocProvider(create: (_) => CalendarCubit()),
       ],
-      child: const _DashboardView(),
+      child: _DashboardView(canSwitchMode: canSwitchMode),
     );
   }
 }
 
 class _DashboardView extends StatelessWidget {
-  const _DashboardView();
+  const _DashboardView({this.canSwitchMode = false});
+
+  final bool canSwitchMode;
 
   @override
   Widget build(BuildContext context) {
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
+    final isClient = AppModeScope.isClient(context);
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: const DashboardPhoneFrame(),
+      body: isClient
+          ? const DashboardPhoneFrame()
+          : const JoinRequestBanner(
+              child: DashboardPhoneFrame(),
+            ),
     );
   }
 }
+

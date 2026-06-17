@@ -1,0 +1,22 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.snow.app",
+      "sha256_cert_fingerprints": [
+        "0F:CE:2A:F1:F4:2D:24:8B:95:CE:B8:EB:C7:7A:4F:EB:21:CA:1A:72:C2:E2:BF:90:6F:3A:84:9B:93:65:12:C3"
+      ]
+    }
+  },
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.snow.app.dev",
+      "sha256_cert_fingerprints": [
+        "0F:CE:2A:F1:F4:2D:24:8B:95:CE:B8:EB:C7:7A:4F:EB:21:CA:1A:72:C2:E2:BF:90:6F:3A:84:9B:93:65:12:C3"
+      ]
+    }
+  }
+]

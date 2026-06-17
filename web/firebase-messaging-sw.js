@@ -4,7 +4,7 @@ importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js
 importScripts('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging-compat.js');
 
 firebase.initializeApp({
-  apiKey: 'AIzaSyAtMZUGKK2Zp9cju9jS2b86LqG-RDacW0Y',
+  apiKey: 'REDACTED',
   authDomain: 'generalapp-dev-3de9b.firebaseapp.com',
   projectId: 'generalapp-dev-3de9b',
   storageBucket: 'generalapp-dev-3de9b.firebasestorage.app',
