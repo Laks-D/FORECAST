@@ -78,9 +78,9 @@ class NotificationService {
           AndroidInitializationSettings('@mipmap/ic_launcher');
 
       const iosSettings = DarwinInitializationSettings(
-        requestAlertPermission: true,
-        requestBadgePermission: true,
-        requestSoundPermission: true,
+        requestAlertPermission: false,
+        requestBadgePermission: false,
+        requestSoundPermission: false,
         defaultPresentAlert: true,
         defaultPresentBadge: true,
         defaultPresentSound: true,
@@ -98,7 +98,8 @@ class NotificationService {
 
       if (!kIsWeb && Platform.isAndroid) {
         await _createAndroidChannels();
-        await _requestAndroidPermissions();
+        // Fire and forget permission request to avoid blocking the splash screen.
+        _requestAndroidPermissions();
       }
 
       _initialized = true;

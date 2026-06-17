@@ -21,16 +21,47 @@ import 'features/theme_customization/bloc/app_theme_cubit.dart';
 import 'features/theme_customization/bloc/app_theme_state.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await runConfiguredApp();
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    await runConfiguredApp();
+  } catch (e, st) {
+    debugPrint('Fatal error during startup: $e');
+    debugPrintStack(stackTrace: st);
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Startup Error:\n$e\n\n$st',
+                style: const TextStyle(color: Colors.red, fontSize: 12),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 Future<void> runConfiguredApp({AppMode? forcedMode}) async {
   WidgetsFlutterBinding.ensureInitialized();
   if (forcedMode != null) AppModeConfig.mode = forcedMode;
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    // If the native Android/iOS SDK already auto-initialized the default app 
+    // (using google-services.json / GoogleService-Info.plist), it will throw duplicate-app.
+    // We can safely ignore this and proceed.
+    if (e.toString().contains('duplicate-app')) {
+      debugPrint('Firebase [DEFAULT] app already initialized natively. Proceeding.');
+    } else {
+      rethrow;
+    }
+  }
   debugPrint('🔥 Firebase started successfully!');
 
   if (kIsWeb) {
@@ -48,7 +79,7 @@ Future<void> runConfiguredApp({AppMode? forcedMode}) async {
   }
 
   await setupServiceLocator();
-  await NotificationService.instance.init();
+  NotificationService.instance.init();
   DeepLinkService.instance.init();
   runApp(App(forcedMode: forcedMode));
 

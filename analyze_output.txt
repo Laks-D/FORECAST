@@ -1,0 +1,149 @@
+Resolving dependencies...
+Downloading packages...
+  _flutterfire_internals 1.3.68 (1.3.72 available)
+  async 2.13.0 (2.13.1 available)
+  bloc 8.1.4 (9.2.1 available)
+  cloud_firestore 6.2.0 (6.5.0 available)
+  cloud_firestore_platform_interface 7.1.0 (8.0.2 available)
+  cloud_firestore_web 5.2.0 (5.5.0 available)
+  dbus 0.7.12 (0.7.14 available)
+  ffi 2.1.5 (2.2.0 available)
+  firebase_auth 6.3.0 (6.5.2 available)
+  firebase_auth_platform_interface 8.1.8 (9.0.2 available)
+  firebase_auth_web 6.1.4 (6.2.2 available)
+  firebase_core 4.6.0 (4.10.0 available)
+  firebase_core_platform_interface 6.0.3 (7.0.1 available)
+  firebase_core_web 3.5.1 (3.8.0 available)
+  firebase_messaging 16.1.3 (16.3.0 available)
+  firebase_messaging_platform_interface 4.7.8 (4.8.0 available)
+  firebase_messaging_web 4.1.4 (4.2.0 available)
+  flex_color_picker 3.7.2 (3.8.0 available)
+  flex_seed_scheme 3.6.1 (4.0.1 available)
+  flutter_bloc 8.1.6 (9.1.1 available)
+  flutter_lints 4.0.0 (6.0.0 available)
+  flutter_local_notifications 20.1.0 (22.0.1 available)
+  flutter_local_notifications_linux 7.0.0 (8.0.1 available)
+  flutter_local_notifications_platform_interface 10.0.0 (12.0.0 available)
+  flutter_local_notifications_windows 2.0.1 (3.1.1 available)
+  flutter_plugin_android_lifecycle 2.0.33 (2.0.35 available)
+  flutter_slidable 3.1.2 (4.0.3 available)
+  get_it 7.7.0 (9.2.1 available)
+  google_fonts 6.3.3 (8.1.0 available)
+  google_sign_in_android 7.2.10 (7.2.13 available)
+  google_sign_in_ios 6.2.5 (6.3.0 available)
+  image_picker 1.2.1 (1.2.2 available)
+  image_picker_android 0.8.13+13 (0.8.13+19 available)
+  image_picker_ios 0.8.13+3 (0.8.13+6 available)
+  lints 4.0.0 (6.1.0 available)
+  matcher 0.12.19 (0.12.20 available)
+  meta 1.17.0 (1.18.3 available)
+  path_provider_android 2.2.22 (2.3.1 available)
+  path_provider_foundation 2.5.1 (2.6.0 available)
+  shared_preferences 2.5.4 (2.5.5 available)
+  shared_preferences_android 2.4.20 (2.4.26 available)
+  shared_preferences_platform_interface 2.4.1 (2.4.2 available)
+  source_span 1.10.1 (1.10.2 available)
+  test_api 0.7.10 (0.7.12 available)
+  timezone 0.10.1 (0.11.0 available)
+  vector_math 2.2.0 (2.4.0 available)
+  vm_service 15.0.2 (15.2.0 available)
+  xml 6.6.1 (7.0.1 available)
+Got dependencies!
+48 packages have newer versions incompatible with dependency constraints.
+Try `flutter pub outdated` for more information.
+Analyzing generic_app...                                        
+
+  error • The named parameter 'clientEventRepository' is required, but there's no corresponding argument • lib/core/di/service_locator.dart:98:11 • missing_required_argument
+  error • The named parameter 'paymentRepository' is required, but there's no corresponding argument • lib/core/di/service_locator.dart:98:11 • missing_required_argument
+  error • The named parameter 'repository' is required, but there's no corresponding argument • lib/core/di/service_locator.dart:98:11 • missing_required_argument
+  error • Too many positional arguments: 0 expected, but 11 found • lib/core/di/service_locator.dart:99:7 • extra_positional_arguments_could_be_named
+  error • The named parameter 'recurrenceId' isn't defined • lib/features/calendar/domain/services/schedule_generator.dart:72:11 • undefined_named_parameter
+warning • Unused import: '../../../../core/di/service_locator.dart' • lib/features/calendar/ui/widgets/schedule_sessions_sheet.dart:10:8 • unused_import
+  error • Target of URI doesn't exist: '../../domain/entities/recurrence_rule.dart' • lib/features/calendar/ui/widgets/schedule_sessions_sheet.dart:20:8 • uri_does_not_exist
+  error • The named parameter 'recurrenceId' isn't defined • lib/features/calendar/ui/widgets/schedule_sessions_sheet.dart:218:56 • undefined_named_parameter
+  error • The method 'RecurrenceRule' isn't defined for the type '_ScheduleSessionsSheetState' • lib/features/calendar/ui/widgets/schedule_sessions_sheet.dart:220:20 • undefined_method
+  error • The method 'addRecurringSessions' isn't defined for the type 'SessionsCubit' • lib/features/calendar/ui/widgets/schedule_sessions_sheet.dart:234:19 • undefined_method
+  error • Target of URI doesn't exist: '../../../core/app/target_uid_resolver.dart' • lib/features/client/data/firestore_client_repository.dart:4:8 • uri_does_not_exist
+  error • Missing concrete implementations of 'ClientRepository.addNote', 'ClientRepository.addPayment', 'ClientRepository.addStatusChange', 'ClientRepository.clearPaymentStatusesForDate', and 6 more • lib/features/client/data/firestore_client_repository.dart:8:7 • non_abstract_class_inherits_abstract_member
+  error • Undefined class 'TargetUidProvider' • lib/features/client/data/firestore_client_repository.dart:11:5 • undefined_class
+  error • Undefined name 'defaultTargetUid' • lib/features/client/data/firestore_client_repository.dart:13:35 • undefined_identifier
+  error • Undefined class 'TargetUidProvider' • lib/features/client/data/firestore_client_repository.dart:16:9 • undefined_class
+warning • The method doesn't override an inherited method • lib/features/client/data/firestore_client_repository.dart:29:24 • override_on_non_overriding_member
+  error • 'FirestoreClientRepository.getClients' ('Future<List<Client>> Function()') isn't a valid override of 'ClientRepository.getClients' ('List<Client> Function()') • lib/features/client/data/firestore_client_repository.dart:43:24 • invalid_override
+  error • 'FirestoreClientRepository.getDeletedClients' ('Future<List<Client>> Function()') isn't a valid override of 'ClientRepository.getDeletedClients' ('List<Client> Function()') • lib/features/client/data/firestore_client_repository.dart:51:24 • invalid_override
+warning • The method doesn't override an inherited method • lib/features/client/data/firestore_client_repository.dart:59:16 • override_on_non_overriding_member
+warning • The method doesn't override an inherited method • lib/features/client/data/firestore_client_repository.dart:69:16 • override_on_non_overriding_member
+warning • The method doesn't override an inherited method • lib/features/client/data/firestore_client_repository.dart:114:16 • override_on_non_overriding_member
+   info • The imported package 'uuid' isn't a dependency of the importing package • lib/features/client/presentation/bloc/client_bloc.dart:1:8 • depend_on_referenced_packages
+  error • Target of URI doesn't exist: 'package:uuid/uuid.dart' • lib/features/client/presentation/bloc/client_bloc.dart:1:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: '../../../payment/domain/repositories/payment_repository.dart' • lib/features/client/presentation/bloc/client_bloc.dart:9:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: '../../../payment/domain/entities/payment.dart' • lib/features/client/presentation/bloc/client_bloc.dart:10:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: '../../data/client_event_repository.dart' • lib/features/client/presentation/bloc/client_bloc.dart:11:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: '../../domain/entities/client_event.dart' • lib/features/client/presentation/bloc/client_bloc.dart:12:8 • uri_does_not_exist
+  error • Undefined class 'PaymentRepository' • lib/features/client/presentation/bloc/client_bloc.dart:19:9 • undefined_class
+  error • Undefined class 'ClientEventRepository' • lib/features/client/presentation/bloc/client_bloc.dart:20:9 • undefined_class
+  error • The name 'Uuid' isn't a class • lib/features/client/presentation/bloc/client_bloc.dart:23:23 • creation_with_non_type
+  error • The name 'PermanentlyDeleteClient' isn't a type, so it can't be used as a type argument • lib/features/client/presentation/bloc/client_bloc.dart:43:8 • non_type_as_type_argument
+  error • The method 'watchClients' isn't defined for the type 'ClientRepository' • lib/features/client/presentation/bloc/client_bloc.dart:51:18 • undefined_method
+warning • The value of the local variable 'email' isn't used • lib/features/client/presentation/bloc/client_bloc.dart:58:17 • unused_local_variable
+warning • The value of the local variable 'phone' isn't used • lib/features/client/presentation/bloc/client_bloc.dart:59:17 • unused_local_variable
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:62:34 • undefined_getter
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:133:27 • undefined_getter
+  error • The method 'Payment' isn't defined for the type 'ClientBloc' • lib/features/client/presentation/bloc/client_bloc.dart:145:33 • undefined_method
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:149:27 • undefined_getter
+  error • Undefined name 'PaymentStatus' • lib/features/client/presentation/bloc/client_bloc.dart:152:15 • undefined_identifier
+  error • The method 'updateClient' isn't defined for the type 'ClientRepository' • lib/features/client/presentation/bloc/client_bloc.dart:163:22 • undefined_method
+  error • The named parameter 'timeline' is required, but there's no corresponding argument • lib/features/client/presentation/bloc/client_bloc.dart:163:35 • missing_required_argument
+  error • The named parameter 'firebaseUid' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:165:7 • undefined_named_parameter
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:165:27 • undefined_getter
+  error • The named parameter 'status' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:175:7 • undefined_named_parameter
+  error • The named parameter 'pinned' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:176:7 • undefined_named_parameter
+  error • The getter 'pinned' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:176:22 • undefined_getter
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:183:27 • undefined_getter
+  error • The method 'updateClient' isn't defined for the type 'ClientRepository' • lib/features/client/presentation/bloc/client_bloc.dart:203:24 • undefined_method
+  error • The named parameter 'timeline' is required, but there's no corresponding argument • lib/features/client/presentation/bloc/client_bloc.dart:203:37 • missing_required_argument
+  error • The named parameter 'firebaseUid' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:207:9 • undefined_named_parameter
+  error • The getter 'firebaseUid' isn't defined for the type 'UpdateClientDetails' • lib/features/client/presentation/bloc/client_bloc.dart:207:78 • undefined_getter
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:207:100 • undefined_getter
+  error • The named parameter 'status' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:215:9 • undefined_named_parameter
+  error • The named parameter 'pinned' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:216:9 • undefined_named_parameter
+  error • The getter 'pinned' isn't defined for the type 'Client' • lib/features/client/presentation/bloc/client_bloc.dart:216:24 • undefined_getter
+  error • The named parameter 'timeline' is required, but there's no corresponding argument • lib/features/client/presentation/bloc/client_bloc.dart:225:20 • missing_required_argument
+  error • The named parameter 'firebaseUid' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:227:7 • undefined_named_parameter
+  error • The getter 'firebaseUid' isn't defined for the type 'CreateClient' • lib/features/client/presentation/bloc/client_bloc.dart:227:26 • undefined_getter
+  error • The named parameter 'status' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:236:7 • undefined_named_parameter
+  error • The named parameter 'pinned' isn't defined • lib/features/client/presentation/bloc/client_bloc.dart:237:7 • undefined_named_parameter
+  error • The method 'addClient' isn't defined for the type 'ClientRepository' • lib/features/client/presentation/bloc/client_bloc.dart:239:22 • undefined_method
+  error • The getter 'firebaseUid' isn't defined for the type 'CreateClient' • lib/features/client/presentation/bloc/client_bloc.dart:245:26 • undefined_getter
+  error • The getter 'referredBy' isn't defined for the type 'CreateClient' • lib/features/client/presentation/bloc/client_bloc.dart:250:15 • undefined_getter
+  error • The getter 'firebaseUid' isn't defined for the type 'CreateClient' • lib/features/client/presentation/bloc/client_bloc.dart:255:28 • undefined_getter
+  error • The getter 'referredBy' isn't defined for the type 'CreateClient' • lib/features/client/presentation/bloc/client_bloc.dart:257:37 • undefined_getter
+  error • Undefined name 'PaymentStatus' • lib/features/client/presentation/bloc/client_bloc.dart:266:60 • undefined_identifier
+  error • The name 'Payment' isn't a type, so it can't be used as a type argument • lib/features/client/presentation/bloc/client_bloc.dart:276:35 • non_type_as_type_argument
+  error • Undefined name 'PaymentStatus' • lib/features/client/presentation/bloc/client_bloc.dart:286:23 • undefined_identifier
+  error • Undefined name 'PaymentStatus' • lib/features/client/presentation/bloc/client_bloc.dart:296:23 • undefined_identifier
+  error • Undefined name 'PaymentStatus' • lib/features/client/presentation/bloc/client_bloc.dart:298:57 • undefined_identifier
+   info • Uses 'await' on an instance of 'void', which is not a subtype of 'Future' • lib/features/client/presentation/bloc/client_bloc.dart:305:5 • await_only_futures
+  error • This expression has a type of 'void' so its value can't be used • lib/features/client/presentation/bloc/client_bloc.dart:305:22 • use_of_void_result
+   info • Uses 'await' on an instance of 'void', which is not a subtype of 'Future' • lib/features/client/presentation/bloc/client_bloc.dart:310:5 • await_only_futures
+  error • This expression has a type of 'void' so its value can't be used • lib/features/client/presentation/bloc/client_bloc.dart:310:22 • use_of_void_result
+  error • Undefined class 'PermanentlyDeleteClient' • lib/features/client/presentation/bloc/client_bloc.dart:313:43 • undefined_class
+  error • The method 'permanentlyDeleteClient' isn't defined for the type 'ClientRepository' • lib/features/client/presentation/bloc/client_bloc.dart:315:22 • undefined_method
+  error • The returned type 'QueryDocumentSnapshot<Map<String, dynamic>>?' isn't returnable from a 'FutureOr<DocumentSnapshot<Map<String, dynamic>>>' function, as required by the closure's context • lib/features/client/presentation/pages/my_profile_page.dart:270:27 • return_of_invalid_type_from_closure
+  error • Target of URI doesn't exist: 'enrollment_payload.dart' • lib/features/join_request/join_request_service.dart:4:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: 'join_request_model.dart' • lib/features/join_request/join_request_service.dart:5:8 • uri_does_not_exist
+  error • The name 'JoinRequestModel' isn't a type, so it can't be used as a type argument • lib/features/join_request/join_request_service.dart:65:22 • non_type_as_type_argument
+  error • Undefined name 'JoinRequestModel' • lib/features/join_request/join_request_service.dart:73:25 • undefined_identifier
+  error • The method 'buildEnrollmentPayload' isn't defined for the type 'JoinRequestService' • lib/features/join_request/join_request_service.dart:131:12 • undefined_method
+  error • Target of URI doesn't exist: '../bloc/join_request_listener_cubit.dart' • lib/features/join_request/ui/join_request_banner.dart:8:8 • uri_does_not_exist
+  error • Target of URI doesn't exist: '../join_request_model.dart' • lib/features/join_request/ui/join_request_banner.dart:9:8 • uri_does_not_exist
+  error • The name 'JoinRequestListenerCubit' isn't a type, so it can't be used as a type argument • lib/features/join_request/ui/join_request_banner.dart:33:25 • non_type_as_type_argument
+  error • The name 'JoinRequestModel' isn't a type, so it can't be used as a type argument • lib/features/join_request/ui/join_request_banner.dart:33:56 • non_type_as_type_argument
+  error • Undefined class 'JoinRequestModel' • lib/features/join_request/ui/join_request_banner.dart:49:5 • undefined_class
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/join_request/ui/join_request_banner.dart:72:57 • undefined_getter
+  error • The getter 'firebaseUid' isn't defined for the type 'Client' • lib/features/join_request/ui/join_request_banner.dart:87:58 • undefined_getter
+  error • The named parameter 'firebaseUid' isn't defined • lib/features/join_request/ui/join_request_banner.dart:90:19 • undefined_named_parameter
+  error • The name 'JoinRequestListenerCubit' isn't a type, so it can't be used as a type argument • lib/features/join_request/ui/join_request_banner.dart:130:36 • non_type_as_type_argument
+  error • Undefined class 'JoinRequestModel' • lib/features/join_request/ui/join_request_banner.dart:150:9 • undefined_class
+warning • The declaration '_mergeNote' isn't referenced • lib/features/payment/presentation/pages/payments_queue_page.dart:540:11 • unused_element
+

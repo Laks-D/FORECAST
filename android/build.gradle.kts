@@ -1,4 +1,4 @@
-extra["firebase_bom_version"] = "33.8.0"
+extra["kotlin_version"] = "2.1.10"
 
 allprojects {
     repositories {

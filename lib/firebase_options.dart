@@ -60,16 +60,15 @@ class DefaultFirebaseOptions {
     projectId: 'snow-appifybiz',
     storageBucket: 'snow-appifybiz.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyCWEMK833XuDhcswSzuyLZbSTT-S7QHpi8',
     appId: '1:25215427677:ios:60095104ce4e6c485c19b4',
     messagingSenderId: '25215427677',
     projectId: 'snow-appifybiz',
     storageBucket: 'snow-appifybiz.firebasestorage.app',
+    iosClientId: '25215427677-q4cehaa8rq1vcnedkkdas2t1i3gipstn.apps.googleusercontent.com',
     iosBundleId: 'com.snow.app',
   );
-
   static const FirebaseOptions windows = FirebaseOptions(
     apiKey: 'AIzaSyDBAX_CHFBmAqT4-NyJw0VFfs9Z8GYLJnY',
     appId: '1:25215427677:web:d3e41dc761b6f27d5c19b4',
