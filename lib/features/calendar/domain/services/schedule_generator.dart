@@ -1,7 +1,24 @@
+import 'dart:math';
+
 import '../../../../core/utils/date_utils.dart';
 import '../entities/schedule_session.dart';
 
 class ScheduleGenerator {
+  /// Per-process counter to avoid ID collisions even if two sessions are
+  /// generated within the same microsecond on the same device.
+  static int _seq = 0;
+
+  static final _random = Random();
+
+  /// Returns an ID that is unique across devices by mixing the current
+  /// microsecond timestamp, a per-process counter, a random component, and
+  /// the client's ID hash.
+  static int _nextId(String clientId, int offset) {
+    final ts = DateTime.now().microsecondsSinceEpoch;
+    final clientBits = (clientId.hashCode & 0xFFFFF);
+    _seq++;
+    return ts + offset + (_seq * 100000) + clientBits + _random.nextInt(99999);
+  }
   static List<ScheduleSession> generate({
     required int count,
     required DateTime startDate,
@@ -13,9 +30,9 @@ class ScheduleGenerator {
     int startSessionNo = 1,
     int customDays = 1,
     SessionDuration? duration,
-    ProgramType? programType,
     String? courseName,
     String? programEnrollmentId,
+    String? recurrenceId,
   }) {
     final sessions = <ScheduleSession>[];
     var cursor = DateTime(startDate.year, startDate.month, startDate.day);
@@ -43,16 +60,16 @@ class ScheduleGenerator {
     for (var i = 0; i < count; i++) {
       sessions.add(
         ScheduleSession(
-          id: DateTime.now().millisecondsSinceEpoch + i,
+          id: _nextId(clientId, i),
           sessionNo: baseSessionNo + i,
           clientId: clientId,
           status: 'Upcoming',
           time: timeRange,
           date: AppDateUtils.dateToStr(cursor),
           duration: duration,
-          programType: programType,
           courseName: courseName,
           programEnrollmentId: programEnrollmentId,
+          recurrenceId: recurrenceId,
         ),
       );
 

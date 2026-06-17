@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -131,6 +133,8 @@ class MyProfilePage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
+                _EnrolledTutorCard(),
+                const SizedBox(height: 12),
                 _SectionCard(
                   title: 'Payments',
                   child: Column(
@@ -240,6 +244,100 @@ class _SectionCard extends StatelessWidget {
           child,
         ],
       ),
+    );
+  }
+}
+
+/// Shows which tutor the currently logged-in client is enrolled with.
+///
+/// Reads the first enrollment document from
+/// `users/{uid}/enrollment` and displays the tutorName stored there.
+class _EnrolledTutorCard extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null || uid.isEmpty) return const SizedBox.shrink();
+
+    final chrome = AppChromeTheme.of(context);
+
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      future: FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .collection('enrollment')
+          .limit(1)
+          .get()
+          .then((snap) => snap.docs.isNotEmpty ? snap.docs.first : null),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _SectionCard(
+            title: 'My Tutor',
+            child: SizedBox(
+              height: 24,
+              child: Center(
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: chrome.mutedColor,
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        final doc = snapshot.data;
+        final tutorName = doc?.data()?['tutorName'] as String? ?? '';
+        final tutorId = doc?.data()?['tutorId'] as String? ?? '';
+
+        if (tutorName.isEmpty && tutorId.isEmpty) {
+          return _SectionCard(
+            title: 'My Tutor',
+            child: Text(
+              'Not enrolled with any tutor yet.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: chrome.mutedColor,
+                    fontWeight: FontWeight.w500,
+                  ),
+            ),
+          );
+        }
+
+        return _SectionCard(
+          title: 'My Tutor',
+          child: Row(
+            children: [
+              CircleAvatar(
+                radius: 18,
+                backgroundColor:
+                    Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                child: Text(
+                  tutorName.isNotEmpty
+                      ? tutorName.characters.first.toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 16,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  tutorName.isNotEmpty ? tutorName : tutorId,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: chrome.textColor,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

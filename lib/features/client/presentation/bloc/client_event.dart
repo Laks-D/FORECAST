@@ -1,6 +1,10 @@
-abstract class ClientEvent {}
+abstract class ClientEvent {
+  const ClientEvent();
+}
 
-class LoadClients extends ClientEvent {}
+class LoadClients extends ClientEvent {
+  const LoadClients();
+}
 
 class SearchClients extends ClientEvent {
   final String query;

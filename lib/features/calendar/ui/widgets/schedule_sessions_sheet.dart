@@ -1,5 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../client/presentation/bloc/client_bloc.dart';
+import '../../../client/presentation/bloc/client_state.dart';
 import 'package:flutter/services.dart';
 
 import '../../../../core/di/service_locator.dart';
@@ -9,9 +14,10 @@ import '../../../../core/utils/date_utils.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../../../design_system/theme/app_visual_style.dart';
 import '../../../client/domain/entities/client.dart';
-import '../../../client/domain/usecases/get_clients_usecase.dart';
+
 import '../../bloc/sessions_cubit.dart';
 import '../../domain/entities/schedule_session.dart';
+import '../../domain/entities/recurrence_rule.dart';
 import '../../domain/services/schedule_generator.dart';
 
 class ScheduleSessionsSheet extends StatefulWidget {
@@ -47,7 +53,9 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   int _startTimeMinutes = 10 * 60;
   int _customDays = 1;
   List<RegisteredProgram> _registeredPrograms = const [];
-  String? _programName;
+  
+  final _courseNameController = TextEditingController();
+  
   SessionDuration? _duration;
   int? _customDurationMinutes;
 
@@ -57,7 +65,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   @override
   void initState() {
     super.initState();
-    _clients = sl<GetClientsUseCase>().execute();
+    _clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
     _clientId = widget.presetClientId;
     if (widget.initialCount != null) {
       _sessionCount = widget.initialCount!.clamp(1, 60);
@@ -72,11 +80,13 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     if (!mounted) return;
     setState(() {
       _registeredPrograms = programs;
-      final containsSelected = _registeredPrograms.any((p) => p.name == _programName);
-      if (_programName != null && !containsSelected) {
-        _programName = null;
-      }
     });
+  }
+
+  @override
+  void dispose() {
+    _courseNameController.dispose();
+    super.dispose();
   }
 
   int? _parseDurationMinutes(String label) {
@@ -114,26 +124,20 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   }
 
   void _applyProgramTemplate(String? selectedName) {
-    if (selectedName == null) {
-      setState(() => _programName = null);
-      return;
-    }
+    if (selectedName == null) return;
 
     final selected = _registeredPrograms.cast<RegisteredProgram?>().firstWhere(
           (p) => p?.name == selectedName,
           orElse: () => null,
         );
 
-    if (selected == null) {
-      setState(() => _programName = selectedName);
-      return;
-    }
+    if (selected == null) return;
 
     final parsedMinutes = _parseDurationMinutes(selected.classDuration);
     final mappedDuration = parsedMinutes != null ? _durationFromMinutes(parsedMinutes) : null;
 
     setState(() {
-      _programName = selected.name;
+      _courseNameController.text = selected.name;
       if (selected.frequency.isNotEmpty) {
         _frequency = selected.frequency;
       }
@@ -189,7 +193,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
       monthlyDate: _monthlyDate,
       clientId: _clientId!,
       startSessionNo: maxSessionNo + 1,
-      courseName: _programName,
+      courseName: _courseNameController.text.trim().isEmpty ? null : _courseNameController.text.trim(),
       duration: _duration,
       customDays: _customDays,
     );
@@ -207,7 +211,31 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
     if (_draft.isEmpty) return;
     if (_clashIds.isNotEmpty) return;
 
-    await cubit.addSessions(_draft);
+    if (_sessionCount > 1) {
+      final recurrenceId = 'rr_${DateTime.now().millisecondsSinceEpoch}_${Random().nextInt(99999)}';
+      
+      // Update draft sessions to have this recurrenceId
+      final linkedDraft = _draft.map((s) => s.copyWith(recurrenceId: recurrenceId)).toList();
+      
+      final rule = RecurrenceRule(
+        recurrenceId: recurrenceId,
+        tutorId: FirebaseAuth.instance.currentUser?.uid ?? '',
+        clientId: _clientId!,
+        programId: null, // We could map `_courseNameController.text` if it matched a program, but simpler to leave null
+        frequency: _frequency.toLowerCase(),
+        interval: 1,
+        byWeekday: _frequency == 'Weekly' ? [_weeklyDay] : const [],
+        startDate: DateTime.parse(linkedDraft.first.date),
+        endDate: DateTime.parse(linkedDraft.last.date),
+        time: linkedDraft.first.time,
+      );
+      
+      // I need to import RecurrenceRule and FirebaseAuth.
+      await cubit.addRecurringSessions(rule, linkedDraft);
+    } else {
+      await cubit.addSessions(_draft);
+    }
+    
     if (!mounted) return;
     Navigator.of(context).pop();
   }
@@ -220,7 +248,6 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
 
     final isClientMode = AppModeScope.isClient(context);
 
-    final selectedProgram = _registeredPrograms.any((p) => p.name == _programName) ? _programName : null;
     final startLabel = AppDateUtils.formatTimeLabelFromMinutes(_startTimeMinutes);
 
     Future<void> pickStartTime() async {
@@ -355,19 +382,36 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                       ),
                       const SizedBox(height: 12),
                       _SearchableSelectField<String>(
-                        label: 'Program',
-                        value: selectedProgram,
-                        displayValue: selectedProgram ?? 'Select',
+                        label: 'Program Template (Optional)',
+                        value: null, // Always allow selecting a template
+                        displayValue: 'Select to auto-fill',
                         enabled: _registeredPrograms.isNotEmpty,
-                        options: _registeredPrograms
-                            .map(
-                              (program) => _OptionItem(
-                                value: program.name,
-                                label: program.name,
-                              ),
-                            )
-                            .toList(),
-                        onChanged: _applyProgramTemplate,
+                        options: [
+                          const _OptionItem(value: '', label: 'Clear'),
+                          ..._registeredPrograms.map(
+                            (program) => _OptionItem(
+                              value: program.name,
+                              label: program.name,
+                            ),
+                          )
+                        ],
+                        onChanged: (v) {
+                          if (v == null || v.isEmpty) return;
+                          _applyProgramTemplate(v);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _courseNameController,
+                        decoration: InputDecoration(
+                          labelText: 'Course Name (Optional)',
+                          hintText: 'e.g. Mathematics 101',
+                          filled: true,
+                          fillColor: scheme.surfaceContainerHighest,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       Row(
