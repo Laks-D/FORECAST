@@ -145,9 +145,17 @@ class CourseProfilePage extends StatelessWidget {
                 height: 46,
                 child: OutlinedButton.icon(
                   onPressed: () {
+                    final clientBloc = context.read<ClientBloc>();
+                    final sessionsCubit = context.read<SessionsCubit>();
                     Navigator.of(context).push(
                       MaterialPageRoute<void>(
-                        builder: (_) => ClientTransactionsPage(clientId: clientId),
+                        builder: (_) => MultiBlocProvider(
+                          providers: [
+                            BlocProvider.value(value: clientBloc),
+                            BlocProvider.value(value: sessionsCubit),
+                          ],
+                          child: ClientTransactionsPage(clientId: clientId),
+                        ),
                       ),
                     );
                   },

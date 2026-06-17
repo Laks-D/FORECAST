@@ -282,11 +282,19 @@ class _CoursesPageState extends State<CoursesPage> {
                               scheme: scheme,
                               chrome: chrome,
                               onTap: () {
+                                final clientBloc = context.read<ClientBloc>();
+                                final sessionsCubit = context.read<SessionsCubit>();
                                 Navigator.of(context).push(
                                   MaterialPageRoute<void>(
-                                    builder: (_) => CourseProfilePage(
-                                      clientId: entity.clientId,
-                                      courseName: entity.courseName,
+                                    builder: (_) => MultiBlocProvider(
+                                      providers: [
+                                        BlocProvider.value(value: clientBloc),
+                                        BlocProvider.value(value: sessionsCubit),
+                                      ],
+                                      child: CourseProfilePage(
+                                        clientId: entity.clientId,
+                                        courseName: entity.courseName,
+                                      ),
                                     ),
                                   ),
                                 );
