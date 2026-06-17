@@ -1124,6 +1124,7 @@ class _CalendarBottomCard extends StatelessWidget {
                 );
                 return;
               }
+              final clientBloc = context.read<ClientBloc>();
               final sessionsCubit = context.read<SessionsCubit>();
               await showModalBottomSheet<void>(
                 context: context,
@@ -1141,8 +1142,11 @@ class _CalendarBottomCard extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: Theme.of(ctx).scaffoldBackgroundColor,
                         ),
-                        child: BlocProvider.value(
-                          value: sessionsCubit,
+                        child: MultiBlocProvider(
+                          providers: [
+                            BlocProvider.value(value: sessionsCubit),
+                            BlocProvider.value(value: clientBloc),
+                          ],
                           child: ScheduleSessionsSheet(initialDate: selectedDate),
                         ),
                       ),

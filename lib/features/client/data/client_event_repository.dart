@@ -2,6 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/app/target_uid_resolver.dart';
 import '../domain/entities/client_event.dart';
+import '../../../core/app/app_mode.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Abstraction over the `client_events` sub-collection (notes / status changes
 /// / profile-created). Payments are NOT stored here.
@@ -47,7 +49,16 @@ class FirestoreClientEventRepository implements ClientEventRepository {
   Future<List<ClientEvent>> getForClient(String clientId) async {
     final col = await _col();
     if (col == null) return const [];
-    return _map(await col.where('clientId', isEqualTo: clientId).get());
+    Query<Map<String, dynamic>> query = col.where('clientId', isEqualTo: clientId);
+    if (AppModeConfig.isClient) {
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+      if (userUid != null) {
+        query = query.where('firebaseUid', isEqualTo: userUid);
+      } else {
+        return const [];
+      }
+    }
+    return _map(await query.get());
   }
 
   @override
@@ -57,7 +68,17 @@ class FirestoreClientEventRepository implements ClientEventRepository {
       yield const [];
       return;
     }
-    yield* col.where('clientId', isEqualTo: clientId).snapshots().map(_map);
+    Query<Map<String, dynamic>> query = col.where('clientId', isEqualTo: clientId);
+    if (AppModeConfig.isClient) {
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+      if (userUid != null) {
+        query = query.where('firebaseUid', isEqualTo: userUid);
+      } else {
+        yield const [];
+        return;
+      }
+    }
+    yield* query.snapshots().map(_map);
   }
 
   @override

@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/app/target_uid_resolver.dart';
 import '../domain/entities/client.dart';
 import '../domain/repositories/client_repository.dart';
+import '../../../core/app/app_mode.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class FirestoreClientRepository implements ClientRepository {
   FirestoreClientRepository({
@@ -26,19 +28,38 @@ class FirestoreClientRepository implements ClientRepository {
 
   @override
   Stream<List<Client>> watchClients() async* {
-    final col = await _col();
-    if (col == null) {
+    final uid = await _targetUid();
+    if (uid == null || uid.trim().isEmpty) {
       yield const [];
       return;
     }
-    yield* col.snapshots().map(_map);
+    Query<Map<String, dynamic>> query = _db.collection('users').doc(uid).collection('clients');
+    if (AppModeConfig.isClient) {
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+      if (userUid != null) {
+        query = query.where('firebaseUid', isEqualTo: userUid);
+      } else {
+        yield const [];
+        return;
+      }
+    }
+    yield* query.snapshots().map(_map);
   }
 
   @override
   Future<List<Client>> getClients() async {
     final col = await _col();
     if (col == null) return const [];
-    final snap = await col.get();
+    Query<Map<String, dynamic>> query = col;
+    if (AppModeConfig.isClient) {
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+      if (userUid != null) {
+        query = query.where('firebaseUid', isEqualTo: userUid);
+      } else {
+        return const [];
+      }
+    }
+    final snap = await query.get();
     return _map(snap);
   }
 

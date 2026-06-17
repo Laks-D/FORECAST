@@ -190,13 +190,21 @@ class _CompleteProfileScreenState extends State<CompleteProfileScreen> {
   }
 }
 
-class ProfileCompletionGate extends StatelessWidget {
+class ProfileCompletionGate extends StatefulWidget {
   const ProfileCompletionGate({
     super.key,
     required this.child,
   });
 
   final Widget child;
+
+  @override
+  State<ProfileCompletionGate> createState() => _ProfileCompletionGateState();
+}
+
+class _ProfileCompletionGateState extends State<ProfileCompletionGate> {
+  late Stream<DocumentSnapshot<Map<String, dynamic>>> _userStream;
+  String? _initializedUid;
 
   bool _isComplete(Map<String, dynamic>? data) {
     final fullName = (data?['fullName'] as String?)?.trim() ?? '';
@@ -205,15 +213,25 @@ class ProfileCompletionGate extends StatelessWidget {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid != _initializedUid && uid != null && uid.trim().isNotEmpty) {
+      _userStream = firestoreDb.collection('users').doc(uid).snapshots();
+      _initializedUid = uid;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
     final uid = user?.uid;
-    if (uid == null || uid.trim().isEmpty) return child;
+    if (uid == null || uid.trim().isEmpty) return widget.child;
 
     final email = (user?.email ?? '').trim();
 
     return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: firestoreDb.collection('users').doc(uid).snapshots(),
+      stream: _userStream,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Scaffold(
@@ -222,7 +240,7 @@ class ProfileCompletionGate extends StatelessWidget {
         }
 
         final data = snap.data?.data();
-        if (_isComplete(data)) return child;
+        if (_isComplete(data)) return widget.child;
 
         return CompleteProfileScreen(
           uid: uid,

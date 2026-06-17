@@ -18,13 +18,35 @@ import '../../../../design_system/theme/app_chrome_theme.dart';
 import '../../domain/entities/payment.dart';
 import '../../domain/repositories/payment_repository.dart';
 
-class ClientTransactionsPage extends StatelessWidget {
+class ClientTransactionsPage extends StatefulWidget {
   const ClientTransactionsPage({
     super.key,
     required this.clientId,
   });
 
   final String clientId;
+
+  @override
+  State<ClientTransactionsPage> createState() => _ClientTransactionsPageState();
+}
+
+class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
+  late Stream<List<Payment>> _paymentsStream;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      final clientBloc = context.read<ClientBloc>();
+      final client = _findClient(clientBloc.state);
+      final paymentRepository = clientBloc.paymentRepository;
+      _paymentsStream = AppModeScope.isClient(context)
+          ? paymentRepository.watchForStudent(client?.firebaseUid ?? '')
+          : paymentRepository.watchForClient(widget.clientId);
+      _initialized = true;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -111,9 +133,7 @@ class ClientTransactionsPage extends StatelessWidget {
               final paymentRepository = context.read<ClientBloc>().paymentRepository;
 
               return StreamBuilder<List<Payment>>(
-                stream: AppModeScope.isClient(context)
-                    ? paymentRepository.watchForStudent(client.firebaseUid ?? '')
-                    : paymentRepository.watchForClient(client.id),
+                stream: _paymentsStream,
                 builder: (context, snapshot) {
                   if (!snapshot.hasData) {
                     return AppLoading(color: onSurface);
@@ -196,7 +216,7 @@ class ClientTransactionsPage extends StatelessWidget {
   Client? _findClient(ClientState state) {
     if (state is! ClientLoaded) return null;
     for (final c in state.entities) {
-      if (c.id == clientId) return c;
+      if (c.id == widget.clientId) return c;
     }
     return null;
   }

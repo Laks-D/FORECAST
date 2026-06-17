@@ -32,6 +32,14 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
   String _query = '';
   // null = All; 'Paid', 'Unpaid', 'Overdue'
   String? _filterStatus;
+  
+  late Stream<List<Payment>> _paymentsStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _paymentsStream = context.read<ClientBloc>().paymentRepository.watchAll();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -123,7 +131,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                         }
 
                         return StreamBuilder<List<Payment>>(
-                          stream: paymentRepository.watchAll(),
+                          stream: _paymentsStream,
                           builder: (context, snapshot) {
                             if (!snapshot.hasData) {
                               return AppLoading(color: onSurface);

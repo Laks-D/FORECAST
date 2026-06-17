@@ -3,6 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/app/target_uid_resolver.dart';
 import '../domain/entities/payment.dart';
 import '../domain/repositories/payment_repository.dart';
+import '../../../core/app/app_mode.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Cloud Firestore implementation of [PaymentRepository].
 ///
@@ -82,7 +84,16 @@ class FirestorePaymentRepository implements PaymentRepository {
   Future<List<Payment>> getAll() async {
     final col = await _col();
     if (col == null) return const [];
-    final snap = await col.get();
+    Query<Map<String, dynamic>> query = col;
+    if (AppModeConfig.isClient) {
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+      if (userUid != null) {
+        query = query.where('firebaseUid', isEqualTo: userUid);
+      } else {
+        return const [];
+      }
+    }
+    final snap = await query.get();
     final list = _map(snap);
     list.sort((a, b) => a.dueDate.compareTo(b.dueDate));
     return list;
@@ -95,7 +106,17 @@ class FirestorePaymentRepository implements PaymentRepository {
       yield const [];
       return;
     }
-    yield* col.snapshots().map((s) {
+    Query<Map<String, dynamic>> query = col;
+    if (AppModeConfig.isClient) {
+      final userUid = FirebaseAuth.instance.currentUser?.uid;
+      if (userUid != null) {
+        query = query.where('firebaseUid', isEqualTo: userUid);
+      } else {
+        yield const [];
+        return;
+      }
+    }
+    yield* query.snapshots().map((s) {
       final list = _map(s);
       list.sort((a, b) => a.dueDate.compareTo(b.dueDate));
       return list;

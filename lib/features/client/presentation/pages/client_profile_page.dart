@@ -1373,15 +1373,24 @@ class _ModifySessionsRangeSheetState extends State<_ModifySessionsRangeSheet> {
     final today = DateTime(now.year, now.month, now.day);
     final initial = _startDate.isBefore(today) ? today : _startDate;
 
+    final clientBloc = context.read<ClientBloc>();
+    final sessionsCubit = context.read<SessionsCubit>();
+
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => ScheduleSessionsSheet(
-        initialDate: initial,
-        presetClientId: widget.clientId,
-        lockClient: true,
-        initialCount: 1,
+      builder: (_) => MultiBlocProvider(
+        providers: [
+          BlocProvider.value(value: clientBloc),
+          BlocProvider.value(value: sessionsCubit),
+        ],
+        child: ScheduleSessionsSheet(
+          initialDate: initial,
+          presetClientId: widget.clientId,
+          lockClient: true,
+          initialCount: 1,
+        ),
       ),
     );
   }
@@ -1853,16 +1862,33 @@ class _ModifySessionsRangeSheetState extends State<_ModifySessionsRangeSheet> {
 
 /* ================= TIMELINE (NON-PAYMENT) ================= */
 
-class _Timeline extends StatelessWidget {
+class _Timeline extends StatefulWidget {
   final Client entity;
 
   const _Timeline({required this.entity});
 
   @override
+  State<_Timeline> createState() => _TimelineState();
+}
+
+class _TimelineState extends State<_Timeline> {
+  late Stream<List<domain.ClientEvent>> _eventsStream;
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      final clientEventRepository = context.read<ClientBloc>().clientEventRepository;
+      _eventsStream = clientEventRepository.watchForClient(widget.entity.id);
+      _initialized = true;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final clientEventRepository = context.read<ClientBloc>().clientEventRepository;
     return StreamBuilder<List<domain.ClientEvent>>(
-      stream: clientEventRepository.watchForClient(entity.id),
+      stream: _eventsStream,
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SizedBox.shrink();
         
