@@ -24,7 +24,8 @@ class JoinRequestListenerCubit extends Cubit<List<JoinRequestModel>> {
       (requests) {
         if (!isClosed) emit(requests);
       },
-      onError: (_) {
+      onError: (e, stack) {
+        print('JoinRequestStream Error: $e\n$stack');
         if (!isClosed) emit(const []);
       },
     );

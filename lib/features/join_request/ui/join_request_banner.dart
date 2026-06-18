@@ -32,9 +32,12 @@ class _JoinRequestBannerState extends State<JoinRequestBanner> {
   Widget build(BuildContext context) {
     return BlocListener<JoinRequestListenerCubit, List<JoinRequestModel>>(
       listener: (context, requests) {
+        print("JoinRequestBanner: received ${requests.length} requests");
         for (final req in requests) {
+          print("JoinRequestBanner: checking req ${req.id}, shown: ${_shown.contains(req.id)}, sheetOpen: $_sheetOpen");
           if (_shown.contains(req.id)) continue;
           if (_sheetOpen) continue;
+          print("JoinRequestBanner: Showing sheet for req ${req.id}");
           _shown.add(req.id);
           _showRequestSheet(context, req);
           break; // show one at a time; next fires when sheet closes

@@ -66,12 +66,15 @@ class JoinRequestService {
     return firestoreDb
         .collection(_kCollection)
         .where('tutorId', isEqualTo: tutorId)
-        .where('status', isEqualTo: 'pending')
-        .orderBy('createdAt', descending: false)
         .snapshots()
-        .map((snap) => snap.docs
-            .map((d) => JoinRequestModel.fromFirestore(d.id, d.data()))
-            .toList());
+        .map((snap) {
+          final list = snap.docs
+              .map((d) => JoinRequestModel.fromFirestore(d.id, d.data()))
+              .where((m) => m.status == 'pending')
+              .toList();
+          list.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+          return list;
+        });
   }
 
   /// Admin resolves a request by writing `accepted` or `rejected`.
