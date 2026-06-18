@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/auth/signup_controller.dart';
+import '../../../core/utils/date_utils.dart';
 import '../repository/auth_repository.dart';
 
 /// Signup screen for a specific [role] ('tutor' or 'client').
@@ -26,10 +27,16 @@ class NewSignupScreen extends StatefulWidget {
 class _NewSignupScreenState extends State<NewSignupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
+  final _middleNameCtrl = TextEditingController();
   final _profCtrl = TextEditingController();
+  final _phoneCodeCtrl = TextEditingController(text: '+91');
+  final _phoneCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+
+  String? _gender;
+  DateTime? _dob;
 
   bool _obscurePass = true;
   bool _obscureConfirm = true;
@@ -43,7 +50,10 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
   @override
   void dispose() {
     _nameCtrl.dispose();
+    _middleNameCtrl.dispose();
     _profCtrl.dispose();
+    _phoneCodeCtrl.dispose();
+    _phoneCtrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
     _confirmCtrl.dispose();
@@ -53,6 +63,11 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
   Future<void> _onSignUp() async {
     if (_loading) return;
     if (!_formKey.currentState!.validate()) return;
+
+    if (_dob == null) {
+      setState(() => _error = 'Please select your Date of Birth');
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -68,6 +83,11 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
         fullName: _nameCtrl.text.trim(),
+        middleName: _middleNameCtrl.text.trim(),
+        gender: _gender,
+        phoneCode: _phoneCodeCtrl.text.trim(),
+        phone: _phoneCtrl.text.trim(),
+        dateOfBirth: _dob,
         profession: _profCtrl.text.trim(),
         role: widget.role,
       );
@@ -382,29 +402,55 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                 ),
                 const SizedBox(height: 28),
 
-                _label('Full Name'),
-                const SizedBox(height: 6),
                 _field(context,
                     controller: _nameCtrl,
-                    hint: 'Your full name',
+                    label: 'Full Name *',
                     validator: (v) =>
                         (v == null || v.trim().isEmpty) ? 'Required' : null),
                 const SizedBox(height: 16),
 
-                _label(_isTutor ? 'Profession' : 'Grade / School'),
-                const SizedBox(height: 6),
                 _field(context,
-                    controller: _profCtrl,
-                    hint: _isTutor
-                        ? 'e.g. Mathematics Teacher'
-                        : 'e.g. Grade 10 / Delhi Public School'),
+                    controller: _middleNameCtrl,
+                    label: 'Middle Name (optional)'),
                 const SizedBox(height: 16),
-
-                _label('Email'),
-                const SizedBox(height: 6),
+                
+                DropdownButtonFormField<String>(
+                  value: _gender,
+                  validator: (v) => v == null ? 'Required' : null,
+                  decoration: _inputDecor(context, 'Gender *'),
+                  items: const [
+                    DropdownMenuItem(value: 'Male', child: Text('Male')),
+                    DropdownMenuItem(value: 'Female', child: Text('Female')),
+                    DropdownMenuItem(value: 'Other', child: Text('Other')),
+                  ],
+                  onChanged: (v) => setState(() => _gender = v),
+                ),
+                const SizedBox(height: 16),
+                
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 100,
+                      child: _field(context,
+                          controller: _phoneCodeCtrl,
+                          label: 'Code'),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _field(context,
+                          controller: _phoneCtrl,
+                          label: 'Phone *',
+                          keyboard: TextInputType.phone,
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                
                 _field(context,
                     controller: _emailCtrl,
-                    hint: 'you@example.com',
+                    label: 'Email *',
                     keyboard: TextInputType.emailAddress,
                     validator: (v) {
                       if (v == null || v.trim().isEmpty) return 'Required';
@@ -413,11 +459,45 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                     }),
                 const SizedBox(height: 16),
 
-                _label('Password'),
-                const SizedBox(height: 6),
+                GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: _dob ?? DateTime.now().subtract(const Duration(days: 365 * 18)),
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+                    if (date != null) {
+                      setState(() => _dob = date);
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: _inputDecor(context, 'Date of birth *'),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _dob != null ? AppDateUtils.displayDate(_dob!) : '',
+                          style: TextStyle(
+                            color: scheme.onSurface,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Icon(Icons.calendar_today, size: 20, color: scheme.onSurface.withOpacity(0.5)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                
+                _field(context,
+                    controller: _profCtrl,
+                    label: _isTutor ? 'Profession *' : 'Grade / School *'),
+                const SizedBox(height: 16),
+
                 _field(context,
                     controller: _passCtrl,
-                    hint: 'Min 6 characters',
+                    label: 'Password *',
                     obscure: _obscurePass,
                     suffix: _eyeIcon(
                         _obscurePass,
@@ -429,11 +509,9 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                     }),
                 const SizedBox(height: 16),
 
-                _label('Confirm Password'),
-                const SizedBox(height: 6),
                 _field(context,
                     controller: _confirmCtrl,
-                    hint: 'Repeat your password',
+                    label: 'Confirm Password *',
                     obscure: _obscureConfirm,
                     suffix: _eyeIcon(
                         _obscureConfirm,
@@ -607,47 +685,53 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
         ),
       );
 
+  InputDecoration _inputDecor(BuildContext context, String label, {Widget? suffix}) {
+    final scheme = Theme.of(context).colorScheme;
+    return InputDecoration(
+      labelText: label,
+      labelStyle:
+          TextStyle(color: scheme.onSurface.withOpacity(0.55), fontSize: 14),
+      floatingLabelStyle: TextStyle(color: _accentColor, fontSize: 14),
+      filled: true,
+      fillColor: Colors.transparent,
+      suffixIcon: suffix,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: scheme.outlineVariant),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide:
+            BorderSide(color: scheme.outlineVariant.withOpacity(0.6)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: _accentColor, width: 1.5),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Colors.red),
+      ),
+      focusedErrorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: Colors.red, width: 1.5),
+      ),
+    );
+  }
+
   Widget _field(
     BuildContext context, {
     required TextEditingController controller,
-    required String hint,
+    required String label,
     bool obscure = false,
     TextInputType keyboard = TextInputType.text,
     Widget? suffix,
     String? Function(String?)? validator,
   }) {
-    final scheme = Theme.of(context).colorScheme;
-    final InputDecoration decor = InputDecoration(
-      hintText: hint,
-      hintStyle:
-          TextStyle(color: scheme.onSurface.withOpacity(0.35), fontSize: 14),
-      filled: true,
-      fillColor: scheme.surfaceContainerLow,
-      suffixIcon: suffix,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: scheme.outlineVariant),
-      ),
-      enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide:
-            BorderSide(color: scheme.outlineVariant.withOpacity(0.6)),
-      ),
-      focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: _accentColor, width: 1.5),
-      ),
-      errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.red),
-      ),
-      focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: Colors.red, width: 1.5),
-      ),
-    );
+    final decor = _inputDecor(context, label, suffix: suffix);
+
 
     return TextFormField(
       controller: controller,

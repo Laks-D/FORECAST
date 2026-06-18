@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import '../../calendar/bloc/calendar_cubit.dart';
 import '../../../core/app/app_mode.dart';
 import '../bloc/dashboard_cubit.dart';
+import '../bloc/dashboard_state.dart';
 import 'widgets/dashboard_phone_frame.dart';
 import '../../join_request/ui/join_request_banner.dart';
 
@@ -77,13 +78,26 @@ class _DashboardView extends StatelessWidget {
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
     final isClient = AppModeScope.isClient(context);
 
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: isClient
-          ? const DashboardPhoneFrame()
-          : const JoinRequestBanner(
-              child: DashboardPhoneFrame(),
-            ),
+    return BlocBuilder<DashboardCubit, DashboardState>(
+      buildWhen: (p, n) => p.tab != n.tab,
+      builder: (context, state) {
+        final isHome = state.tab == DashboardTab.home;
+        return PopScope(
+          canPop: isHome,
+          onPopInvokedWithResult: (didPop, result) {
+            if (didPop) return;
+            context.read<DashboardCubit>().selectTab(DashboardTab.home);
+          },
+          child: Scaffold(
+            backgroundColor: bgColor,
+            body: isClient
+                ? const DashboardPhoneFrame()
+                : const JoinRequestBanner(
+                    child: DashboardPhoneFrame(),
+                  ),
+          ),
+        );
+      },
     );
   }
 }

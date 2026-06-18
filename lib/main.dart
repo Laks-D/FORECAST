@@ -145,33 +145,6 @@ class App extends StatelessWidget {
             themeMode: state.themeMode,
             navigatorKey: DeepLinkService.instance.navigatorKey,
             home: const LandingScreen(),
-            builder: (context, child) {
-              if (child == null) return const SizedBox();
-              final mediaQueryData = MediaQuery.of(context);
-              const double baseWidth = 430.0;
-              final scale = mediaQueryData.size.width / baseWidth;
-              final logicalHeight = mediaQueryData.size.height / scale;
-
-              return MediaQuery(
-                data: mediaQueryData.copyWith(
-                  size: Size(baseWidth, logicalHeight),
-                  devicePixelRatio: mediaQueryData.devicePixelRatio * scale,
-                  viewInsets: mediaQueryData.viewInsets / scale,
-                  viewPadding: mediaQueryData.viewPadding / scale,
-                  padding: mediaQueryData.padding / scale,
-                  systemGestureInsets: mediaQueryData.systemGestureInsets / scale,
-                ),
-                child: FittedBox(
-                  fit: BoxFit.fitWidth,
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
-                    width: baseWidth,
-                    height: logicalHeight,
-                    child: child,
-                  ),
-                ),
-              );
-            },
           );
         },
       ),

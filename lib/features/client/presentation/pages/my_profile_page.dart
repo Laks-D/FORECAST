@@ -11,7 +11,7 @@ import '../bloc/client_bloc.dart';
 import '../bloc/client_state.dart';
 import 'client_personal_details_page.dart';
 import '../../../payment/presentation/pages/client_transactions_page.dart';
-
+import '../../../calendar/bloc/sessions_cubit.dart';
 class MyProfilePage extends StatelessWidget {
   const MyProfilePage({super.key, required this.client});
 
@@ -268,7 +268,7 @@ class _EnrolledTutorCard extends StatelessWidget {
 
     final chrome = AppChromeTheme.of(context);
 
-    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    return FutureBuilder<DocumentSnapshot<Map<String, dynamic>>?>(
       future: FirebaseFirestore.instance
           .collection('users')
           .doc(uid)

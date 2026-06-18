@@ -25,6 +25,11 @@ class AuthRepository {
     required String email,
     required String password,
     required String fullName,
+    String? middleName,
+    String? gender,
+    required String phoneCode,
+    required String phone,
+    DateTime? dateOfBirth,
     required String profession,
     required String role,
   }) async {
@@ -41,6 +46,11 @@ class AuthRepository {
     await firestoreDb.collection('users').doc(user.uid).set(
       {
         'fullName': fullName.trim(),
+        if (middleName != null && middleName.trim().isNotEmpty) 'middleName': middleName.trim(),
+        if (gender != null) 'gender': gender,
+        'phoneCode': phoneCode.trim(),
+        'phone': phone.trim(),
+        if (dateOfBirth != null) 'dateOfBirth': dateOfBirth.toIso8601String(),
         'profession': profession.trim(),
         'email': email.trim(),
         'roles': roles,
@@ -63,7 +73,11 @@ class AuthRepository {
           'id': user.uid,
           'firebaseUid': user.uid,
           'name': fullName.trim(),
-          'primaryContact': '',
+          if (middleName != null && middleName.trim().isNotEmpty) 'middleName': middleName.trim(),
+          if (gender != null) 'gender': gender,
+          'primaryContact': phone.trim(),
+          'countryCode': phoneCode.trim(),
+          if (dateOfBirth != null) 'dateOfBirth': dateOfBirth.toIso8601String(),
           'email': email.trim(),
           'status': 'Active',
           'timeline': [

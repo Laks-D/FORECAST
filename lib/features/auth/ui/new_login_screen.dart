@@ -208,13 +208,11 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
                 const SizedBox(height: 36),
 
                 // Email
-                _FieldLabel(label: 'Email'),
-                const SizedBox(height: 6),
                 TextFormField(
                   controller: _emailCtrl,
                   keyboardType: TextInputType.emailAddress,
                   autocorrect: false,
-                  decoration: _fieldDecor(context, hint: 'you@example.com'),
+                  decoration: _fieldDecor(context, label: 'Email *'),
                   validator: (v) {
                     if (v == null || v.trim().isEmpty) return 'Email required';
                     if (!v.contains('@')) return 'Enter a valid email';
@@ -224,13 +222,11 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
                 const SizedBox(height: 18),
 
                 // Password
-                _FieldLabel(label: 'Password'),
-                const SizedBox(height: 6),
                 TextFormField(
                   controller: _passCtrl,
                   obscureText: _obscure,
                   decoration: _fieldDecor(context,
-                      hint: 'Your password',
+                      label: 'Password *',
                       suffix: IconButton(
                         icon: Icon(
                           _obscure
@@ -435,55 +431,41 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
   }
 
   InputDecoration _fieldDecor(BuildContext context,
-      {required String hint, Widget? suffix}) {
+      {required String label, Widget? suffix}) {
     final scheme = Theme.of(context).colorScheme;
     return InputDecoration(
-      hintText: hint,
-      hintStyle:
-          TextStyle(color: scheme.onSurface.withOpacity(0.35), fontSize: 14),
+      labelText: label,
+      labelStyle:
+          TextStyle(color: scheme.onSurface.withOpacity(0.55), fontSize: 14),
+      floatingLabelStyle: TextStyle(color: _accentColor, fontSize: 14),
       filled: true,
-      fillColor: scheme.surfaceContainerLow,
+      fillColor: Colors.transparent,
       suffixIcon: suffix,
       contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: scheme.outlineVariant),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide:
             BorderSide(color: scheme.outlineVariant.withOpacity(0.6)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: BorderSide(color: _accentColor, width: 1.5),
       ),
       errorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: Colors.red),
       ),
       focusedErrorBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         borderSide: const BorderSide(color: Colors.red, width: 1.5),
       ),
     );
   }
 }
 
-class _FieldLabel extends StatelessWidget {
-  const _FieldLabel({required this.label});
-  final String label;
 
-  @override
-  Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(
-        fontSize: 13,
-        fontWeight: FontWeight.w600,
-        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.75),
-      ),
-    );
-  }
-}

@@ -250,13 +250,16 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(color: chrome.mutedColor.withOpacity(0.18)),
               ),
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+              child: Material(
+                color: Colors.transparent,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 14, 8),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
                       children: [
                         Expanded(
                           child: Text(
@@ -291,14 +294,16 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
                     option('Completed'),
                     option('Pending'),
                     option('Cancelled'),
-                    const SizedBox(height: 6),
-                  ],
+                      const SizedBox(height: 6),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      );
+    },
     );
 
     if (!context.mounted) return;
@@ -568,31 +573,31 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
                               ),
                             ),
                             const SizedBox(width: 10),
-                            Expanded(
-                              child: FilledButton(
-                                onPressed: () {
-                                  Navigator.of(context).pop(
-                                    _CompletionFeedback(
-                                      rating: rating,
-                                      comments: controller.text.trim().isEmpty
-                                          ? null
-                                          : controller.text.trim(),
-                                    ),
-                                  );
-                                },
-                                child: const Text('Save'),
+                              Expanded(
+                                child: FilledButton(
+                                  onPressed: () {
+                                    Navigator.of(context).pop(
+                                      _CompletionFeedback(
+                                        rating: rating,
+                                        comments: controller.text.trim().isEmpty
+                                            ? null
+                                            : controller.text.trim(),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('Save'),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    );
-                  },
+                            ],
+                          ),
+                        ],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
-          ),
-        );
+          );
       },
     );
   }
@@ -699,10 +704,14 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
               border: Border.all(color: chrome.mutedColor.withOpacity(0.08)),
               boxShadow: shadows,
             ),
-            child: AnimatedSize(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOutCubic,
-              alignment: Alignment.topCenter,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(24),
+              child: Material(
+                color: Colors.transparent,
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  curve: Curves.easeOutCubic,
+                  alignment: Alignment.topCenter,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
                 child: Column(
@@ -790,7 +799,9 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
       },
     );
   }

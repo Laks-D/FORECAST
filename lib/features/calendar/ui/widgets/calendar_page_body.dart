@@ -1562,13 +1562,15 @@ class _CalendarBottomCard extends StatelessWidget {
                                 );
                                },
                              );
-
-                             return isSliverWrap ? list : Expanded(child: list);
+                             
+                             return list;
                            },
                          )
-                       : (isSliverWrap 
-                           ? _PaymentScheduleList(items: paymentItems, isWeeklyAll: isWeeklyAll, isSliverWrap: true)
-                           : Expanded(child: _PaymentScheduleList(items: paymentItems, isWeeklyAll: isWeeklyAll)));
+                       : _PaymentScheduleList(
+                           items: paymentItems,
+                           isWeeklyAll: isWeeklyAll,
+                           isSliverWrap: isSliverWrap,
+                         );
 
                     if (isSliverWrap) return bottomContent;
                     return Expanded(child: bottomContent);

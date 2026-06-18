@@ -205,36 +205,41 @@ class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
       context: context,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
       builder: (_) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Update Status',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+        return Material(
+          color: Colors.transparent,
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Update Status',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                    const SizedBox(height: 24),
+                    ListTile(
+                      leading: const Icon(Icons.check_circle_outline, color: VibrantColors.pastelGreen),
+                      title: const Text('Paid', style: TextStyle(fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        context.read<ClientBloc>().paymentRepository.setStatus(payment.paymentId, PaymentStatus.paid);
+                        Navigator.pop(context);
+                      },
+                    ),
+                    const Divider(),
+                    ListTile(
+                      leading: const Icon(Icons.schedule_outlined, color: VibrantColors.warmYellow),
+                      title: const Text('Unpaid', style: TextStyle(fontWeight: FontWeight.w600)),
+                      onTap: () {
+                        context.read<ClientBloc>().paymentRepository.setStatus(payment.paymentId, PaymentStatus.unpaid);
+                        Navigator.pop(context);
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                ListTile(
-                  leading: const Icon(Icons.check_circle_outline, color: VibrantColors.pastelGreen),
-                  title: const Text('Paid', style: TextStyle(fontWeight: FontWeight.w600)),
-                  onTap: () {
-                    context.read<ClientBloc>().paymentRepository.setStatus(payment.paymentId, PaymentStatus.paid);
-                    Navigator.pop(context);
-                  },
-                ),
-                const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.schedule_outlined, color: VibrantColors.warmYellow),
-                  title: const Text('Unpaid', style: TextStyle(fontWeight: FontWeight.w600)),
-                  onTap: () {
-                    context.read<ClientBloc>().paymentRepository.setStatus(payment.paymentId, PaymentStatus.unpaid);
-                    Navigator.pop(context);
-                  },
-                ),
-              ],
+              ),
             ),
           ),
         );
