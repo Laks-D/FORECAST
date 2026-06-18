@@ -11,18 +11,21 @@ class WidgetCustomizationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chrome = AppChromeTheme.of(context);
+    final onFrame = ThemeData.estimateBrightnessForColor(chrome.frameColor) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
 
     return Scaffold(
       backgroundColor: chrome.frameColor,
       appBar: AppBar(
         backgroundColor: chrome.frameColor,
-        foregroundColor: Colors.white,
+        foregroundColor: onFrame,
         elevation: 0,
         title: const Text('Widget customization'),
         actions: [
           TextButton(
             onPressed: () => context.read<WidgetCustomizationCubit>().resetDefaults(),
-            style: TextButton.styleFrom(foregroundColor: Colors.white),
+            style: TextButton.styleFrom(foregroundColor: onFrame),
             child: const Text('Reset'),
           ),
         ],

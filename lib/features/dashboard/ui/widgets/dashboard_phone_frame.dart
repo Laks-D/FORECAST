@@ -84,10 +84,15 @@ class DashboardPhoneFrame extends StatelessWidget {
               Positioned.fill(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(horizontalPadding, topPadding, horizontalPadding, bottomPadding),
-                  child: Column(
+                  child: Stack(
                     children: [
-                      Expanded(
-                        child: BlocSelector<DashboardCubit, DashboardState, DashboardTab>(
+                      Positioned.fill(
+                        child: MediaQuery(
+                          data: MediaQuery.of(context).copyWith(
+                            padding: MediaQuery.of(context).padding.copyWith(bottom: 100),
+                            viewPadding: MediaQuery.of(context).viewPadding.copyWith(bottom: 100),
+                          ),
+                          child: BlocSelector<DashboardCubit, DashboardState, DashboardTab>(
                           selector: (s) => s.tab,
                           builder: (context, tab) {
                             if (tab == DashboardTab.calendar) {
@@ -146,10 +151,15 @@ class DashboardPhoneFrame extends StatelessWidget {
                             );
                           },
                         ),
+                        ),
                       ),
-                      const SizedBox(height: navGap),
-                      DashboardBottomNav(
-                        onTabSelected: (tab) => context.read<DashboardCubit>().selectTab(tab),
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: DashboardBottomNav(
+                          onTabSelected: (tab) => context.read<DashboardCubit>().selectTab(tab),
+                        ),
                       ),
                     ],
                   ),

@@ -255,6 +255,7 @@ class _ClientPageState extends State<ClientPage> {
                       child: TextFormField(
                         controller: phoneController,
                         keyboardType: TextInputType.phone,
+                        autofillHints: const [AutofillHints.telephoneNumber],
                         decoration: const InputDecoration(labelText: 'Phone *'),
                         textInputAction: TextInputAction.done,
                         validator: (v) =>
@@ -267,6 +268,7 @@ class _ClientPageState extends State<ClientPage> {
                 TextFormField(
                   controller: emailController,
                   keyboardType: TextInputType.emailAddress,
+                  autofillHints: const [AutofillHints.email],
                   decoration: const InputDecoration(labelText: 'Email'),
                   textInputAction: TextInputAction.done,
                   validator: (v) {
@@ -355,18 +357,6 @@ class _ClientPageState extends State<ClientPage> {
                         child: const ClientRegistrationPage(),
                       ),
                     ),
-                  );
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.qr_code_scanner),
-                title: const Text('Scan invite QR'),
-                subtitle: const Text('Scan a tutor invite to prefill registration'),
-                onTap: () {
-                  Navigator.pop(sheetContext);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ScanInvitePage()),
                   );
                 },
               ),
@@ -559,7 +549,7 @@ class _ClientPageState extends State<ClientPage> {
                           await Future.delayed(const Duration(milliseconds: 800));
                         },
                         child: ListView.separated(
-                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                          padding: EdgeInsets.fromLTRB(0, 0, 0, 8 + MediaQuery.paddingOf(context).bottom),
                           itemCount: entities.length,
                           separatorBuilder: (_, __) => const SizedBox(height: 14),
                           itemBuilder: (context, index) {

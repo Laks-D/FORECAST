@@ -1442,7 +1442,7 @@ class _CalendarBottomCard extends StatelessWidget {
                                itemCount: sessions.length,
                                shrinkWrap: isSliverWrap,
                                physics: isSliverWrap ? const NeverScrollableScrollPhysics() : null,
-                               padding: const EdgeInsets.only(bottom: 24),
+                               padding: EdgeInsets.only(bottom: 24 + MediaQuery.paddingOf(context).bottom),
                                separatorBuilder: (_, __) => const SizedBox(height: 12),
                                itemBuilder: (context, index) {
                                  final s = sessions[index];
@@ -1677,7 +1677,7 @@ class _PaymentScheduleList extends StatelessWidget {
       itemCount: rows.length,
       shrinkWrap: isSliverWrap,
       physics: isSliverWrap ? const NeverScrollableScrollPhysics() : null,
-      padding: const EdgeInsets.only(bottom: 24),
+      padding: EdgeInsets.only(bottom: 24 + MediaQuery.paddingOf(context).bottom),
       separatorBuilder: (_, __) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final row = rows[index];
@@ -2473,9 +2473,6 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
   void initState() {
     super.initState();
     clients = (context.read<ClientBloc>().state is ClientLoaded ? (context.read<ClientBloc>().state as ClientLoaded).entities : <Client>[]);
-    if (clients.isNotEmpty) {
-      _clientId = clients.first.id;
-    }
     _weeklyDay = widget.selectedDate.weekday;
     _monthlyDate = widget.selectedDate.day;
 
@@ -2529,29 +2526,7 @@ class _AddPaymentSheetState extends State<_AddPaymentSheet> {
     });
   }
 
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // Ensure initial client selection prefers a client that has sessions scheduled
-    try {
-      final sessions = context.read<SessionsCubit>().state.sessions;
-      final clientsWithSessions = clients.where((c) =>
-        sessions.any((s) => s.clientId == c.id)
-      ).toList(growable: false);
-      if (clientsWithSessions.isNotEmpty) {
-        if (_clientId == null || !clientsWithSessions.any((c) => c.id == _clientId)) {
-          _clientId = clientsWithSessions.first.id;
-        }
-      } else {
-        // Fall back to first client so payments can still be scheduled.
-        if (clients.isNotEmpty) {
-          _clientId ??= clients.first.id;
-        }
-      }
-    } catch (_) {
-      // ignore: keep existing behavior if sessions cubit isn't available
-    }
-  }
+
 
   @override
   void dispose() {

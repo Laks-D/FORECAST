@@ -54,7 +54,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
   
   final _courseNameController = TextEditingController();
   
-  SessionDuration? _duration;
+  SessionDuration? _duration = SessionDuration.oneHour;
   int? _customDurationMinutes;
 
   List<ScheduleSession> _draft = const [];
@@ -380,7 +380,7 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                       ),
                       const SizedBox(height: 12),
                       _SearchableSelectField<String>(
-                        label: 'Program Template (Optional)',
+                        label: 'Program',
                         value: null, // Always allow selecting a template
                         displayValue: 'Select to auto-fill',
                         enabled: _registeredPrograms.isNotEmpty,
@@ -401,8 +401,9 @@ class _ScheduleSessionsSheetState extends State<ScheduleSessionsSheet> {
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _courseNameController,
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                         decoration: InputDecoration(
-                          labelText: 'Course Name (Optional)',
+                          labelText: 'Course Name *',
                           hintText: 'e.g. Mathematics 101',
                           filled: true,
                           fillColor: scheme.surfaceContainerHighest,

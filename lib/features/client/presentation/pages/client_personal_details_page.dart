@@ -319,6 +319,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                             labelText: 'Phone *',
                           ),
                           keyboardType: TextInputType.phone,
+                          autofillHints: const [AutofillHints.telephoneNumber],
                           textInputAction: TextInputAction.next,
                           validator: (v) {
                             final value = (v ?? '').trim();
@@ -338,6 +339,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                       labelText: 'Email *',
                     ),
                     keyboardType: TextInputType.emailAddress,
+                    autofillHints: const [AutofillHints.email],
                     enabled: widget.allowEmailEdit,
                     validator: (v) {
                       final val = (v ?? '').trim();

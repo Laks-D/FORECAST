@@ -16,6 +16,7 @@ import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/domain/entities/client.dart';
 import 'course_profile_page.dart';
 import '../../../client/presentation/ui/scan_invite_page.dart';
+import '../../../../core/app/student_enrollment_resolver.dart';
 
 class CoursesPage extends StatefulWidget {
   const CoursesPage({
@@ -32,11 +33,19 @@ class CoursesPage extends StatefulWidget {
 class _CoursesPageState extends State<CoursesPage> {
   Set<String> _pinnedCourseKeys = <String>{};
   String _query = '';
+  String _tutorName = 'Tutor';
 
   @override
   void initState() {
     super.initState();
     _loadPinnedCourses();
+    _loadTutorName();
+  }
+
+  Future<void> _loadTutorName() async {
+    final name = await StudentEnrollmentResolver.getTutorName();
+    if (!mounted) return;
+    setState(() => _tutorName = name);
   }
 
   Future<void> _loadPinnedCourses() async {
@@ -219,9 +228,9 @@ class _CoursesPageState extends State<CoursesPage> {
 
                           final existing = itemsByKey[key];
                           if (existing == null) {
-                            final clientName =
-                                clientById[s.clientId]?.displayName ??
-                                    'Client';
+                            final clientName = AppModeConfig.isClient
+                                ? (_tutorName.trim().isNotEmpty && _tutorName != 'Tutor' ? _tutorName : 'Tutor')
+                                : (clientById[s.clientId]?.displayName ?? 'Client');
                             itemsByKey[key] = _CourseSummary(
                               key: key,
                               clientId: s.clientId,

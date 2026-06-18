@@ -61,8 +61,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
     final chrome = AppChromeTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final visual = AppVisualStyle.of(context);
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final bg = isLight ? Theme.of(context).scaffoldBackgroundColor : chrome.frameColor;
+    final bg = Theme.of(context).scaffoldBackgroundColor;
 
     return Scaffold(
       backgroundColor: bg,
@@ -79,9 +78,9 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                     width: 64,
                     height: 64,
                     decoration: BoxDecoration(
-                      color: chrome.mutedColor.withOpacity(0.10),
+                      color: scheme.onSurface.withOpacity(0.05),
                       borderRadius: BorderRadius.circular(22),
-                      border: Border.all(color: chrome.mutedColor.withOpacity(0.15)),
+                      border: Border.all(color: scheme.onSurface.withOpacity(0.1)),
                     ),
                     child: Icon(
                       Icons.school_rounded,
@@ -94,7 +93,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                     'Welcome',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.w900,
-                          color: chrome.textColor,
+                          color: scheme.onSurface,
                           letterSpacing: -0.5,
                         ),
                   ),
@@ -102,7 +101,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen>
                   Text(
                     'Sign in or create a new account',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: chrome.mutedColor,
+                          color: scheme.onSurface.withOpacity(0.65),
                           fontWeight: FontWeight.w500,
                         ),
                   ),
@@ -183,7 +182,6 @@ class _SegmentedTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
 
     return AnimatedBuilder(
@@ -193,9 +191,9 @@ class _SegmentedTabs extends StatelessWidget {
         return Container(
           height: 48,
           decoration: BoxDecoration(
-            color: chrome.mutedColor.withOpacity(0.08),
+            color: scheme.onSurface.withOpacity(0.05),
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: chrome.mutedColor.withOpacity(0.15)),
+            border: Border.all(color: scheme.onSurface.withOpacity(0.1)),
           ),
           child: Stack(
             children: [
@@ -211,7 +209,7 @@ class _SegmentedTabs extends StatelessWidget {
                       heightFactor: 1,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
-                          color: chrome.textColor,
+                          color: scheme.onSurface,
                           borderRadius: BorderRadius.circular(999),
                         ),
                       ),
@@ -345,7 +343,7 @@ class _RoleCardGrid extends StatelessWidget {
       decoration: BoxDecoration(
         color: cardColor,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: chrome.mutedColor.withOpacity(0.10)),
+        border: Border.all(color: scheme.onSurface.withOpacity(0.1)),
         boxShadow: shadows,
       ),
       child: Material(
@@ -377,14 +375,14 @@ class _RoleCardGrid extends StatelessWidget {
                               card.title,
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                                     fontWeight: FontWeight.w800,
-                                    color: chrome.textColor,
+                                    color: scheme.onSurface,
                                   ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               card.subtitle,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: chrome.mutedColor,
+                                    color: scheme.onSurface.withOpacity(0.65),
                                     fontWeight: FontWeight.w500,
                                   ),
                             ),
@@ -394,7 +392,7 @@ class _RoleCardGrid extends StatelessWidget {
                       Icon(
                         Icons.arrow_forward_ios_rounded,
                         size: 16,
-                        color: chrome.mutedColor,
+                        color: scheme.onSurface.withOpacity(0.65),
                       ),
                     ],
                   )
@@ -416,14 +414,14 @@ class _RoleCardGrid extends StatelessWidget {
                         card.title,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
                               fontWeight: FontWeight.w800,
-                              color: chrome.textColor,
+                              color: scheme.onSurface,
                             ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         card.subtitle,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: chrome.mutedColor,
+                              color: scheme.onSurface.withOpacity(0.65),
                               fontWeight: FontWeight.w500,
                             ),
                       ),

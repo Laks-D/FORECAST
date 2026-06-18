@@ -12,6 +12,7 @@ class AppCard extends StatelessWidget {
     this.padding,
     this.radius,
     this.color,
+    this.border,
   });
 
   final Widget child;
@@ -19,6 +20,7 @@ class AppCard extends StatelessWidget {
   final EdgeInsets? padding;
   final double? radius;
   final Color? color;
+  final BoxBorder? border;
 
   @override
   Widget build(BuildContext context) {
@@ -58,6 +60,7 @@ class AppCard extends StatelessWidget {
             color: surface,
             borderRadius: BorderRadius.circular(r),
             boxShadow: shadows,
+            border: border,
           ),
           child: cardChild,
         ),

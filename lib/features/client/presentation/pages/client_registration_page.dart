@@ -256,6 +256,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                                 labelText: 'Phone *',
                               ),
                               keyboardType: TextInputType.phone,
+                              autofillHints: const [AutofillHints.telephoneNumber],
                               validator: (v) => (v == null || v.trim().isEmpty)
                                   ? 'Required'
                                   : null,
@@ -273,6 +274,7 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                           labelText: 'Email *',
                         ),
                         keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
                         validator: (v) {
                           final val = (v ?? '').trim();
                           if (val.isEmpty) return 'Required';

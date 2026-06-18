@@ -53,35 +53,36 @@ class _DashboardBottomNavState extends State<DashboardBottomNav> {
           },
         ),
       ],
-      child: SizedBox(
-        height: 68,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            border: Border(
-              top: BorderSide(
-                color: Theme.of(context)
-                    .colorScheme
-                    .outlineVariant
-                    .withOpacity(0.65),
-              ),
+      child: Container(
+        height: 64,
+        margin: EdgeInsets.only(
+          left: 16, 
+          right: 16, 
+          bottom: 16 + MediaQuery.viewPaddingOf(context).bottom,
+        ),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1E1E24), // Dark pill color
+          borderRadius: BorderRadius.circular(32),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.3),
+              blurRadius: 20,
+              offset: const Offset(0, 10),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                for (final tab in _tabs)
-                  Expanded(
-                    child: _NavIcon(
-                      tab: tab,
-                      icon: _iconFor(tab),
-                      onTap: () => widget.onTabSelected(tab),
-                    ),
-                  ),
-              ],
-            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              for (final tab in _tabs)
+                _NavIcon(
+                  tab: tab,
+                  icon: _iconFor(tab),
+                  onTap: () => widget.onTabSelected(tab),
+                ),
+            ],
           ),
         ),
       ),
@@ -120,36 +121,32 @@ class _NavIcon extends StatelessWidget {
     return BlocSelector<DashboardCubit, DashboardState, bool>(
       selector: (state) => state.tab == tab,
       builder: (context, selected) {
-        final color = selected ? scheme.onSurface : chrome.mutedColor;
+        final iconColor = selected ? const Color(0xFF1E1E24) : scheme.onSurface.withOpacity(0.9);
+        final bgColor = selected ? Colors.white : Colors.transparent;
         
         return InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(30),
           highlightColor: Colors.transparent,
           splashColor: scheme.onSurface.withOpacity(0.05),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeOutCubic,
-                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                child: Icon(
-                  icon,
-                  size: 26,
-                  color: color,
-                ),
+          child: Padding(
+            padding: const EdgeInsets.all(6.0),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 240),
+              curve: Curves.easeOutCubic,
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: bgColor,
+                shape: BoxShape.circle,
               ),
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 240),
-                width: selected ? 4 : 0,
-                height: selected ? 4 : 0,
-                decoration: const BoxDecoration(
-                  color: VibrantColors.pastelGreen,
-                  shape: BoxShape.circle,
-                ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                size: 24,
+                color: iconColor,
               ),
-            ],
+            ),
           ),
         );
       },

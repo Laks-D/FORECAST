@@ -45,7 +45,7 @@ class _InviteQrPageState extends State<InviteQrPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Invite — QR'),
-        backgroundColor: chrome.frameColor,
+        backgroundColor: Colors.transparent,
       ),
       body: SafeArea(
         child: Padding(

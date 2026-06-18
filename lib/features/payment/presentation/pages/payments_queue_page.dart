@@ -31,8 +31,6 @@ class PaymentsQueuePage extends StatefulWidget {
 
 class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
   String _query = '';
-  // null = All; 'Paid', 'Unpaid', 'Overdue'
-  String? _filterStatus;
   
   late Stream<List<Payment>> _paymentsStream;
   String _tutorName = 'Tutor';
@@ -64,7 +62,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
     final defaultCurrency = context.select((UserProfileCubit c) => c.state.currency);
     final bgColor = scheme.surface;
     final onSurface = scheme.onSurface;
-    final isClient = AppModeScope.isClient(context);
+      final isClient = AppModeScope.isClient(context);
     final paymentRepository = context.read<ClientBloc>().paymentRepository;
 
     return Scaffold(
@@ -100,45 +98,6 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                       },
                     ),
                   ),
-                  if (!isClient) ...[
-                    const SizedBox(height: 12),
-                    // ── Filter pills ─────────────────────────────────────────
-                    SizedBox(
-                      height: 36,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        children: [
-                          _FilterPill(
-                            label: 'All',
-                            selected: _filterStatus == null,
-                            onTap: () => setState(() => _filterStatus = null),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterPill(
-                            label: 'Paid',
-                            color: VibrantColors.pastelGreen,
-                            selected: _filterStatus == 'Paid',
-                            onTap: () => setState(() => _filterStatus = 'Paid'),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterPill(
-                            label: 'Unpaid',
-                            color: VibrantColors.warmYellow,
-                            selected: _filterStatus == 'Unpaid',
-                            onTap: () => setState(() => _filterStatus = 'Unpaid'),
-                          ),
-                          const SizedBox(width: 8),
-                          _FilterPill(
-                            label: 'Overdue',
-                            color: const Color(0xFFEF4444),
-                            selected: _filterStatus == 'Overdue',
-                            onTap: () => setState(() => _filterStatus = 'Overdue'),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
                   const SizedBox(height: 14),
                   Expanded(
                     child: BlocBuilder<ClientBloc, ClientState>(
@@ -154,11 +113,10 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                               return AppLoading(color: onSurface);
                             }
                             
-                            var rawPayments = snapshot.data!;
+                            // Only ever show 'Paid' payments in the global ledger
+                            var rawPayments = snapshot.data!.where((p) => p.status == PaymentStatus.paid).toList();
                             
                             if (isClient) {
-                               rawPayments = rawPayments.where((p) => p.status == PaymentStatus.paid).toList();
-                               
                                final uid = context.read<ClientBloc>().state is ClientLoaded 
                                   ? (context.read<ClientBloc>().state as ClientLoaded).entities.firstOrNull?.firebaseUid 
                                   : null;
@@ -206,15 +164,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                             }
 
                             final payments = mappedPayments
-                              .where((p) {
-                                // Filter by status tab
-                                if (_filterStatus != null &&
-                                    p.paymentStatus != _filterStatus) {
-                                  return false;
-                                }
-                                // Filter by search query
-                                return matchesQuery(p);
-                              })
+                              .where((p) => matchesQuery(p))
                               .toList();
 
                             if (payments.isEmpty) {
@@ -235,7 +185,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                                 await Future.delayed(const Duration(milliseconds: 800));
                               },
                               child: ListView.builder(
-                                padding: const EdgeInsets.fromLTRB(0, 0, 0, 8),
+                                padding: EdgeInsets.fromLTRB(0, 0, 0, 8 + MediaQuery.paddingOf(context).bottom),
                                 itemCount: listItems.length,
                                 itemBuilder: (context, index) {
                                   final item = listItems[index];

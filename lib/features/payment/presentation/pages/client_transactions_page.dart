@@ -15,6 +15,7 @@ import '../../../client/presentation/bloc/client_state.dart';
 import '../../../client/presentation/pages/client_profile_page.dart';
 import '../../../calendar/bloc/sessions_cubit.dart';
 import '../../../../design_system/theme/app_chrome_theme.dart';
+import '../../../../design_system/theme/app_visual_style.dart';
 import '../../domain/entities/payment.dart';
 import '../../domain/repositories/payment_repository.dart';
 
@@ -22,9 +23,11 @@ class ClientTransactionsPage extends StatefulWidget {
   const ClientTransactionsPage({
     super.key,
     required this.clientId,
+    this.fromProfile = false,
   });
 
   final String clientId;
+  final bool fromProfile;
 
   @override
   State<ClientTransactionsPage> createState() => _ClientTransactionsPageState();
@@ -63,52 +66,6 @@ class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
         foregroundColor: onSurface,
         elevation: 0,
         title: const Text('Transactions'),
-        actions: [
-          BlocBuilder<ClientBloc, ClientState>(
-            buildWhen: (p, n) => p.runtimeType != n.runtimeType,
-            builder: (context, state) {
-              if (AppModeScope.isClient(context)) {
-                return const SizedBox.shrink();
-              }
-
-              final client = _findClient(state);
-              return Padding(
-                padding: const EdgeInsets.only(right: 12, top: 8, bottom: 8),
-                child: TextButton(
-                  onPressed: client == null
-                      ? null
-                      : () {
-                          final clientBloc = context.read<ClientBloc>();
-                          final sessionsCubit = context.read<SessionsCubit>();
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => MultiBlocProvider(
-                                providers: [
-                                  BlocProvider.value(value: clientBloc),
-                                  BlocProvider.value(value: sessionsCubit),
-                                ],
-                                child: ClientProfilePage(entity: client),
-                              ),
-                            ),
-                          );
-                        },
-                  style: TextButton.styleFrom(
-                    foregroundColor: onSurface,
-                    side: BorderSide(
-                      color: scheme.outlineVariant.withOpacity(0.75),
-                      width: 1.5,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  ),
-                  child: const Text('Profile'),
-                ),
-              );
-            },
-          ),
-        ],
       ),
       body: SafeArea(
         child: Padding(
@@ -139,14 +96,39 @@ class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
                     return AppLoading(color: onSurface);
                   }
 
-                  final payments = snapshot.data!.where((p) => p.status == PaymentStatus.paid).toList();
+                  final payments = snapshot.data!.toList();
                   payments.sort((a, b) => b.dueDate.compareTo(a.dueDate));
                   final listItems = _buildMonthGroupedItems(payments);
 
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _HeaderCard(client: client),
+                      _HeaderCard(
+                        client: client,
+                        onTap: AppModeScope.isClient(context)
+                            ? null
+                            : () {
+                                if (widget.fromProfile) {
+                                  Navigator.of(context).pop();
+                                } else {
+                                  final clientBloc = context.read<ClientBloc>();
+                                  final sessionsCubit = context.read<SessionsCubit>();
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => MultiBlocProvider(
+                                        providers: [
+                                          BlocProvider.value(value: clientBloc),
+                                          BlocProvider.value(value: sessionsCubit),
+                                        ],
+                                        child: ClientProfilePage(entity: client),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                      ),
+                      const SizedBox(height: 14),
+                      _SummaryRow(payments: payments, currency: currency),
                       const SizedBox(height: 14),
                       Expanded(
                         child: payments.isEmpty
@@ -195,9 +177,14 @@ class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
                                   }
 
                                   final p = (item as _PaymentItem).payment;
+                                  final isTutor = !AppModeScope.isClient(context);
                                   return Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
-                                    child: _TransactionCard(payment: p, currency: currency),
+                                    child: _TransactionCard(
+                                      payment: p, 
+                                      currency: currency,
+                                      onTap: isTutor ? () => _showEditStatusSheet(context, p) : null,
+                                    ),
                                   );
                                 },
                               ),
@@ -210,6 +197,48 @@ class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showEditStatusSheet(BuildContext context, Payment payment) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Update Status',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 24),
+                ListTile(
+                  leading: const Icon(Icons.check_circle_outline, color: VibrantColors.pastelGreen),
+                  title: const Text('Paid', style: TextStyle(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    context.read<ClientBloc>().paymentRepository.setStatus(payment.paymentId, PaymentStatus.paid);
+                    Navigator.pop(context);
+                  },
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.schedule_outlined, color: VibrantColors.warmYellow),
+                  title: const Text('Unpaid', style: TextStyle(fontWeight: FontWeight.w600)),
+                  onTap: () {
+                    context.read<ClientBloc>().paymentRepository.setStatus(payment.paymentId, PaymentStatus.unpaid);
+                    Navigator.pop(context);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -285,9 +314,10 @@ class _PaymentItem extends _PaymentsListItem {
 }
 
 class _HeaderCard extends StatelessWidget {
-  const _HeaderCard({required this.client});
+  const _HeaderCard({required this.client, this.onTap});
 
   final Client client;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -295,67 +325,69 @@ class _HeaderCard extends StatelessWidget {
     final chrome = AppChromeTheme.of(context);
 
     return AppCard(
-      padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
-      child: Row(
-        children: [
-            Container(
-              width: 54,
-              height: 54,
-              decoration: BoxDecoration(
-                color: scheme.primary.withOpacity(0.10),
-                borderRadius: BorderRadius.circular(18),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                client.name.isEmpty ? '?' : client.name.characters.first,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      color: scheme.primary,
-                      fontWeight: FontWeight.w900,
-                    ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    client.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+      onTap: onTap,
+      border: Border.all(color: scheme.outlineVariant.withOpacity(0.35), width: 1.5),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: SizedBox(
+        width: double.infinity,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              client.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    client.formattedPhone,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: chrome.mutedColor,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
-              ),
             ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              client.formattedPhone,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: chrome.mutedColor,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _TransactionCard extends StatelessWidget {
-  const _TransactionCard({required this.payment, required this.currency});
+  const _TransactionCard({required this.payment, required this.currency, this.onTap});
 
   final Payment payment;
   final String currency;
+  final VoidCallback? onTap;
+
+  bool get isPaid => payment.status == PaymentStatus.paid;
+  bool get isOverdue => !isPaid && payment.dueDate.isBefore(DateTime.now());
+
+  String get statusLabel => isPaid ? 'Paid' : (isOverdue ? 'Overdue' : 'Unpaid');
+  
+  Color statusColor(BuildContext context) {
+    if (isPaid) return VibrantColors.pastelGreen;
+    if (isOverdue) return const Color(0xFFEF4444);
+    return VibrantColors.warmYellow;
+  }
+  
+  IconData get statusIcon {
+    if (isPaid) return Icons.check_circle_outline;
+    if (isOverdue) return Icons.warning_amber_outlined;
+    return Icons.schedule_outlined;
+  }
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final chrome = AppChromeTheme.of(context);
+    final sColor = statusColor(context);
 
     return AppCard(
+      onTap: onTap,
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 16),
       child: Row(
         children: [
@@ -363,11 +395,12 @@ class _TransactionCard extends StatelessWidget {
               width: 54,
               height: 54,
               decoration: BoxDecoration(
-                color: scheme.primary.withOpacity(0.10),
+                color: sColor.withOpacity(0.15),
                 borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: sColor.withOpacity(0.25)),
               ),
               alignment: Alignment.center,
-              child: Icon(Icons.payments_outlined, color: scheme.primary),
+              child: Icon(statusIcon, color: sColor, size: 28),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -375,7 +408,7 @@ class _TransactionCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Paid',
+                    statusLabel,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: chrome.mutedColor,
                           fontWeight: FontWeight.w700,
@@ -411,10 +444,91 @@ class _TransactionCard extends StatelessWidget {
                 ],
               ),
             ),
+            if (onTap != null)
+              Icon(Icons.more_vert, color: chrome.mutedColor.withOpacity(0.5)),
         ],
       ),
     );
   }
 
   static String _formatDate(DateTime dt) => AppDateUtils.displayDate(dt);
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.payments, required this.currency});
+
+  final List<Payment> payments;
+  final String currency;
+
+  @override
+  Widget build(BuildContext context) {
+    double paid = 0;
+    double unpaid = 0;
+    double overdue = 0;
+    
+    final now = DateTime.now();
+
+    for (final p in payments) {
+      if (p.status == PaymentStatus.paid) {
+        paid += p.amount;
+      } else {
+        if (p.dueDate.isBefore(now)) {
+          overdue += p.amount;
+        } else {
+          unpaid += p.amount;
+        }
+      }
+    }
+
+    return AppCard(
+      border: Border.all(color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.35), width: 1.5),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+      child: Row(
+        children: [
+          Expanded(child: _SummaryItem(label: 'Paid', amount: paid, color: VibrantColors.pastelGreen, currency: currency)),
+          Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5)),
+          Expanded(child: _SummaryItem(label: 'Unpaid', amount: unpaid, color: VibrantColors.warmYellow, currency: currency)),
+          Container(width: 1, height: 32, color: Theme.of(context).colorScheme.outlineVariant.withOpacity(0.5)),
+          Expanded(child: _SummaryItem(label: 'Pending', amount: overdue, color: const Color(0xFFEF4444), currency: currency)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryItem extends StatelessWidget {
+  const _SummaryItem({
+    required this.label,
+    required this.amount,
+    required this.color,
+    required this.currency,
+  });
+
+  final String label;
+  final double amount;
+  final Color color;
+  final String currency;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '$currency${amount.toStringAsFixed(0)}',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w900,
+              ),
+        ),
+      ],
+    );
+  }
 }

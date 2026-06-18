@@ -251,17 +251,7 @@ class ClientProfilePage extends StatelessWidget {
         return Scaffold(
           appBar: AppBar(
             title: const Text('Profile'),
-            actions: [
-              IconButton(
-                tooltip: 'Scan to join class',
-                icon: const Icon(Icons.qr_code_scanner),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ScanInvitePage()),
-                  );
-                },
-              ),
-            ],
+            actions: const [],
           ),
           body: ListView(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
@@ -306,7 +296,10 @@ class ClientProfilePage extends StatelessWidget {
                                 BlocProvider.value(value: clientBloc),
                                 BlocProvider.value(value: sessionsCubit),
                               ],
-                              child: ClientTransactionsPage(clientId: current.id),
+                              child: ClientTransactionsPage(
+                                clientId: current.id,
+                                fromProfile: true,
+                              ),
                             ),
                           ),
                         );
