@@ -55,10 +55,23 @@ class _LandingScreenState extends State<LandingScreen> {
     _rolesFuture = null;
   }
 
+  void _handleBackgroundSignOut() {
+    _invalidateRolesCache();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await FirebaseAuth.instance.signOut();
+    });
+  }
+
   Future<List<String>> _getRolesFuture(String uid) {
     if (_cachedRoleUid == uid && _rolesFuture != null) return _rolesFuture!;
     _cachedRoleUid = uid;
-    _rolesFuture = AuthRepository.instance.fetchRoles(uid);
+    _rolesFuture = AuthRepository.instance.fetchRoles(uid).then((roles) {
+      if (roles.isEmpty) _invalidateRolesCache();
+      return roles;
+    }).catchError((_) {
+      _invalidateRolesCache();
+      return <String>[];
+    });
     return _rolesFuture!;
   }
 
@@ -71,111 +84,138 @@ class _LandingScreenState extends State<LandingScreen> {
           return AuthGate(key: ValueKey(_authGateGeneration));
         }
 
-        return StreamBuilder<User?>(
-          stream: FirebaseAuth.instance.authStateChanges(),
-          builder: (context, authSnap) {
-            if (authSnap.connectionState == ConnectionState.waiting) {
-              return const _Spinner();
-            }
-
-            final user = authSnap.data;
-
-            // ── Not signed in ──────────────────────────────────────────────
-            if (user == null) {
-              _invalidateRolesCache();
-              // Fix C: clear enrollment cache so the next sign-in always
-              // re-fetches the correct tutor UID from Firestore.
-              StudentEnrollmentResolver.invalidateCache();
-              // Forget the FCM-registered uid so the next user re-registers.
-              FcmTokenService.instance.reset();
-              // Bump generation so AuthGate is always a fresh instance and
-              // its initState reliably reads any pending signup state.
-              if (_previousUid != null) {
-                _authGateGeneration++;
-              }
-              _previousUid = null;
+        // While a login attempt is in flight, freeze the auth-routing so
+        // LandingScreen never reacts to the transient Firebase sign-in that
+        // happens inside _assertRole. This completely prevents the grey screen.
+        return ValueListenableBuilder<bool>(
+          valueListenable: LoginController.instance.loginInProgressNotifier,
+          builder: (context, loginInProgress, _) {
+            if (loginInProgress) {
+              // Login is in progress — keep showing the auth gate.
+              // NewLoginScreen is on top of it anyway, so user sees nothing.
               return AuthGate(key: ValueKey(_authGateGeneration));
             }
 
-            // ── Signup in progress: block dashboard routing ─────────────────
-            if (SignupController.instance.isSignupInProgress) {
-              return const _Spinner();
-            }
+            return StreamBuilder<User?>(
+              stream: FirebaseAuth.instance.authStateChanges(),
+              builder: (context, authSnap) {
+                if (authSnap.connectionState == ConnectionState.waiting) {
+                  return const _Spinner();
+                }
 
-            // ── Fresh sign-in: always re-fetch roles ───────────────────────
-            if (_previousUid == null || _previousUid != user.uid) {
-              _invalidateRolesCache();
-            }
-            _previousUid = user.uid;
+                final user = authSnap.data;
 
-            // Register this device's FCM token (guarded; deduped per uid).
-            FcmTokenService.instance.registerCurrentDevice();
+                // ── Not signed in ──────────────────────────────────────────────
+                if (user == null) {
+                  _invalidateRolesCache();
+                  // Fix C: clear enrollment cache so the next sign-in always
+                  // re-fetches the correct tutor UID from Firestore.
+                  StudentEnrollmentResolver.invalidateCache();
+                  // Forget the FCM-registered uid so the next user re-registers.
+                  FcmTokenService.instance.reset();
+                  // Bump generation so AuthGate is always a fresh instance and
+                  // its initState reliably reads any pending signup state.
+                  if (_previousUid != null) {
+                    _authGateGeneration++;
+                  }
+                  _previousUid = null;
+                  return AuthGate(key: ValueKey(_authGateGeneration));
+                }
 
-            // ── Role check → dashboard ─────────────────────────────────────
-            return BlocBuilder<AppModeCubit, AppModeState>(
-              builder: (context, modeState) {
-                return FutureBuilder<List<String>>(
-                  future: _getRolesFuture(user.uid),
-                  builder: (context, rolesSnap) {
-                    if (rolesSnap.connectionState == ConnectionState.waiting) {
-                      return const _Spinner();
-                    }
+                // ── Signup in progress: block dashboard routing ─────────────────
+                if (SignupController.instance.isSignupInProgress) {
+                  return const _Spinner();
+                }
 
-                    final roles = rolesSnap.data ?? [];
+                // ── Fresh sign-in: always re-fetch roles ───────────────────────
+                if (_previousUid == null || _previousUid != user.uid) {
+                  _invalidateRolesCache();
+                }
+                _previousUid = user.uid;
 
-                    final isTutor = roles.contains('tutor');
-                    final isClient =
-                        roles.contains('client') || roles.contains('student');
+                // Register this device's FCM token (guarded; deduped per uid).
+                FcmTokenService.instance.registerCurrentDevice();
 
-                    // Dual-role: route to the dashboard that matches the login tab
-                    // used this session. If no login happened yet this session
-                    // (e.g., app restarted while already signed in), fall back to
-                    // tutor dashboard.
-                    if (isTutor && isClient) {
-                      final loginRole = LoginController.instance.lastLoginRole;
-                      AppMode mode = modeState.mode ?? AppMode.admin;
-                      if (loginRole != null) {
-                        final expectedMode = loginRole == 'client' ? AppMode.client : AppMode.admin;
-                        LoginController.instance.lastLoginRole = null;
-                        if (mode != expectedMode) {
-                          mode = expectedMode;
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (context.mounted) {
-                              context.read<AppModeCubit>().setMode(expectedMode);
-                            }
-                          });
+                // ── Role check → dashboard ─────────────────────────────────────
+                return BlocBuilder<AppModeCubit, AppModeState>(
+                  builder: (context, modeState) {
+                    return FutureBuilder<List<String>>(
+                      future: _getRolesFuture(user.uid),
+                      builder: (context, rolesSnap) {
+                        if (rolesSnap.connectionState == ConnectionState.waiting) {
+                          return const _Spinner();
                         }
-                      }
-                      
-                      AppModeConfig.isDualRole = true;
-                      AppModeConfig.mode = mode;
-                      return _buildDashboard(
-                          user: user, appMode: mode, isDualRole: true);
-                    }
 
-                    AppModeConfig.isDualRole = false;
+                        final roles = rolesSnap.data ?? [];
 
-                    if (isTutor) {
-                      AppModeConfig.mode = AppMode.admin;
-                      return _buildDashboard(
-                          user: user, appMode: AppMode.admin, isDualRole: false);
-                    }
+                        final isTutor = roles.contains('tutor');
+                        final isClient =
+                            roles.contains('client') || roles.contains('student');
 
-                    if (isClient) {
-                      AppModeConfig.mode = AppMode.client;
-                      return _buildDashboard(
-                          user: user, appMode: AppMode.client, isDualRole: false);
-                    }
+                        // Extra safety for forced mode (Client App only).
+                        // Note: role mismatch on login is handled exclusively by
+                        // _assertRole in auth_repository.dart. We do NOT duplicate
+                        // that check here to avoid a double sign-out race condition
+                        // that causes a grey screen.
+                        if (modeState.forced && roles.isNotEmpty && !isClient) {
+                          _handleBackgroundSignOut();
+                          return const _Spinner();
+                        }
 
-                    // No role found — role write may have failed during signup.
-                    // Auto-sign-out after a short delay.
-                    return _RolelessScreen(onSignOut: _invalidateRolesCache);
+                        // Dual-role: route to the dashboard that matches the login tab
+                        // used this session. If no login happened yet this session
+                        // (e.g., app restarted while already signed in), fall back to
+                        // tutor dashboard.
+                        if (isTutor && isClient) {
+                          final loginRole = LoginController.instance.lastLoginRole;
+                          AppMode mode = modeState.mode ?? AppMode.admin;
+                          if (loginRole != null) {
+                            final expectedMode = loginRole == 'client' ? AppMode.client : AppMode.admin;
+                            LoginController.instance.lastLoginRole = null;
+                            if (mode != expectedMode) {
+                              mode = expectedMode;
+                              WidgetsBinding.instance.addPostFrameCallback((_) {
+                                if (context.mounted) {
+                                  context.read<AppModeCubit>().setMode(expectedMode);
+                                }
+                              });
+                            }
+                          }
+                          
+                          AppModeConfig.isDualRole = true;
+                          AppModeConfig.mode = mode;
+                          return _buildDashboard(
+                              user: user, appMode: mode, isDualRole: true);
+                        }
+
+                        AppModeConfig.isDualRole = false;
+
+                        if (isTutor) {
+                          LoginController.instance.lastLoginRole = null;
+                          AppModeConfig.mode = AppMode.admin;
+                          return _buildDashboard(
+                              user: user, appMode: AppMode.admin, isDualRole: false);
+                        }
+
+                        if (isClient) {
+                          LoginController.instance.lastLoginRole = null;
+                          AppModeConfig.mode = AppMode.client;
+                          return _buildDashboard(
+                              user: user, appMode: AppMode.client, isDualRole: false);
+                        }
+
+                        // No role found — role write may have failed during signup.
+                        // Auto-sign-out after a short delay.
+                        return _RolelessScreen(onSignOut: _invalidateRolesCache);
+                      },
+                    );
                   },
                 );
               },
             );
           },
         );
+
       },
     );
   }
@@ -262,3 +302,6 @@ class _RolelessScreenState extends State<_RolelessScreen> {
         ),
       );
 }
+
+
+

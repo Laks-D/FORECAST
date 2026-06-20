@@ -143,6 +143,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                               state.entities,
                               isClient: isClient,
                               tutorName: _tutorName,
+                              defaultCurrency: defaultCurrency,
                             );
 
                             bool matchesQuery(_PaymentVM p) {
@@ -207,7 +208,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                                             ),
                                           ),
                                           Text(
-                                            '${item.currency}${item.total.toStringAsFixed(0)}',
+                                            '${_normalizeCurrency(item.currency)}${item.total.toStringAsFixed(0)}',
                                             style: Theme.of(context)
                                                 .textTheme
                                                 .titleSmall
@@ -343,7 +344,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
                                                   mainAxisAlignment: MainAxisAlignment.center,
                                                   children: [
                                                     Text(
-                                                      '${payment.currency}${payment.amount.toStringAsFixed(0)}',
+                                                      '${_normalizeCurrency(payment.currency)}${payment.amount.toStringAsFixed(0)}',
                                                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                                             color: chrome.textColor,
                                                             fontWeight: FontWeight.w900,
@@ -443,7 +444,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
 
   /// Returns ALL payment events as VMs, grouped by client + day.
   /// Each VM has a `paymentStatus` of 'Paid', 'Unpaid', or 'Overdue'.
-  List<_PaymentVM> _mapPayments(List<Payment> payments, List<Client> clients, {required bool isClient, required String tutorName}) {
+  List<_PaymentVM> _mapPayments(List<Payment> payments, List<Client> clients, {required bool isClient, required String tutorName, required String defaultCurrency}) {
     final now = DateTime.now();
     final singles = <_PaymentSingleVM>[];
 
@@ -467,7 +468,7 @@ class _PaymentsQueuePageState extends State<PaymentsQueuePage> {
           amount: payment.amount,
           paidAt: payment.dueDate,
           note: payment.note,
-          currency: payment.currency ?? client.currency ?? 'USD',
+          currency: _normalizeCurrency(payment.currency ?? client.currency ?? defaultCurrency),
           paymentStatus: status,
         ),
       );
@@ -691,4 +692,12 @@ class _FilterPill extends StatelessWidget {
       ),
     );
   }
+}
+
+String _normalizeCurrency(String raw) {
+  final clean = raw.trim();
+  if (clean.toUpperCase() == 'USD' || clean == r'$') {
+    return '₹';
+  }
+  return clean;
 }

@@ -379,8 +379,21 @@ class AuthRepository {
   /// Validates that [uid]'s Firestore roles array contains [expectedRole].
   /// Signs out and throws ROLE_MISMATCH if not.
   Future<void> _assertRole(String uid, String expectedRole) async {
-    final snap = await firestoreDb.collection('users').doc(uid).get();
-    final raw = snap.data()?['roles'];
+    DocumentSnapshot<Map<String, dynamic>>? snap;
+    int attempts = 0;
+    while (true) {
+      try {
+        snap = await firestoreDb.collection('users').doc(uid).get();
+        break;
+      } catch (e) {
+        attempts++;
+        if (attempts >= 3) {
+          rethrow;
+        }
+        await Future.delayed(Duration(milliseconds: 200 * attempts));
+      }
+    }
+    final raw = snap?.data()?['roles'];
     final List<String> roles = raw is List ? raw.cast<String>() : [];
 
     // If no roles array yet, fall back to inferring from enrollment subcollection.
@@ -393,36 +406,44 @@ class AuthRepository {
           {'roles': inferred},
           SetOptions(merge: true),
         ).ignore();
-        return _assertRoleAgainstList(uid, inferred, expectedRole);
+        _assertRoleAgainstList(uid, inferred, expectedRole); // sync, may throw
+        return;
       }
-      await FirebaseAuth.instance.signOut();
+      // Fire-and-forget signOut so we throw IMMEDIATELY without yielding to
+      // the event loop. This prevents authStateChanges from firing and
+      // corrupting the navigator before the error can be displayed.
+      FirebaseAuth.instance.signOut().ignore();
       throw FirebaseAuthException(
         code: 'ROLE_MISMATCH',
         message: 'Account has no role assigned. Please complete sign-up.',
       );
     }
 
-    await _assertRoleAgainstList(uid, roles, expectedRole);
+    _assertRoleAgainstList(uid, roles, expectedRole); // sync, may throw
   }
 
-  Future<void> _assertRoleAgainstList(
+  // Synchronous — no async/await so the ROLE_MISMATCH exception propagates
+  // immediately back to _onLogin without yielding to the event loop.
+  // signOut is fire-and-forget to avoid an authStateChanges race condition
+  // that would show a grey screen before the error message is displayed.
+  void _assertRoleAgainstList(
     String uid,
     List<String> roles,
     String expectedRole,
-  ) async {
+  ) {
     final wantsTutor = expectedRole == 'tutor';
     final hasTutor = roles.contains('tutor');
     final hasClient = roles.contains('client') || roles.contains('student');
 
     if (wantsTutor && !hasTutor) {
-      await FirebaseAuth.instance.signOut();
+      FirebaseAuth.instance.signOut().ignore();
       throw FirebaseAuthException(
         code: 'ROLE_MISMATCH',
         message: 'This is a Student account. Please use the Student login.',
       );
     }
     if (!wantsTutor && !hasClient) {
-      await FirebaseAuth.instance.signOut();
+      FirebaseAuth.instance.signOut().ignore();
       throw FirebaseAuthException(
         code: 'ROLE_MISMATCH',
         message: 'This is a Tutor account. Please use the Tutor login.',
@@ -450,11 +471,22 @@ class AuthRepository {
   // ── Role fetch (used by LandingScreen) ───────────────────────────────────
 
   Future<List<String>> fetchRoles(String uid) async {
-    try {
-      final snap = await firestoreDb.collection('users').doc(uid).get();
+    DocumentSnapshot<Map<String, dynamic>>? snap;
+    int attempts = 0;
+    while (true) {
+      try {
+        snap = await firestoreDb.collection('users').doc(uid).get();
+        break;
+      } catch (_) {
+        attempts++;
+        if (attempts >= 3) break;
+        await Future.delayed(Duration(milliseconds: 200 * attempts));
+      }
+    }
+    if (snap != null) {
       final raw = snap.data()?['roles'];
       if (raw is List && raw.isNotEmpty) return raw.cast<String>();
-    } catch (_) {}
+    }
     final inferred = await _inferRolesFromSubcollections(uid);
     if (inferred.isNotEmpty) {
       firestoreDb.collection('users').doc(uid).set(

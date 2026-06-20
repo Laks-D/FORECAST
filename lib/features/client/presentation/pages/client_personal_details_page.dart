@@ -119,8 +119,11 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
     return AppDateUtils.displayDate(dt);
   }
 
-  String _money(double amount, String currency) =>
-      '${currency}${amount.toStringAsFixed(1)}';
+  String _money(double amount, String currency) {
+    final clean = currency.trim();
+    final dispCurrency = (clean.toUpperCase() == 'USD' || clean == r'$') ? '₹' : clean;
+    return '${dispCurrency}${amount.toStringAsFixed(1)}';
+  }
 
   Future<void> _pickDateOfBirth() async {
     final now = DateTime.now();
@@ -194,7 +197,8 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
     final chrome = AppChromeTheme.of(context);
     final defaultCurrency =
         context.select((UserProfileCubit c) => c.state.currency);
-    final currency = widget.entity.currency ?? defaultCurrency;
+    final rawCurrency = widget.entity.currency ?? defaultCurrency;
+    final currency = (rawCurrency.trim().toUpperCase() == 'USD' || rawCurrency.trim() == r'$') ? '₹' : rawCurrency;
 
     Widget row(String label, Widget value) {
       return Padding(
@@ -324,6 +328,10 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
                           validator: (v) {
                             final value = (v ?? '').trim();
                             if (value.isEmpty) return 'Phone is required';
+                            final digits = value.replaceAll(RegExp(r'\D'), '');
+                            if (digits.length != 10) {
+                              return 'Phone number must be exactly 10 digits';
+                            }
                             return null;
                           },
                         ),

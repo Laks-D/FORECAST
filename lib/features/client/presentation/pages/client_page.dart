@@ -258,8 +258,15 @@ class _ClientPageState extends State<ClientPage> {
                         autofillHints: const [AutofillHints.telephoneNumber],
                         decoration: const InputDecoration(labelText: 'Phone *'),
                         textInputAction: TextInputAction.done,
-                        validator: (v) =>
-                            (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        validator: (v) {
+                          final val = (v ?? '').trim();
+                          if (val.isEmpty) return 'Required';
+                          final digits = val.replaceAll(RegExp(r'\D'), '');
+                          if (digits.length != 10) {
+                            return 'Must be 10 digits';
+                          }
+                          return null;
+                        },
                       ),
                     ),
                   ],

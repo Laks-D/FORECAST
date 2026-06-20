@@ -257,9 +257,15 @@ class _ClientRegistrationPageState extends State<ClientRegistrationPage> {
                               ),
                               keyboardType: TextInputType.phone,
                               autofillHints: const [AutofillHints.telephoneNumber],
-                              validator: (v) => (v == null || v.trim().isEmpty)
-                                  ? 'Required'
-                                  : null,
+                              validator: (v) {
+                                final val = (v ?? '').trim();
+                                if (val.isEmpty) return 'Required';
+                                final digits = val.replaceAll(RegExp(r'\D'), '');
+                                if (digits.length != 10) {
+                                  return 'Must be 10 digits';
+                                }
+                                return null;
+                              },
                               textInputAction: TextInputAction.next,
                             ),
                           ),

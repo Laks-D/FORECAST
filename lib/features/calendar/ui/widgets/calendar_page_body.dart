@@ -1686,7 +1686,8 @@ class _PaymentScheduleList extends StatelessWidget {
         final p = row.item;
         final client = row.client;
         final status = row.status;
-        final rowCurrency = client.currency ?? defaultCurrency;
+        final rawCurrency = client.currency ?? defaultCurrency;
+        final rowCurrency = (rawCurrency.trim().toUpperCase() == 'USD' || rawCurrency.trim() == r'$') ? '₹' : rawCurrency;
         final amountLabel = p.amount == null
           ? 'No amount'
           : '${rowCurrency}${p.amount!.toStringAsFixed(0)}';

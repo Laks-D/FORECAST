@@ -70,7 +70,6 @@ Future<void> runConfiguredApp({AppMode? forcedMode}) async {
       persistenceEnabled: false,
       ignoreUndefinedProperties: true,
       webExperimentalAutoDetectLongPolling: true,
-      webExperimentalForceLongPolling: true,
     );
   }
 

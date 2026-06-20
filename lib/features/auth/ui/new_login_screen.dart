@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/auth/login_controller.dart';
+import '../../../core/services/deep_link_service.dart';
 import '../repository/auth_repository.dart';
 import '../../auth/forgot_password/ui/forgot_password_screen.dart';
 
@@ -18,6 +19,7 @@ class NewLoginScreen extends StatefulWidget {
     super.key,
     required this.role,
     this.pendingMessage,
+    this.initialError,
   });
 
   /// 'tutor' or 'client'.
@@ -25,6 +27,11 @@ class NewLoginScreen extends StatefulWidget {
 
   /// Optional SnackBar message from a just-completed signup.
   final String? pendingMessage;
+
+  /// Optional error message to display immediately on first build.
+  /// Used when the widget was unmounted during a login error and a fresh
+  /// screen is pushed with the error pre-loaded.
+  final String? initialError;
 
   @override
   State<NewLoginScreen> createState() => _NewLoginScreenState();
@@ -47,6 +54,10 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
   @override
   void initState() {
     super.initState();
+    // Pre-load any error passed in from a navigated-back error flow.
+    if (widget.initialError != null) {
+      _error = widget.initialError;
+    }
     // Show success message from a preceding signup.
     if (widget.pendingMessage != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -76,29 +87,69 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
       _error = null;
     });
 
+    // Freeze LandingScreen auth routing so it never shows a grey screen
+    // during the transient Firebase sign-in that happens inside signIn().
+    LoginController.instance.loginInProgress = true;
+    LoginController.instance.lastLoginRole = widget.role;
+
     try {
       await AuthRepository.instance.signIn(
         email: _emailCtrl.text.trim(),
         password: _passCtrl.text,
         expectedRole: widget.role,
       );
-      // Record which tab was used — LandingScreen uses this to route
-      // dual-role users to the correct dashboard.
-      LoginController.instance.lastLoginRole = widget.role;
+      // Success: release freeze BEFORE popping so LandingScreen shows dashboard.
+      LoginController.instance.loginInProgress = false;
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
 
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _error = _friendlyError(e);
-        _loading = false;
-      });
-    } catch (_) {
-      setState(() {
-        _error = 'Login failed. Please try again.';
-        _loading = false;
-      });
+      // Await sign-out before releasing the freeze so LandingScreen always
+      // sees a null user when it unfreezes (prevents grey screen).
+      await FirebaseAuth.instance.signOut().catchError((_) {});
+      LoginController.instance.loginInProgress = false;
+      LoginController.instance.lastLoginRole = null;
+      final errorMsg = _friendlyError(e);
+      if (mounted) {
+        setState(() {
+          _error = errorMsg;
+          _loading = false;
+        });
+      } else {
+        _navigateToLoginWithError(errorMsg);
+      }
+    } catch (e) {
+      // Generic error (e.g. Firestore permission-denied during role check).
+      await FirebaseAuth.instance.signOut().catchError((_) {});
+      LoginController.instance.loginInProgress = false;
+      LoginController.instance.lastLoginRole = null;
+      final errorMsg = _mapGenericError(e);
+      if (mounted) {
+        setState(() {
+          _error = errorMsg;
+          _loading = false;
+        });
+      } else {
+        _navigateToLoginWithError(errorMsg);
+      }
     }
+  }
+
+  /// Fallback used when this widget is unmounted during an async error flow.
+  /// Pushes a fresh [NewLoginScreen] with [message] pre-loaded as an inline
+  /// error — the user sees the login form with the error text, not a dialog.
+  void _navigateToLoginWithError(String message) {
+    final nav = DeepLinkService.instance.navigatorKey.currentState;
+    if (nav == null) return;
+    nav.pushAndRemoveUntil(
+      MaterialPageRoute<void>(
+        builder: (_) => NewLoginScreen(
+          role: widget.role,
+          initialError: message,
+        ),
+      ),
+      (route) => route.isFirst, // Keep root LandingScreen
+    );
   }
 
   String _friendlyError(FirebaseAuthException e) {
@@ -111,9 +162,26 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
       'user-disabled' => 'This account has been disabled.',
       'too-many-requests' => 'Too many attempts. Please wait a moment.',
       'network-request-failed' => 'No internet connection.',
-      'ROLE_MISMATCH' => e.message ?? 'Wrong account type.',
+      'ROLE_MISMATCH' => _isTutor
+          ? 'This account does not exist on the tutor platform.'
+          : 'This account does not exist on the student platform.',
       _ => e.message ?? 'Login failed (${e.code}).',
     };
+  }
+
+  /// Maps generic (non-FirebaseAuth) exceptions to user-friendly messages.
+  /// Firestore permission-denied during role check is treated as a role mismatch.
+  String _mapGenericError(Object e) {
+    final s = e.toString().toLowerCase();
+    if (s.contains('permission-denied') || s.contains('permission denied')) {
+      return _isTutor
+          ? 'This account does not exist on the tutor platform.'
+          : 'This account does not exist on the student platform.';
+    }
+    if (s.contains('network') || s.contains('socket') || s.contains('unavailable')) {
+      return 'No internet connection. Please try again.';
+    }
+    return 'Login failed. Please try again.';
   }
 
   void _goToForgotPassword() {
@@ -130,26 +198,46 @@ class _NewLoginScreenState extends State<NewLoginScreen> {
       _loading = true;
       _error = null;
     });
+
+    LoginController.instance.loginInProgress = true;
+    LoginController.instance.lastLoginRole = widget.role;
+
     try {
       await AuthRepository.instance.signInWithGoogle(
         expectedRole: widget.role,
       );
-      LoginController.instance.lastLoginRole = widget.role;
+      LoginController.instance.loginInProgress = false;
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
     } on FirebaseAuthException catch (e) {
-      setState(() {
-        _error = _friendlyError(e);
-        _loading = false;
-      });
+      await FirebaseAuth.instance.signOut().catchError((_) {});
+      LoginController.instance.loginInProgress = false;
+      LoginController.instance.lastLoginRole = null;
+      final errorMsg = _friendlyError(e);
+      if (mounted) {
+        setState(() {
+          _error = errorMsg;
+          _loading = false;
+        });
+      } else {
+        _navigateToLoginWithError(errorMsg);
+      }
     } catch (e) {
+      await FirebaseAuth.instance.signOut().catchError((_) {});
+      LoginController.instance.loginInProgress = false;
+      LoginController.instance.lastLoginRole = null;
       final msg = e.toString();
-      setState(() {
-        _error = msg.contains('canceled') || msg.contains('cancelled')
-            ? null
-            : 'Google sign-in failed. Please try again.';
-        _loading = false;
-      });
+      final errorMsg = msg.contains('canceled') || msg.contains('cancelled')
+          ? null
+          : _mapGenericError(e);
+      if (mounted) {
+        setState(() {
+          _error = errorMsg;
+          _loading = false;
+        });
+      } else if (errorMsg != null) {
+        _navigateToLoginWithError(errorMsg);
+      }
     }
   }
 

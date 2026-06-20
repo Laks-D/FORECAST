@@ -86,7 +86,7 @@ class _ClientTransactionsPageState extends State<ClientTransactionsPage> {
                 );
               }
 
-              final currency = client.currency ?? defaultCurrency;
+              final currency = _normalizeCurrency(client.currency ?? defaultCurrency);
               final paymentRepository = context.read<ClientBloc>().paymentRepository;
 
               return StreamBuilder<List<Payment>>(
@@ -536,4 +536,12 @@ class _SummaryItem extends StatelessWidget {
       ],
     );
   }
+}
+
+String _normalizeCurrency(String raw) {
+  final clean = raw.trim();
+  if (clean.toUpperCase() == 'USD' || clean == r'$') {
+    return '₹';
+  }
+  return clean;
 }

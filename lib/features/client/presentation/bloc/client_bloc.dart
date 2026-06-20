@@ -158,7 +158,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
       clientId: event.entityId,
       firebaseUid: client.firebaseUid,
       amount: event.amount,
-      currency: client.currency ?? 'USD',
+      currency: client.currency ?? '₹',
       status: PaymentStatus.unpaid,
       dueDate: event.scheduledAt ?? DateTime.now(),
       note: event.note,
