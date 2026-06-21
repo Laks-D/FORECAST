@@ -560,10 +560,10 @@ class _WeeklyTopContent extends StatelessWidget {
                   color: Colors.transparent,
                 ),
                 child: SizedBox(
-                  height: 74,
+                  height: 86,
                   width: double.infinity,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
                     child: Builder(
                       builder: (context) {
                         final selected = calendarState.selectedDate;
@@ -673,76 +673,76 @@ class _WeekDayChip extends StatelessWidget {
             borderRadius: BorderRadius.circular(24),
             boxShadow: boxShadows,
           ),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    maxLines: 1,
-                    softWrap: false,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: selected
-                              ? (visual.neumorphism ? scheme.primary.withOpacity(0.75) : Colors.black54)
-                              : chrome.textColor.withOpacity(0.5),
-                          fontWeight: FontWeight.w700,
-                          height: 1.0,
-                        ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: selected
+                        ? (visual.neumorphism ? scheme.primary.withOpacity(0.75) : Colors.black54)
+                        : chrome.textColor.withOpacity(0.5),
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                    height: 1.0,
                   ),
-                  const SizedBox(height: 8),
-                  Text(
-                    '${date.day}',
-                    maxLines: 1,
-                    softWrap: false,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: selected
-                              ? (visual.neumorphism ? scheme.primary : Colors.black)
-                              : chrome.textColor,
-                          fontWeight: FontWeight.w900,
-                          height: 1.0,
-                        ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${date.day}',
+                  maxLines: 1,
+                  softWrap: false,
+                  style: TextStyle(
+                    color: selected
+                        ? (visual.neumorphism ? scheme.primary : Colors.black)
+                        : chrome.textColor,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    height: 1.0,
                   ),
-                  if (hasSessions && sessionCount > 0) ...[
-                    const SizedBox(height: 2),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                      decoration: BoxDecoration(
-                        color: allCompleted
-                            ? VibrantColors.pastelGreen
-                            : (selected
-                                ? (visual.neumorphism ? scheme.primary : Colors.black87)
-                                : VibrantColors.warmYellow),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '$sessionCount',
-                        style: TextStyle(
-                          color: selected
-                              ? (visual.neumorphism ? scheme.onPrimary : VibrantColors.softBlue)
-                              : chrome.surfaceColor,
-                          fontSize: 8,
-                          fontWeight: FontWeight.w800,
-                          height: 1.2,
-                        ),
-                      ),
+                ),
+                if (hasSessions && sessionCount > 0) ...[
+                  const SizedBox(height: 2),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: allCompleted
+                          ? VibrantColors.pastelGreen
+                          : (selected
+                              ? (visual.neumorphism ? scheme.primary : Colors.black87)
+                              : VibrantColors.warmYellow),
+                      borderRadius: BorderRadius.circular(999),
                     ),
-                  ] else if (hasSessions) ...[
-                    const SizedBox(height: 2),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
+                    child: Text(
+                      '$sessionCount',
+                      style: TextStyle(
                         color: selected
-                            ? (visual.neumorphism ? scheme.primary : Colors.black87)
-                            : VibrantColors.warmYellow,
-                        borderRadius: BorderRadius.circular(999),
+                            ? (visual.neumorphism ? scheme.onPrimary : VibrantColors.softBlue)
+                            : chrome.surfaceColor,
+                        fontSize: 8,
+                        fontWeight: FontWeight.w800,
+                        height: 1.2,
                       ),
-                      child: const SizedBox(height: 5, width: 5),
                     ),
-                  ],
+                  ),
+                ] else if (hasSessions) ...[
+                  const SizedBox(height: 2),
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: selected
+                          ? (visual.neumorphism ? scheme.primary : Colors.black87)
+                          : VibrantColors.warmYellow,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: const SizedBox(height: 5, width: 5),
+                  ),
                 ],
-              ),
+              ],
             ),
           ),
         ),
@@ -1687,7 +1687,7 @@ class _PaymentScheduleList extends StatelessWidget {
         final client = row.client;
         final status = row.status;
         final rawCurrency = client.currency ?? defaultCurrency;
-        final rowCurrency = (rawCurrency.trim().toUpperCase() == 'USD' || rawCurrency.trim() == r'$') ? '₹' : rawCurrency;
+        final rowCurrency = rawCurrency.trim().isEmpty ? '₹' : rawCurrency.trim();
         final amountLabel = p.amount == null
           ? 'No amount'
           : '${rowCurrency}${p.amount!.toStringAsFixed(0)}';
@@ -1809,10 +1809,19 @@ class _PaymentScheduleList extends StatelessWidget {
                                   fontSize: 16,
                                 ),
                           ),
-                          const SizedBox(height: 4),
+                          const SizedBox(height: 2),
+                          Text(
+                            AppDateUtils.displayDate(p.date),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: scheme.primary.withOpacity(0.75),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                ),
+                          ),
+                          const SizedBox(height: 2),
                           Text(
                             p.note != null && p.note!.trim().isNotEmpty
-                                ? '$amountLabel • ${p.note!.trim()}'
+                                ? '$amountLabel \u2022 ${p.note!.trim()}'
                                 : amountLabel,
                             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                   color: scheme.onSurfaceVariant,
@@ -1834,6 +1843,7 @@ class _PaymentScheduleList extends StatelessWidget {
                           fontSize: 14,
                         ),
                       )
+
                     else
                       DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
@@ -1911,13 +1921,12 @@ class _PaymentScheduleList extends StatelessWidget {
                           }
 
                           if (v == 'Paid') {
+                            // Fix: use MarkSinglePaymentPaid which correctly calls
+                            // paymentRepository.markPaid() for this specific payment.
+                            // UpdateClientStatus only updated the client entity, not
+                            // the payment Firestore document.
                             context.read<ClientBloc>().add(
-                                  UpdateClientStatus(
-                                    entityId: client.id,
-                                    status: 'Paid',
-                                    createdAt: p.date,
-                                    refId: p.paymentEventId,
-                                  ),
+                                  MarkSinglePaymentPaid(paymentId: p.paymentEventId),
                                 );
                             try {
                               context.read<CalendarCubit>().refresh();

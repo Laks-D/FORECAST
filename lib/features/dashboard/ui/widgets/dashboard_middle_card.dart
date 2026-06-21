@@ -186,15 +186,11 @@ class _ScheduleSummaryCardState extends State<_ScheduleSummaryCard> {
       session.date,
       session.time,
     );
-    if (derived == 'Cancelled' || derived == 'Completed') {
+    if (derived == 'Cancelled') {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
+        const SnackBar(
           duration: Duration(seconds: 1),
-          content: Text(
-            derived == 'Cancelled'
-                ? 'Cancelled classes can’t be restored.'
-                : 'Completed classes can’t be modified.',
-          ),
+          content: Text('Cancelled classes can’t be restored.'),
         ),
       );
       return;

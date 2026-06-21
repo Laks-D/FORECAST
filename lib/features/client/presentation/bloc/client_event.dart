@@ -162,3 +162,11 @@ class PermanentlyDeleteClient extends ClientEvent {
   final String entityId;
   PermanentlyDeleteClient({required this.entityId});
 }
+
+/// Allows a student (client) to mark a single payment as paid.
+/// Unlike [UpdateClientStatus] this event is NOT blocked by isClient guard.
+class MarkSinglePaymentPaid extends ClientEvent {
+  final String paymentId;
+
+  MarkSinglePaymentPaid({required this.paymentId});
+}

@@ -11,7 +11,6 @@ import 'profile_photo_screen.dart';
 
 class ProfileDetailsScreen extends StatefulWidget {
   const ProfileDetailsScreen({super.key});
-
   @override
   State<ProfileDetailsScreen> createState() => _ProfileDetailsScreenState();
 }
@@ -19,7 +18,6 @@ class ProfileDetailsScreen extends StatefulWidget {
 class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
   SignupProfileData? _signupProfile;
   bool _editing = false;
-
   final _nameCtrl = TextEditingController();
   final _handleCtrl = TextEditingController();
   final _middleNameCtrl = TextEditingController();
@@ -50,22 +48,16 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
       _emailCtrl.text = st.userEmail ?? '';
       _selectedGender = st.userGender;
       _selectedDob = st.userDateOfBirth;
-      
-      // Seed from SignupProfile if available
       _nationalityCtrl.text = _signupProfile?.nationality ?? 'India';
-      _currencyCtrl.text = _signupProfile?.currency ?? '₹';
+      _currencyCtrl.text = _signupProfile?.currency ?? '...';
     }
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose();
-    _handleCtrl.dispose();
-    _middleNameCtrl.dispose();
-    _phoneCtrl.dispose();
-    _emailCtrl.dispose();
-    _nationalityCtrl.dispose();
-    _currencyCtrl.dispose();
+    _nameCtrl.dispose(); _handleCtrl.dispose(); _middleNameCtrl.dispose();
+    _phoneCtrl.dispose(); _emailCtrl.dispose();
+    _nationalityCtrl.dispose(); _currencyCtrl.dispose();
     super.dispose();
   }
 
@@ -84,58 +76,34 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
   Future<void> _toggleEdit() async {
     if (_editing) {
       final profileCubit = context.read<UserProfileCubit>();
-
-      // Save all fields via bulk update
       context.read<DashboardCubit>().updateProfile(
-            name: _nameCtrl.text,
-            handle: _handleCtrl.text,
-            middleName: _middleNameCtrl.text,
-            phone: _phoneCtrl.text,
-            email: _emailCtrl.text,
-            gender: _selectedGender,
-            dob: _selectedDob,
-          );
-
-      // Save to Storage (Nationality/Currency)
-      final updatedProfile = (_signupProfile ??
-              SignupProfileData(
-                fullName: _nameCtrl.text.trim(),
-                userName: _handleCtrl.text.trim(),
-                email: _emailCtrl.text.trim(),
-              ))
-          .copyWith(
+        name: _nameCtrl.text, handle: _handleCtrl.text,
+        middleName: _middleNameCtrl.text, phone: _phoneCtrl.text,
+        email: _emailCtrl.text, gender: _selectedGender, dob: _selectedDob,
+      );
+      final updatedProfile = (_signupProfile ?? SignupProfileData(
+        fullName: _nameCtrl.text.trim(), userName: _handleCtrl.text.trim(),
+        email: _emailCtrl.text.trim(),
+      )).copyWith(
         nationality: _nationalityCtrl.text.trim(),
         currency: _currencyCtrl.text.trim(),
       );
-
       await SignupProfileStorage.saveProfile(updatedProfile);
       if (!mounted) return;
-
-      setState(() {
-        _signupProfile = updatedProfile;
-      });
-
-      // Propagate new default currency across app.
-      try {
-        profileCubit.refresh();
-      } catch (_) {}
-
+      setState(() { _signupProfile = updatedProfile; });
+      try { profileCubit.refresh(); } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Row(
-              children: [
-                Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
-                SizedBox(width: 10),
-                Text('Profile saved', style: TextStyle(fontWeight: FontWeight.w600)),
-              ],
-            ),
-            backgroundColor: const Color(0xFF22C55E),
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            duration: const Duration(seconds: 2),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Row(children: [
+            Icon(Icons.check_circle_outline, color: Colors.white, size: 18),
+            SizedBox(width: 10),
+            Text('Profile saved', style: TextStyle(fontWeight: FontWeight.w600)),
+          ]),
+          backgroundColor: const Color(0xFF22C55E),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          duration: const Duration(seconds: 2),
+        ));
       }
     }
     setState(() => _editing = !_editing);
@@ -143,439 +111,287 @@ class _ProfileDetailsScreenState extends State<ProfileDetailsScreen> {
 
   void _openProfilePhoto(BuildContext context) {
     final cubit = context.read<DashboardCubit>();
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => BlocProvider.value(
-          value: cubit,
-          child: const ProfilePhotoScreen(),
-        ),
-      ),
-    );
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => BlocProvider.value(value: cubit, child: const ProfilePhotoScreen()),
+    ));
   }
 
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Scaffold(
-      backgroundColor: chrome.frameColor,
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        surfaceTintColor: Colors.transparent,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: chrome.mutedColor, size: 20),
-          onPressed: () => Navigator.pop(context),
-        ),
-        actions: const [
-          SizedBox(width: 8),
-        ],
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const SizedBox(height: 100),
-            // Avatar with Neon Glow
-            Center(
-              child: BlocBuilder<DashboardCubit, DashboardState>(
-                builder: (context, state) {
-                  return Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      // Neon Glow
-                      Container(
-                        width: 130,
-                        height: 130,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: VibrantColors.softPink.withOpacity(0.22),
-                              blurRadius: 18,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        key: const Key('profile_avatar_tap'),
-                        onTap: () => _openProfilePhoto(context),
-                        child: Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            border: Border.all(color: VibrantColors.softPink, width: 2),
-                          ),
-                          child: ClipOval(
-                            child: state.userAvatarBytes == null
-                                ? Container(
-                                    color: chrome.surfaceColor,
-                                    child: Icon(Icons.person, size: 60, color: chrome.mutedColor),
-                                  )
-                                : Image.memory(
-                                    state.userAvatarBytes!,
-                                    fit: BoxFit.cover,
-                                    alignment: state.userAvatarAlignment,
-                                  ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Section 1: Personal Information
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    'Personal Information',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: Colors.white.withOpacity(0.9),
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      _toggleEdit();
-                    },
-                    child: Row(
-                      children: [
-                        Icon(
-                          _editing ? Icons.check : Icons.edit_outlined,
-                          size: 16,
-                          color: chrome.accentBlue,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _editing ? 'SAVE' : 'Edit',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: chrome.accentBlue,
-                                fontWeight: FontWeight.w800,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            _ProfileSection(
-              children: [
-                _ProfileRow(
-                  icon: Icons.person_outline,
-                  label: 'Full Name',
+      backgroundColor: isDark ? const Color(0xFF0F0F14) : const Color(0xFFF0F2F8),
+      body: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: _buildHeader(context, isDark),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+            sliver: SliverList(delegate: SliverChildListDelegate([
+              _SectionLabel('PERSONAL INFORMATION', isDark),
+              _GlassCard(isDark: isDark, children: [
+                _InfoRow(icon: Icons.person_rounded, label: 'Full Name',
                   value: _editing ? null : _nameCtrl.text,
                   controller: _editing ? _nameCtrl : null,
-                  iconColor: chrome.accentBlue,
-                ),
-                _ProfileRow(
-                  icon: Icons.alternate_email,
-                  label: 'Username',
+                  accent: const Color(0xFF6C63FF), isDark: isDark),
+                _InfoRow(icon: Icons.alternate_email_rounded, label: 'Username',
                   value: _editing ? null : _handleCtrl.text,
                   controller: _editing ? _handleCtrl : null,
-                  iconColor: chrome.accentBlue,
-                ),
-                _ProfileRow(
-                  icon: Icons.mail_outline,
-                  label: 'Email',
+                  accent: const Color(0xFF06B6D4), isDark: isDark),
+                _InfoRow(icon: Icons.mail_rounded, label: 'Email',
                   value: _editing ? null : _emailCtrl.text,
                   controller: _editing ? _emailCtrl : null,
-                  iconColor: VibrantColors.softPink,
-                ),
-                _ProfileRow(
-                  icon: Icons.phone_iphone_outlined,
-                  label: 'Phone',
-                  value: _editing ? null : _phoneCtrl.text,
+                  accent: const Color(0xFFEC4899), isDark: isDark, isLast: true),
+              ]),
+              _SectionLabel('CONTACT & LOCATION', isDark),
+              _GlassCard(isDark: isDark, children: [
+                _InfoRow(icon: Icons.phone_rounded, label: 'Phone',
+                  value: _editing ? null : (_phoneCtrl.text.isEmpty ? 'Not set' : _phoneCtrl.text),
                   controller: _editing ? _phoneCtrl : null,
-                  iconColor: VibrantColors.warmYellow,
-                ),
-                _ProfileRow(
-                  icon: Icons.public_outlined,
-                  label: 'Nationality',
+                  accent: const Color(0xFFF59E0B), isDark: isDark),
+                _InfoRow(icon: Icons.public_rounded, label: 'Nationality',
                   value: _editing ? null : _nationalityCtrl.text,
                   controller: _editing ? _nationalityCtrl : null,
-                  iconColor: VibrantColors.pastelGreen,
-                ),
-                _ProfileRow(
-                  icon: Icons.payments_outlined,
-                  label: 'Primary Currency',
+                  accent: const Color(0xFF10B981), isDark: isDark, isLast: true),
+              ]),
+              _SectionLabel('PREFERENCES', isDark),
+              _GlassCard(isDark: isDark, children: [
+                _InfoRow(icon: Icons.payments_rounded, label: 'Currency',
                   value: _editing ? null : _currencyCtrl.text,
                   controller: _editing ? _currencyCtrl : null,
-                  iconColor: VibrantColors.softBlue,
-                ),
-                _ProfileRow(
-                  icon: Icons.wc_outlined,
-                  label: 'Gender',
+                  accent: const Color(0xFF6C63FF), isDark: isDark),
+                _InfoRow(icon: Icons.wc_rounded, label: 'Gender',
                   value: _editing ? null : (_selectedGender ?? 'Not set'),
-                  iconColor: VibrantColors.softBlue,
-                  child: _editing
-                      ? _GenderDropdown(
-                          value: _selectedGender,
-                          onChanged: (v) => setState(() => _selectedGender = v),
-                        )
-                      : null,
-                ),
-                _ProfileRow(
-                  icon: Icons.cake_outlined,
-                  label: 'Date of Birth',
-                  value: _editing
-                      ? null
-                      : (_selectedDob != null
-                          ? AppDateUtils.displayDate(_selectedDob!)
-                          : 'Not set'),
-                  iconColor: VibrantColors.warmYellow,
-                  isLast: true,
-                  child: _editing
-                      ? _DobPickerInline(
-                          value: _selectedDob,
-                          onChanged: (v) => setState(() => _selectedDob = v),
-                        )
-                      : null,
-                ),
-              ],
+                  accent: const Color(0xFF8B5CF6), isDark: isDark,
+                  trailing: _editing ? _GenderDropdown(value: _selectedGender,
+                    onChanged: (v) => setState(() => _selectedGender = v), isDark: isDark) : null),
+                _InfoRow(icon: Icons.cake_rounded, label: 'Date of Birth',
+                  value: _editing ? null : (_selectedDob != null ? AppDateUtils.displayDate(_selectedDob!) : 'Not set'),
+                  accent: const Color(0xFFF59E0B), isDark: isDark, isLast: true,
+                  trailing: _editing ? _DobPicker(value: _selectedDob,
+                    onChanged: (v) => setState(() => _selectedDob = v), isDark: isDark) : null),
+              ]),
+            ])),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context, bool isDark) {
+    return BlocBuilder<DashboardCubit, DashboardState>(
+      builder: (context, state) {
+        final name = state.userName ?? 'User';
+        final handle = state.userHandle ?? '';
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft, end: Alignment.bottomRight,
+              colors: isDark
+                ? [const Color(0xFF1A1035), const Color(0xFF0D1B3E)]
+                : [const Color(0xFF6C63FF), const Color(0xFF4F46E5)],
             ),
-            const SizedBox(height: 32),
-
-            const SizedBox(height: 48),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({required this.children});
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: chrome.surfaceColor.withOpacity(0.6),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: chrome.mutedColor.withOpacity(0.1)),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({
-    required this.icon,
-    required this.label,
-    this.value,
-    this.child,
-    this.controller,
-    required this.iconColor,
-    this.isLast = false,
-  });
-
-  final IconData icon;
-  final String label;
-  final String? value;
-  final Widget? child;
-  final TextEditingController? controller;
-  final Color iconColor;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          child: Row(
-            children: [
-              // Icon
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: iconColor.withOpacity(0.2)),
+          ),
+          child: SafeArea(bottom: false, child: Column(children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new, color: Colors.white70, size: 20),
+                  onPressed: () => Navigator.pop(context),
                 ),
-                child: Icon(icon, color: iconColor, size: 20),
-              ),
-              const SizedBox(width: 16),
-              // Label
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: chrome.mutedColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-              const SizedBox(width: 10),
-              // Value or Input
-              if (child != null)
-                Expanded(child: Align(alignment: Alignment.centerRight, child: child!))
-              else if (controller != null)
-                Expanded(
-                  child: TextField(
-                    controller: controller,
-                    textAlign: TextAlign.right,
-                    cursorColor: chrome.accentBlue,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                    decoration: InputDecoration(
-                      isDense: true,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: UnderlineInputBorder(
-                        borderSide: BorderSide(color: chrome.accentBlue, width: 1),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 4),
-                    ),
+                const Text('My Profile', style: TextStyle(
+                  color: Colors.white, fontWeight: FontWeight.w700, fontSize: 17)),
+                TextButton(
+                  onPressed: _toggleEdit,
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.white.withOpacity(0.18),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    minimumSize: Size.zero,
                   ),
-                )
-              else if (value != null)
-                Text(
-                  value!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.white.withOpacity(0.9),
-                        fontWeight: FontWeight.w700,
-                      ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(_editing ? Icons.check_rounded : Icons.edit_rounded, size: 14, color: Colors.white),
+                    const SizedBox(width: 4),
+                    Text(_editing ? 'Save' : 'Edit',
+                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+                  ]),
                 ),
+              ]),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              key: const Key('profile_avatar_tap'),
+              onTap: () => _openProfilePhoto(context),
+              child: Stack(alignment: Alignment.bottomRight, children: [
+                Container(
+                  width: 100, height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withOpacity(0.5), width: 2.5),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))],
+                  ),
+                  child: ClipOval(child: state.userAvatarBytes == null
+                    ? Container(
+                        decoration: BoxDecoration(gradient: LinearGradient(
+                          colors: [Colors.white.withOpacity(0.18), Colors.white.withOpacity(0.06)],
+                          begin: Alignment.topLeft, end: Alignment.bottomRight,
+                        )),
+                        child: const Icon(Icons.person_rounded, size: 52, color: Colors.white70))
+                    : Image.memory(state.userAvatarBytes!, fit: BoxFit.cover, alignment: state.userAvatarAlignment)),
+                ),
+                Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6C63FF), shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2)),
+                  child: const Icon(Icons.camera_alt_rounded, size: 13, color: Colors.white),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            Text(name, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 22)),
+            if (handle.isNotEmpty) ...[
+              const SizedBox(height: 3),
+              Text('@', style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 13, fontWeight: FontWeight.w500)),
             ],
-          ),
-        ),
-        if (!isLast)
-          Divider(
-            height: 1,
-            indent: 72,
-            endIndent: 16,
-            color: chrome.mutedColor.withOpacity(0.08),
-          ),
-      ],
+            const SizedBox(height: 24),
+          ])),
+        );
+      },
     );
+  }
+}
+
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.title, this.isDark);
+  final String title; final bool isDark;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(4, 20, 0, 8),
+    child: Text(title, style: TextStyle(
+      color: isDark ? Colors.white38 : Colors.black38,
+      fontWeight: FontWeight.w700, fontSize: 11, letterSpacing: 1.2)),
+  );
+}
+
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({required this.children, required this.isDark});
+  final List<Widget> children; final bool isDark;
+  @override
+  Widget build(BuildContext context) => Container(
+    decoration: BoxDecoration(
+      color: isDark ? const Color(0xFF1C1C2E) : Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDark ? 0.3 : 0.07), blurRadius: 16, offset: const Offset(0, 4))],
+    ),
+    child: Column(children: children),
+  );
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({
+    required this.icon, required this.label, required this.accent, required this.isDark,
+    this.value, this.controller, this.trailing, this.isLast = false,
+  });
+  final IconData icon; final String label; final Color accent; final bool isDark;
+  final String? value; final TextEditingController? controller; final Widget? trailing; final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    final labelColor = isDark ? Colors.white38 : Colors.black38;
+    final valueColor = isDark ? Colors.white : Colors.black87;
+    final dividerColor = isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.06);
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Row(children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(color: accent.withOpacity(0.12), borderRadius: BorderRadius.circular(11)),
+            child: Icon(icon, color: accent, size: 19),
+          ),
+          const SizedBox(width: 14),
+          SizedBox(width: 100, child: Text(label, style: TextStyle(color: labelColor, fontWeight: FontWeight.w600, fontSize: 13))),
+          Expanded(child: trailing != null
+            ? Align(alignment: Alignment.centerRight, child: trailing!)
+            : controller != null
+              ? TextField(
+                  controller: controller, textAlign: TextAlign.right, cursorColor: accent,
+                  style: TextStyle(color: valueColor, fontWeight: FontWeight.w700, fontSize: 14),
+                  decoration: InputDecoration(
+                    isDense: true, border: InputBorder.none, enabledBorder: InputBorder.none,
+                    focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: accent, width: 1.5)),
+                    contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                  ))
+              : Text(value ?? '—', textAlign: TextAlign.right, style: TextStyle(
+                  color: (value == null || value == 'Not set' || value!.isEmpty) ? labelColor : valueColor,
+                  fontWeight: FontWeight.w700, fontSize: 14))),
+        ]),
+      ),
+      if (!isLast) Divider(height: 1, indent: 68, endIndent: 16, color: dividerColor),
+    ]);
   }
 }
 
 class _GenderDropdown extends StatelessWidget {
-  const _GenderDropdown({required this.value, required this.onChanged});
-  final String? value;
-  final ValueChanged<String?> onChanged;
-
+  const _GenderDropdown({required this.value, required this.onChanged, required this.isDark});
+  final String? value; final ValueChanged<String?> onChanged; final bool isDark;
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
     const options = ['Male', 'Female', 'Other', 'Prefer not to say'];
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<String>(
-        value: options.contains(value) ? value : null,
-        isDense: true,
-        dropdownColor: const Color(0xFF1C1C1E),
-        icon: Padding(
-          padding: const EdgeInsets.only(left: 4),
-          child: Icon(Icons.unfold_more, size: 16, color: chrome.mutedColor.withOpacity(0.5)),
-        ),
-        underline: const SizedBox.shrink(),
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w700,
-            ),
-        items: options.map((s) => DropdownMenuItem(
-          value: s, 
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(s),
-          ),
-        )).toList(),
-        onChanged: onChanged,
-      ),
-    );
+    return DropdownButtonHideUnderline(child: DropdownButton<String>(
+      value: options.contains(value) ? value : null, isDense: true,
+      dropdownColor: isDark ? const Color(0xFF1C1C2E) : Colors.white,
+      icon: Icon(Icons.keyboard_arrow_down_rounded, size: 18, color: isDark ? Colors.white38 : Colors.black38),
+      style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w700, fontSize: 14),
+      items: options.map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+      onChanged: onChanged,
+    ));
   }
 }
 
-class _DobPickerInline extends StatelessWidget {
-  const _DobPickerInline({required this.value, required this.onChanged});
-  final DateTime? value;
-  final ValueChanged<DateTime?> onChanged;
-
+class _DobPicker extends StatelessWidget {
+  const _DobPicker({required this.value, required this.onChanged, required this.isDark});
+  final DateTime? value; final ValueChanged<DateTime?> onChanged; final bool isDark;
   @override
   Widget build(BuildContext context) {
-    final chrome = AppChromeTheme.of(context);
     return GestureDetector(
       onTap: () async {
         final picked = await showDatePicker(
           context: context,
-          initialDate: value ?? DateTime(2000),
-          firstDate: DateTime(1920),
-          lastDate: DateTime.now(),
+          initialDate: value ?? DateTime(2000), firstDate: DateTime(1920), lastDate: DateTime.now(),
           builder: (context, child) => Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: ColorScheme.dark(
-                primary: chrome.accentBlue, 
-                onPrimary: Colors.white,
-                surface: const Color(0xFF1C1C1E),
-                onSurface: Colors.white
-              ),
-              textButtonTheme: TextButtonThemeData(
-                style: TextButton.styleFrom(foregroundColor: chrome.accentBlue),
-              ),
-            ),
+            data: Theme.of(context).copyWith(colorScheme: ColorScheme.dark(
+              primary: const Color(0xFF6C63FF), onPrimary: Colors.white,
+              surface: isDark ? const Color(0xFF1C1C2E) : Colors.white,
+              onSurface: isDark ? Colors.white : Colors.black,
+            ), textButtonTheme: TextButtonThemeData(style: TextButton.styleFrom(foregroundColor: const Color(0xFF6C63FF)))),
             child: child!,
           ),
         );
         if (picked != null) onChanged(picked);
       },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value != null ? AppDateUtils.displayDate(value!) : 'Select Date',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(width: 6),
-            Icon(Icons.calendar_today_outlined, size: 14, color: chrome.mutedColor.withOpacity(0.6)),
-          ],
-        ),
-      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Text(value != null ? AppDateUtils.displayDate(value!) : 'Select',
+          style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.w700, fontSize: 14)),
+        const SizedBox(width: 4),
+        Icon(Icons.calendar_today_rounded, size: 14, color: isDark ? Colors.white38 : Colors.black38),
+      ]),
     );
   }
 }
 
 extension SignupProfileDataExt on SignupProfileData {
   SignupProfileData copyWith({
-    String? fullName,
-    String? profession,
-    String? userName,
-    String? email,
-    String? nationality,
-    String? currency,
-    List<String>? selectedPrograms,
-    List<String>? preferences,
+    String? fullName, String? profession, String? userName, String? email,
+    String? nationality, String? currency, List<String>? selectedPrograms, List<String>? preferences,
   }) {
     return SignupProfileData(
-      fullName: fullName ?? this.fullName,
-      profession: profession ?? this.profession,
-      userName: userName ?? this.userName,
-      email: email ?? this.email,
-      nationality: nationality ?? this.nationality,
-      currency: currency ?? this.currency,
+      fullName: fullName ?? this.fullName, profession: profession ?? this.profession,
+      userName: userName ?? this.userName, email: email ?? this.email,
+      nationality: nationality ?? this.nationality, currency: currency ?? this.currency,
       selectedPrograms: selectedPrograms ?? this.selectedPrograms,
       preferences: preferences ?? this.preferences,
     );

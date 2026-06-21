@@ -121,7 +121,7 @@ class _ClientPersonalDetailsPageState extends State<ClientPersonalDetailsPage> {
 
   String _money(double amount, String currency) {
     final clean = currency.trim();
-    final dispCurrency = (clean.toUpperCase() == 'USD' || clean == r'$') ? '₹' : clean;
+    final dispCurrency = clean.isEmpty ? '₹' : clean;
     return '${dispCurrency}${amount.toStringAsFixed(1)}';
   }
 

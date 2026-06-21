@@ -300,7 +300,7 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
     return switch (e.code) {
       'email-already-in-use' =>
         'This email already has an account. Use the Sign In tab instead.',
-      'weak-password' => 'Password is too weak (min 6 characters).',
+      'weak-password' => 'Password too weak. Use min 6 chars with uppercase, lowercase, number & special character.',
       'invalid-email' => 'Enter a valid email address.',
       'network-request-failed' => 'No internet connection.',
       'ROLE_ALREADY_EXISTS' => e.message ?? 'You already have this role.',
@@ -512,10 +512,48 @@ class _NewSignupScreenState extends State<NewSignupScreen> {
                         () => setState(() => _obscurePass = !_obscurePass)),
                     validator: (v) {
                       if (v == null || v.isEmpty) return 'Required';
-                      if (v.length < 6) return 'At least 6 characters';
+                      if (v.length < 6) return 'Min 6 characters';
+                      if (!v.contains(RegExp(r'[A-Z]'))) return 'Must contain an uppercase letter';
+                      if (!v.contains(RegExp(r'[a-z]'))) return 'Must contain a lowercase letter';
+                      if (!v.contains(RegExp(r'[0-9]'))) return 'Must contain a number';
+                      if (!v.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>\-_]'))) return 'Must contain a special character';
                       return null;
                     }),
-                const SizedBox(height: 16),
+
+                // Password strength hints (live feedback)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, left: 4, bottom: 4),
+                  child: ValueListenableBuilder<TextEditingValue>(
+                    valueListenable: _passCtrl,
+                    builder: (_, val, __) {
+                      final pw = val.text;
+                      Widget req(bool met, String text) => Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Row(children: [
+                          Icon(
+                            met ? Icons.check_circle_rounded : Icons.radio_button_unchecked_rounded,
+                            size: 13,
+                            color: met ? const Color(0xFF22C55E) : Colors.grey,
+                          ),
+                          const SizedBox(width: 6),
+                          Text(text, style: TextStyle(
+                            fontSize: 11.5,
+                            color: met ? const Color(0xFF22C55E) : Colors.grey,
+                            fontWeight: met ? FontWeight.w600 : FontWeight.w400,
+                          )),
+                        ]),
+                      );
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        req(pw.length >= 6, 'At least 6 characters'),
+                        req(pw.contains(RegExp(r'[A-Z]')), 'One uppercase letter'),
+                        req(pw.contains(RegExp(r'[a-z]')), 'One lowercase letter'),
+                        req(pw.contains(RegExp(r'[0-9]')), 'One number'),
+                        req(pw.contains(RegExp(r'[!@#\$%^&*(),.?":{}|<>\-_]')), 'One special character'),
+                      ]);
+                    },
+                  ),
+                ),
+
 
                 _field(context,
                     controller: _confirmCtrl,

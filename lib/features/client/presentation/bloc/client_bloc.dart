@@ -44,6 +44,7 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
     on<DeleteClient>(_onDeleteClient);
     on<RestoreClient>(_onRestoreClient);
     on<PermanentlyDeleteClient>(_onPermanentlyDeleteClient);
+    on<MarkSinglePaymentPaid>(_onMarkSinglePaymentPaid);
   }
 
   @override
@@ -323,5 +324,12 @@ class ClientBloc extends Bloc<ClientEvent, ClientState> {
   Future<void> _onPermanentlyDeleteClient(PermanentlyDeleteClient event, Emitter<ClientState> emit) async {
     if (AppModeConfig.isClient) return;
     await repository.permanentlyDeleteClient(entityId: event.entityId);
+  }
+
+  /// Allows a student (client mode) to mark a single payment as paid.
+  /// This intentionally bypasses the isClient guard — it only touches
+  /// the payment status, not any client record.
+  Future<void> _onMarkSinglePaymentPaid(MarkSinglePaymentPaid event, Emitter<ClientState> emit) async {
+    await paymentRepository.markPaid(event.paymentId);
   }
 }
