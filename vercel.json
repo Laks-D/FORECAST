@@ -1,5 +1,0 @@
-{
-  "framework": "nextjs",
-  "buildCommand": "cd tracker && npm install && npm run build",
-  "outputDirectory": "tracker/.next"
-}
